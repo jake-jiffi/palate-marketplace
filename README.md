@@ -15,16 +15,16 @@ Run these as two separate commands (slash commands run one at a time, so enter t
 /plugin install palate-website-builder@palate
 ```
 
-Then create a token at [app.palatemcp.com](https://app.palatemcp.com) and connect the Palate MCP
-with one command (run in your terminal, no environment variables):
+Then connect the Palate MCP. Easiest is to sign in with your browser, no token:
 
 ```bash
-claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp --header "Authorization: Bearer plt_live_xxx"
+claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp
 ```
 
-Run `/mcp` to confirm the `palate` server is connected. Update later with
-`/plugin marketplace update palate`. The dashboard at app.palatemcp.com hands you every block with
-your real token already filled in.
+Claude Code opens your browser to sign in and click Allow. Prefer a token (CI, or other clients)?
+Create one at [app.palatemcp.com](https://app.palatemcp.com) and add
+`--header "Authorization: Bearer plt_live_xxx"`. Run `/mcp` to confirm `palate` is connected; update
+later with `/plugin marketplace update palate`.
 
 ## What you get
 
