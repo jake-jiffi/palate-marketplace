@@ -1,0 +1,21 @@
+{
+  "name": "palate",
+  "owner": {
+    "name": "Jiffi",
+    "url": "https://palatemcp.com"
+  },
+  "metadata": {
+    "description": "Palate: the taste layer for AI website builders. Install the Palate website-builder plugin (skill + MCP-depth hooks + the Palate MCP connector) for Claude Code.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "palate-website-builder",
+      "source": {
+        "source": "github",
+        "repo": "jake-jiffi/palate-website-builder"
+      },
+      "description": "Builds production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites), plus brand packages. Bundles the skill, the survey/verify agents, the MCP-depth enforcement hooks, and the Palate MCP connector. Needs a Palate API token (app.palatemcp.com) in PALATE_MCP_TOKEN."
+    }
+  ]
+}
