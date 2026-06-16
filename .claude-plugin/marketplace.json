@@ -15,7 +15,7 @@
         "source": "github",
         "repo": "jake-jiffi/palate-website-builder"
       },
-      "description": "Builds production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites), plus brand packages. Bundles the skill, the survey/verify agents, the MCP-depth enforcement hooks, and the Palate MCP connector. Needs a Palate API token (app.palatemcp.com) in PALATE_MCP_TOKEN."
+      "description": "Builds production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites), plus brand packages. Bundles the skill, the survey/verify agents, and the MCP-depth enforcement hooks. After install, connect the Palate MCP with one `claude mcp add` command (free token at app.palatemcp.com)."
     }
   ]
 }
