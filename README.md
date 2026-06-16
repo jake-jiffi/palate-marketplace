@@ -5,8 +5,13 @@ website builders.
 
 ## Install (Claude Code)
 
+Run these as two separate commands (slash commands run one at a time, so enter the first, wait, then the second):
+
 ```
 /plugin marketplace add jake-jiffi/palate-marketplace
+```
+
+```
 /plugin install palate-website-builder@palate
 ```
 
