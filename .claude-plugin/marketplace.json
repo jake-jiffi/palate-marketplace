@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Palate: the taste layer for AI website builders. Install the Palate website-builder plugin (skill + MCP-depth hooks + the Palate MCP connector) for Claude Code.",
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "plugins": [
     {
