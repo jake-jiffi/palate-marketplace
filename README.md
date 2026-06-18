@@ -18,13 +18,16 @@ Run these as two separate commands (slash commands run one at a time, so enter t
 Then connect the Palate MCP. Easiest is to sign in with your browser, no token:
 
 ```bash
-claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp
+claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp
 ```
 
-Claude Code opens your browser to sign in and click Allow. Prefer a token (CI, or other clients)?
-Create one at [app.palatemcp.com](https://app.palatemcp.com) and add
-`--header "Authorization: Bearer plt_live_xxx"`. Run `/mcp` to confirm `palate` is connected; update
-later with `/plugin marketplace update palate`.
+`--scope user` registers palate for your whole user account, not just the current directory. Without
+it the connection only exists where you ran the command, so the skill (which builds client sites in
+fresh directories) loses the Palate tools. Claude Code opens your browser to sign in and click Allow.
+Prefer a token (CI, or other clients)? Create one at [app.palatemcp.com](https://app.palatemcp.com)
+and add `--header "Authorization: Bearer plt_live_xxx"`. Run `/mcp` to confirm `palate` is connected;
+update later with `/plugin marketplace update palate`, then restart Claude Code so the refreshed
+plugin loads.
 
 ## What you get
 

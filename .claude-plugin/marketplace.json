@@ -5,17 +5,18 @@
     "url": "https://palatemcp.com"
   },
   "metadata": {
-    "description": "Palate: the taste layer for AI website builders. Install the Palate website-builder plugin (skill + MCP-depth hooks + the Palate MCP connector) for Claude Code.",
-    "version": "1.4.0"
+    "description": "Palate: the taste layer for AI website builders. Install the Palate website-builder plugin (skill + MCP-depth hooks; connect the Palate MCP with one claude mcp add --scope user command after install) for Claude Code.",
+    "version": "1.4.1"
   },
   "plugins": [
     {
       "name": "palate-website-builder",
+      "version": "1.4.1",
       "source": {
         "source": "github",
         "repo": "jake-jiffi/palate-website-builder"
       },
-      "description": "Builds production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites), plus brand packages. v1.3 adds a divergent-to-convergent concept spine, a self-issued build commission held to an awards-grade bar, a screenshot-grounded visual self-review loop, and novelty + buildability gates that block on real evidence rather than a claim. After install, connect the Palate MCP with one claude mcp add command (free token at app.palatemcp.com)."
+      "description": "Builds production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites), plus brand packages. It runs a divergent-to-convergent concept spine, a self-issued build commission held to an awards-grade bar, a screenshot-grounded visual self-review loop, and novelty + buildability gates that block on real evidence rather than a claim. The 1.4.x line adds anti-slop guards that catch generic AI-tell layouts and copy before they ship. After install, connect the Palate MCP with one claude mcp add --scope user command (free token at app.palatemcp.com)."
     }
   ]
 }
