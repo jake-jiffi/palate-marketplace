@@ -15,6 +15,17 @@ Run these as two separate commands (slash commands run one at a time, so enter t
 /plugin install palate-website-builder@palate
 ```
 
+> **If the install fails with "Host key verification failed" / "No ED25519 host key is known for github.com":**
+> this is a known Claude Code installer issue ([anthropics/claude-code#50725](https://github.com/anthropics/claude-code/issues/50725));
+> it clones over SSH with strict host checking, which fails on machines that have never
+> connected to GitHub over SSH. Fix it once with:
+>
+> ```bash
+> mkdir -p ~/.ssh && ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+> ```
+>
+> then run the install command again. Updating Claude Code (`claude update`) also helps on recent versions.
+
 After installing, run `/reload-plugins` (or restart Claude Code) so the website-builder skill loads. A
 freshly installed plugin is not active until you do.
 
