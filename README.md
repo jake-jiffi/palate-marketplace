@@ -50,3 +50,7 @@ choosing **Authenticate**, and clicking **Allow**. Prefer a token (CI, or other 
 design taste from deeply-analysed reference sites), plus brand packages. It bundles the skill, the
 survey/verify agents, the MCP-depth enforcement hooks, and the Palate MCP connector. Full setup and
 the manual/other-client paths: see the plugin's `INSTALL.md`.
+
+## Maintainers
+
+Release process (versioning, the vendored plugin sync, why installs never git-clone): see [RELEASING.md](./RELEASING.md).
