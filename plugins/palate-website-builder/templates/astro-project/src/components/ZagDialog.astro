@@ -1,0 +1,141 @@
+---
+/*
+ * ============================================================================
+ * OPT-IN EXAMPLE - the interactive-primitive behaviour layer.
+ * See references/interactive-primitives.md (reuse the brain, re-skin every pixel).
+ * ============================================================================
+ *
+ * A focus-trapping dialog driven by a Zag.js state machine in VANILLA JS (no React
+ * island). It is NOT part of the default scaffold and NOT imported by any page, so
+ * the default template ships no Zag bundle. Copy it into a build that needs a
+ * dialog / modal and re-skin it to the brand.
+ *
+ * To enable it for one build (lean default stays lean - this is per-build):
+ *   1. Install ONLY the machines you use (each is its own package):
+ *        pnpm add @zag-js/vanilla @zag-js/dialog
+ *   2. Import and place it on the page that needs it:
+ *        ---
+ *        import ZagDialog from "../components/ZagDialog.astro";
+ *        ---
+ *        <ZagDialog triggerLabel="Book a call" title="Book a call" />
+ *
+ * Why this and not a hand-rolled modal: the keyboard, focus trap + return, and ARIA
+ * are correct by construction (the part AI output gets wrong). Proven on this stack
+ * by the sec-svz.2 spike (0 axe violations, full keyboard, no framework leak).
+ *
+ * The five gotchas this file already handles (do not undo them):
+ *   1. Cache DOM refs by [data-part] BEFORE the first render - spreadProps rewrites ids.
+ *   2. @zag-js/vanilla is a separate install from @zag-js/dialog.
+ *   3. (combobox only) the label needs getLabelProps() - n/a for the dialog.
+ *   4. (carousel only) the root needs an aria-label - n/a for the dialog.
+ *   5. [hidden] must win over positional CSS - see the <style> block below.
+ *
+ * Re-skin: style the [data-part] / [data-state] selectors with the brand's tokens.
+ * The var(--token, fallback) form shows the seam; rename to the project's token names.
+ */
+interface Props {
+  triggerLabel?: string;
+  title?: string;
+  description?: string;
+  id?: string;
+}
+const {
+  triggerLabel = "Open",
+  title = "Dialog title",
+  description = "Dialog description.",
+  id = "dlg",
+} = Astro.props;
+---
+
+<section class="zd" data-zag-dialog data-id={id}>
+  <button type="button" data-part="trigger" class="zd-trigger">{triggerLabel}</button>
+  <div data-part="backdrop" class="zd-backdrop" hidden></div>
+  <div data-part="positioner" class="zd-positioner" hidden>
+    <div data-part="content" class="zd-content">
+      <h2 data-part="title" class="zd-title">{title}</h2>
+      <p data-part="description" class="zd-desc">{description}</p>
+      <slot />
+      <button type="button" data-part="close" class="zd-close">Close</button>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Gotcha 5: [hidden] must win over the positional CSS below. */
+  .zd [hidden] { display: none !important; }
+
+  /* Re-skin seam: these map to your @palate/brand tokens (rename as needed). */
+  .zd-trigger {
+    padding: 0.6rem 1.1rem;
+    border-radius: var(--radius-sm, 6px);
+    background: var(--brand-accent, #1a1a1a);
+    color: var(--brand-on-accent, #fff);
+    border: 0;
+  }
+  .zd-trigger:active { transform: translateY(1px); }          /* the pressed-state floor */
+  .zd-trigger:focus-visible { outline: 2px solid var(--brand-focus, #1a1a1a); outline-offset: 2px; }
+
+  .zd-backdrop {
+    position: fixed; inset: 0;
+    background: color-mix(in srgb, var(--brand-ink, #000) 50%, transparent);
+  }
+  .zd-positioner {
+    position: fixed; inset: 0;
+    display: grid; place-items: center; padding: 1rem;
+  }
+  .zd-content {
+    max-width: 32rem; width: 100%;
+    background: var(--brand-surface, #fff);
+    color: var(--brand-on-surface, #111);
+    border-radius: var(--radius-lg, 12px);
+    padding: clamp(1.25rem, 4vw, 2rem);
+  }
+  .zd-close:focus-visible { outline: 2px solid var(--brand-focus, #1a1a1a); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .zd-content[data-state="open"] { animation: zd-in 200ms ease-out; }
+    @keyframes zd-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+
+<script>
+  import * as dialog from "@zag-js/dialog";
+  import { VanillaMachine, normalizeProps, spreadProps } from "@zag-js/vanilla";
+
+  document.querySelectorAll<HTMLElement>("[data-zag-dialog]").forEach((root) => {
+    // Gotcha 1: cache refs by [data-part] BEFORE the first render (spreadProps rewrites ids).
+    const trigger = root.querySelector<HTMLElement>('[data-part="trigger"]');
+    const backdrop = root.querySelector<HTMLElement>('[data-part="backdrop"]');
+    const positioner = root.querySelector<HTMLElement>('[data-part="positioner"]');
+    const content = root.querySelector<HTMLElement>('[data-part="content"]');
+    const titleEl = root.querySelector<HTMLElement>('[data-part="title"]');
+    const descEl = root.querySelector<HTMLElement>('[data-part="description"]');
+    const close = root.querySelector<HTMLElement>('[data-part="close"]');
+
+    const machine = new VanillaMachine(dialog.machine, { id: root.dataset.id || "dlg" });
+
+    function render() {
+      const api = dialog.connect(machine.service, normalizeProps);
+      if (trigger) spreadProps(trigger, api.getTriggerProps(), machine.scope.id);
+      if (backdrop && positioner) {
+        if (api.open) {
+          backdrop.hidden = false;
+          positioner.hidden = false;
+          spreadProps(backdrop, api.getBackdropProps(), machine.scope.id);
+          spreadProps(positioner, api.getPositionerProps(), machine.scope.id);
+          if (content) spreadProps(content, api.getContentProps(), machine.scope.id);
+          if (titleEl) spreadProps(titleEl, api.getTitleProps(), machine.scope.id);
+          if (descEl) spreadProps(descEl, api.getDescriptionProps(), machine.scope.id);
+          if (close) spreadProps(close, api.getCloseTriggerProps(), machine.scope.id);
+        } else {
+          backdrop.hidden = true;
+          positioner.hidden = true;
+        }
+      }
+    }
+
+    machine.subscribe(render);
+    machine.start();
+    render();
+  });
+</script>

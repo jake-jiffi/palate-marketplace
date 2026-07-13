@@ -1,0 +1,43 @@
+---
+// Collection index - blog / news / job board. Lists `collectionItem` documents
+// via loadPage(), which falls back to an empty list during the preview stage.
+// Rename this folder and the GROQ type per project (e.g. /jobs + jobListing).
+// See references/cms-and-draft-preview.md.
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { loadPage } from "../../lib/load";
+
+type Item = { title: string; slug: string; excerpt?: string; publishedAt?: string };
+
+const items = await loadPage<Item[]>(
+  `*[_type == "collectionItem"] | order(publishedAt desc){
+    title, "slug": slug.current, excerpt, publishedAt
+  }`,
+  {},
+  [],
+);
+---
+<BaseLayout title="Latest - {{CLIENT_NAME}}">
+  <section class="bg-brand-bg mx-auto max-w-3xl px-6 py-20">
+    <h1 class="font-display text-brand-text text-4xl md:text-5xl">Latest</h1>
+
+    {items.length === 0 && (
+      <p class="text-brand-muted mt-6">Nothing published yet - add items in the Studio.</p>
+    )}
+
+    <ul class="mt-10 space-y-10">
+      {items.map((it) => (
+        <li>
+          <a href={`/blog/${it.slug}`} class="group block">
+            <h2 class="font-display text-brand-text text-2xl group-hover:underline">{it.title}</h2>
+            {it.publishedAt && (
+              <time class="text-brand-muted mt-1 block text-sm">
+                {new Date(it.publishedAt).toLocaleDateString("en-AU", { dateStyle: "long" })}
+              </time>
+            )}
+            {it.excerpt && <p class="text-brand-muted mt-2">{it.excerpt}</p>}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</BaseLayout>

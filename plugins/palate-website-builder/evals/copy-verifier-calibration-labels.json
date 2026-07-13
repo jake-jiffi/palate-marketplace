@@ -1,0 +1,11 @@
+{
+  "_doc": "W8 copy-verifier calibration. Each row pairs two hero lines with the copy verifier's 4-axis read (specificity/voiceFit/momentum/restraint, the W9 axes) and Jake's preference. Seed rows below are ILLUSTRATIVE examples of the format, not founder labels; mark real rows by removing todo. The number is future work until Jake labels >= 5 decisive pairs (see copy-verifier-calibration.md).",
+  "comparisons": [
+    { "todo": true, "a": { "hero": "Plant-based and laboratory-made ingredients.", "axes": { "specificity": 5, "voiceFit": 5, "momentum": 3, "restraint": 5 } },
+      "b": { "hero": "Powerful, seamless solutions to elevate your skincare.", "axes": { "specificity": 1, "voiceFit": 2, "momentum": 2, "restraint": 2 } },
+      "human_prefers": "a", "comment": "illustrative: named-specific vs generic filler" },
+    { "todo": true, "a": { "hero": "Book an eye test in 60 seconds.", "axes": { "specificity": 5, "voiceFit": 4, "momentum": 5, "restraint": 5 } },
+      "b": { "hero": "Your vision, our passion.", "axes": { "specificity": 1, "voiceFit": 2, "momentum": 2, "restraint": 3 } },
+      "human_prefers": "a", "comment": "illustrative: concrete action vs empty slogan" }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "palate-website-builder",
+  "version": "1.10.0",
+  "description": "Builds production-grade Astro websites grounded by the Palate MCP, and converts brand assets into a four-format design-token package. Connect the Palate MCP with one `claude mcp add --scope user` command (token from app.palatemcp.com).",
+  "author": {
+    "name": "Jiffi",
+    "url": "https://palatemcp.com"
+  },
+  "homepage": "https://palatemcp.com/docs",
+  "repository": "https://github.com/jake-jiffi/palate-website-builder",
+  "license": "UNLICENSED",
+  "keywords": [
+    "astro",
+    "web-design",
+    "mcp",
+    "palate",
+    "brand",
+    "design-tokens",
+    "taste"
+  ]
+}

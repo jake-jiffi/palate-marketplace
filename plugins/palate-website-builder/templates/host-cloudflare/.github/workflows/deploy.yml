@@ -1,0 +1,39 @@
+# Build in CI, deploy the artifact to Cloudflare Workers.
+# The site NEVER builds on Cloudflare. The private brand package installs here
+# using the native GITHUB_TOKEN (granted by permissions: packages: read).
+name: Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # lets a Sanity webhook trigger a rebuild on content change
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read         # REQUIRED: without this, npm ci 401s on the brand package
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@jiffi-projects'
+      - name: Install (brand package authenticates via native GITHUB_TOKEN)
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: npm run build
+        env:
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
+          SANITY_DATASET: production
+          SANITY_API_READ_TOKEN: ${{ secrets.SANITY_API_READ_TOKEN }}
+      - name: Deploy pre-built artifact to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

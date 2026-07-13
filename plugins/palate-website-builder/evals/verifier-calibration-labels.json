@@ -1,0 +1,44 @@
+{
+  "_README": "See verifier-calibration.md. This is the labelled set the build-verifier calibration gate scores against. Two label kinds: `absolute` ({report, human:'ship'|'do-not-ship'}) anchors, and `comparisons` ({a, b, human_prefers:'a'|'b'|'tie'}) pairwise rows. PAIRWISE is the calibrated method (it is what cleared the library gate at 0.716); absolute anchors only become comparisons once BOTH ship and do-not-ship labels exist. report paths may be absolute or relative to THIS file. Mark unfinished rows with `\"todo\": true` and they are ignored.",
+  "_method": "pairwise concordance, mirroring library/_meta/vlm/calibration.json (ties excluded from the denominator; chance baseline 0.5; deploy gate 0.7).",
+  "absolute": [
+    {
+      "report": "/Users/jakeshelley/dev/website-building/ferrous-cast/verify-report.json",
+      "human": "do-not-ship",
+      "comment": "Overnight bold build. Self-scored Variety 5 (desktop) / 4 (mobile) and verdict pass, but it collapsed Explore (no built variants / no pairwise gate ran in the report). Anchored do-not-ship at the BOLD bar: a high self-score that did not earn the ambition gate is exactly the uncalibrated-judge failure this spike measures."
+    },
+    {
+      "report": "/Users/jakeshelley/dev/website-building/lumen-cast/verify-report.json",
+      "human": "do-not-ship",
+      "comment": "Overnight bold build. Self-scored all six axes 5 and verdict pass, but uniqueness ran:false (single converged page, no live Explore variants) and the report carries no pairwise win. Anchored do-not-ship: maxed axes while Explore collapsed - do-not-ship at the bold bar per the diagnosis."
+    },
+    {
+      "report": "/Users/jakeshelley/dev/website-building/monolith-no7/verify-report.json",
+      "human": "do-not-ship",
+      "comment": "Overnight bold build. Self-scored all six axes 5 and verdict pass, but the build converged to a single page (variants:[], uniqueness fail-open) with no rendered Explore set and no pairwise gate in the report. Anchored do-not-ship: another high self-score that did not clear the bold bar."
+    }
+  ],
+  "comparisons": [
+    {
+      "todo": true,
+      "a": "TODO/path/to/a/verify-report.json",
+      "b": "/Users/jakeshelley/dev/website-building/lumen-cast/verify-report.json",
+      "human_prefers": "a",
+      "comment": "TODO (Jake): a SHIP-grade build vs lumen-cast. Pairwise is the calibrated signal - this row teaches the gate that a properly-ambitious build should outrank a high-self-score-but-Explore-collapsed one. Set `a` to a build you would actually ship, set human_prefers accordingly, and remove `todo`."
+    },
+    {
+      "todo": true,
+      "a": "TODO/path/to/a/verify-report.json",
+      "b": "TODO/path/to/b/verify-report.json",
+      "human_prefers": "tie",
+      "comment": "TODO (Jake): two builds you rate as genuinely equal (a tie). Ties are excluded from the concordance denominator (mirrors the library's 67-decisive-of-101), so they cost nothing but record the judgement. Remove `todo` when filled."
+    },
+    {
+      "todo": true,
+      "a": "TODO/path/to/a/verify-report.json",
+      "b": "TODO/path/to/b/verify-report.json",
+      "human_prefers": "b",
+      "comment": "TODO (Jake): a third real comparison. Aim for at least ~10 decisive (non-tie) comparisons before the held-out concordance is worth reading; this seed is far too thin to graduate the spike (see verifier-calibration.md)."
+    }
+  ]
+}

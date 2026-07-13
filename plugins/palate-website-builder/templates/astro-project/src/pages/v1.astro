@@ -1,0 +1,64 @@
+---
+// EXAMPLE Explore variant. Showing the conventions: every section is wrapped
+// with <SectionMark id="vN-sectionName" />, the parent section uses `relative`
+// so the label can anchor, and the page composes sections that could later be
+// extracted at Compose time. Claude generates v2..vN by varying the section
+// sequence, hero pattern, CTA placement, motion intensity, and design tokens
+// within the brand. See references/explore-stage.md.
+//
+// Remember to add this variant to src/lib/variants.ts so the switcher shows it.
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SectionMark from "../components/SectionMark.astro";
+import { loadPage } from "../lib/load";
+import { home, type HomeContent } from "../lib/content";
+
+const data = await loadPage<HomeContent>(
+  `*[_type == "page" && slug.current == "/"][0]`,
+  {},
+  home,
+);
+const { hero } = data;
+---
+<BaseLayout title="v1 - {{CLIENT_NAME}}">
+  <section class="bg-brand-bg relative px-6 py-24 text-center">
+    <SectionMark id="v1-hero" />
+    {hero.eyebrow && (
+      <p class="text-brand-muted text-sm font-medium uppercase tracking-wide">{hero.eyebrow}</p>
+    )}
+    <h1 class="font-display text-brand-text mx-auto mt-3 max-w-3xl text-4xl md:text-6xl">
+      {hero.heading}
+    </h1>
+    <p class="text-brand-muted mx-auto mt-6 max-w-xl text-lg">{hero.sub}</p>
+    <div class="mt-8">
+      <a
+        href={hero.cta.href}
+        class="rounded-brand bg-brand-accent text-brand-inverse inline-flex px-6 py-3 font-semibold"
+      >
+        {hero.cta.label}
+      </a>
+    </div>
+  </section>
+
+  <section class="bg-brand-bg relative px-6 py-20">
+    <SectionMark id="v1-features" />
+    <div class="mx-auto max-w-5xl">
+      <h2 class="font-display text-brand-text text-3xl">What we do</h2>
+      <p class="text-brand-muted mt-3 max-w-2xl">
+        Replace with three to six feature blocks - this variant's structural pattern.
+      </p>
+    </div>
+  </section>
+
+  <section class="bg-brand-bg relative px-6 py-20 text-center">
+    <SectionMark id="v1-cta" />
+    <h2 class="font-display text-brand-text text-3xl">Ready to start?</h2>
+    <div class="mt-6">
+      <a
+        href={hero.cta.href}
+        class="rounded-brand bg-brand-accent text-brand-inverse inline-flex px-6 py-3 font-semibold"
+      >
+        {hero.cta.label}
+      </a>
+    </div>
+  </section>
+</BaseLayout>

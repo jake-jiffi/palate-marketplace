@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+
+# Secrets - never commit. .env.example is the committed template.
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+npm-debug.log*
+
+# Vercel local link + creds
+.vercel/
+
+# Vercel preview protection-bypass secret (grants access; never commit)
+.jiffi-vercel-bypass

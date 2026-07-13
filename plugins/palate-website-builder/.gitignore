@@ -1,0 +1,13 @@
+node_modules/
+.DS_Store
+*.skill
+.vercel/
+dist/
+.astro/
+scripts/reference-capture/node_modules/
+# Per-build artefacts the gates write into a build's project dir; never the skill's source.
+build-manifest.json
+**/build-manifest.json
+verify-report.json
+.palate-shots/
+.palate-skill-state.json

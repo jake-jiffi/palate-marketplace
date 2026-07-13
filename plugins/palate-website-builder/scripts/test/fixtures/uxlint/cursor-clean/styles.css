@@ -1,0 +1,2 @@
+/* Pointer cursor and a colour transition only, nothing hidden. */
+.btn { cursor: pointer; transition: color 200ms ease; }

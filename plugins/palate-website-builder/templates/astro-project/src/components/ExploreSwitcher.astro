@@ -1,0 +1,70 @@
+---
+// Explore-mode "pick a direction" picker. A floating pill in the BOTTOM-RIGHT
+// that expands UPWARD into a labelled panel - deliberately out of the site's
+// own navigation so it never interferes with the real header. Renders only when
+// PUBLIC_EXPLORE_MODE=true AND at least one variant is registered in
+// src/lib/variants.ts. Zero-JS (native <details>). See references/explore-stage.md.
+import { variants, landingVariants } from "../lib/variants";
+
+const exploreMode = import.meta.env.PUBLIC_EXPLORE_MODE === "true";
+const path = Astro.url.pathname;
+const all = [...variants, ...landingVariants];
+const show = exploreMode && all.length > 0;
+const current = all.find((v) => v.href === path) ?? all[0];
+const optionClass = (active: boolean) =>
+  [
+    "block rounded-xl px-4 py-2.5 transition-colors",
+    active
+      ? "bg-emerald-300 font-semibold text-neutral-950"
+      : "text-white/70 hover:bg-white/5 hover:text-white",
+  ].join(" ");
+---
+
+{show && current && (
+  <details class="ev-switcher fixed bottom-5 right-5 z-[60] font-mono text-sm">
+    {/* Panel - opens upward, above the pill */}
+    <div class="ev-panel absolute bottom-full right-0 mb-3 w-72 rounded-2xl border border-white/10 bg-neutral-900/95 p-3 shadow-2xl backdrop-blur">
+      <p class="px-2 pb-2 pt-1 text-xs uppercase tracking-[0.2em] text-white/40">
+        Preview &middot; Pick a direction
+      </p>
+      <ul class="max-h-[60vh] space-y-0.5 overflow-y-auto">
+        {variants.map((v) => (
+          <li>
+            <a href={v.href} class={optionClass(v.href === path)}>
+              <span class="text-white/40">{v.id}</span> {v.name}
+            </a>
+          </li>
+        ))}
+        {variants.length > 0 && landingVariants.length > 0 && (
+          <li aria-hidden="true"><hr class="my-2 border-white/10" /></li>
+        )}
+        {landingVariants.map((v) => (
+          <li>
+            <a href={v.href} class={optionClass(v.href === path)}>
+              <span class="text-white/40">{v.id}</span> {v.name}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    {/* Pill - the collapsed control */}
+    <summary class="ev-pill flex cursor-pointer select-none items-center gap-2 rounded-full border border-white/10 bg-neutral-900/95 px-4 py-2.5 text-white shadow-2xl backdrop-blur">
+      <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-300"></span>
+      <span class="truncate">
+        <span class="text-white/40">{current.id}</span> {current.name}
+      </span>
+      <svg class="ev-chevron ml-1 h-4 w-4 shrink-0 text-white/50 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M18 15l-6-6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </summary>
+  </details>
+)}
+
+<style>
+  /* Hide the native disclosure triangle; the pill is the whole control. */
+  .ev-switcher > summary { list-style: none; }
+  .ev-switcher > summary::-webkit-details-marker { display: none; }
+  /* Chevron points up when closed (panel opens up); flips when open. */
+  .ev-switcher[open] .ev-chevron { transform: rotate(180deg); }
+</style>

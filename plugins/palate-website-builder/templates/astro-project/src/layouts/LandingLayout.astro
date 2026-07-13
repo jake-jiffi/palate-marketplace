@@ -1,0 +1,21 @@
+---
+// Single-focus landing layout. Wraps BaseLayout but deliberately exposes no
+// header/nav slot, so a landing page cannot inject the global site nav that
+// competes with its one action (removing the nav is one of the highest-certainty
+// conversion gains). The footer slot still passes through for legal links.
+// Landing routes use this instead of BaseLayout; the lp-uses-full-nav-layout
+// lint rule enforces it. See references/audit-dimensions.md "Landing conversion".
+import BaseLayout from "./BaseLayout.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  noindex?: boolean;
+}
+const { title, description, image, noindex } = Astro.props;
+---
+<BaseLayout title={title} description={description} image={image} noindex={noindex}>
+  <slot />
+  <slot name="footer" slot="footer" />
+</BaseLayout>

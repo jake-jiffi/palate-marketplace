@@ -1,0 +1,36 @@
+---
+// Home page - the canonical example of the content pattern every page follows:
+// loadPage() returns Sanity content when a project is configured, and the
+// typed fallback from src/lib/content.ts otherwise. The GROQ query and the
+// matching Sanity schema are written per-project in Phase B; the fallback
+// shape is the contract between them. See references/cms-and-draft-preview.md.
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { loadPage } from "../lib/load";
+import { home, type HomeContent } from "../lib/content";
+
+const data = await loadPage<HomeContent>(
+  `*[_type == "page" && slug.current == "/"][0]`,
+  {},
+  home,
+);
+const { hero } = data;
+---
+<BaseLayout title="{{CLIENT_NAME}}">
+  <section class="bg-brand-bg px-6 py-24 text-center">
+    {hero.eyebrow && (
+      <p class="text-brand-muted text-sm font-medium uppercase tracking-wide">{hero.eyebrow}</p>
+    )}
+    <h1 class="font-display text-brand-text mx-auto mt-3 max-w-3xl text-4xl md:text-6xl">
+      {hero.heading}
+    </h1>
+    <p class="text-brand-muted mx-auto mt-6 max-w-xl text-lg">{hero.sub}</p>
+    <div class="mt-8">
+      <a
+        href={hero.cta.href}
+        class="rounded-brand bg-brand-accent text-brand-inverse inline-flex px-6 py-3 font-semibold"
+      >
+        {hero.cta.label}
+      </a>
+    </div>
+  </section>
+</BaseLayout>
