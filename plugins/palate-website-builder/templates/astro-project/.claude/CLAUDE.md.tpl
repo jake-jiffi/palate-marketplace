@@ -14,6 +14,9 @@ Astro 6 + Cloudflare Workers + Sanity. Brand from @jiffi-projects/{{SLUG}}-brand
 3. src/lib/sanity.ts (content)
 4. The brand package CLAUDE.md (design rules)
 
+## Continuing this site (add a page, a section, a feature)
+Use the palate-website-builder skill's **CONTINUE SITE** mode, not a fresh build: ask it to "add {the page or section} to this site". It grounds the addition in the Palate MCP per page, matches these brand tokens and this layout, adds the SEO + sitemap entry, and runs the anti-slop + rendered + visual gates on the changed page. It never re-invents the brand.
+
 ## Deploy
 Push to main -> CI builds (brand package via GITHUB_TOKEN) -> deploys dist/ to Workers.
 Content change in Sanity -> webhook -> revalidate workflow rebuilds.

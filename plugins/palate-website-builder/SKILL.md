@@ -1,13 +1,13 @@
 ---
 name: palate-website-builder
 description: >
-  The Palate website builder skill. Builds production-grade Astro websites grounded by the Palate MCP (268 deeply-analysed real websites with inner-page depth, design tokens, and a taste layer). Two modes: (1) BUILD SITE, grounded by the Palate MCP for real design taste. (2) BUILD BRAND, converts raw brand assets into a four-format design token package. Trigger when asked to build, scaffold, or start a website, or to build/convert a brand package.
+  The Palate website builder skill. Builds AND maintains production-grade Astro websites grounded by the Palate MCP (2,000+ deeply-analysed real websites with inner-page depth, design tokens, and a taste layer). Three modes: (1) BUILD SITE, scaffold a new site grounded by the Palate MCP for real design taste. (2) CONTINUE SITE, extend an existing site (add a page or section, restyle, add a feature) with the same MCP grounding and gates, minus the scaffold and identity machinery. (3) BUILD BRAND, convert raw brand assets into a four-format design token package. Trigger when asked to build, scaffold or start a website; to add to, edit, restyle, extend, continue or improve an existing site; or to build/convert a brand package.
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Skill, WebSearch, WebFetch, mcp__palate]
 ---
 
 # Palate Website Builder
 
-One skill, two capabilities. It builds production-grade Astro websites grounded by the Palate MCP's library of deeply-analysed real websites, and it builds brand packages that feed those builds. The Palate MCP provides the taste; this skill provides the craft.
+One skill, three capabilities. It builds production-grade Astro websites grounded by the Palate MCP's library of deeply-analysed real websites, keeps building them after launch (add pages, sections and features with the same rigour), and builds the brand packages that feed those builds. The Palate MCP provides the taste; this skill provides the craft.
 
 ## Mode dispatch (read this first)
 
@@ -16,11 +16,12 @@ Decide which mode the request is, then jump to that section. When a request span
 | If the request is... | Mode | Go to |
 |----------------------|------|-------|
 | "build/scaffold/start a site for {client}", "migrate {client} from Webflow" | **BUILD SITE** | "Mode: Build a website" |
+| "add a page/section to {site}", "edit / restyle / improve this site", "continue building {site}", "build the {pageType} page on my existing site" | **CONTINUE SITE** | "Mode: Continue an existing site" |
 | "build a brand repo / brand package for {client}", "convert these brand assets", "turn this brand into code" (no website) | **BUILD BRAND** | "Mode: Build a brand package" |
 
-The two modes share infrastructure (slug derivation, the Palate MCP reference library, state patterns) but produce different things. BUILD SITE may call BUILD BRAND internally (Phase 0) when a site needs a brand package that doesn't exist yet.
+The three modes share infrastructure (slug derivation, the Palate MCP reference library, the gates, state patterns) but produce different things. BUILD SITE may call BUILD BRAND internally (Phase 0) when a site needs a brand package that doesn't exist yet; CONTINUE SITE reuses the MCP grounding and the gates on an existing codebase, without the scaffold or identity machinery.
 
-Do not use this skill for: one-page landing pages with no CMS, pure web applications, or editing an already-scaffolded site (use the sub-skills inside that project).
+For adding to, editing, restyling or extending an EXISTING site, use CONTINUE SITE mode (below), not a fresh BUILD SITE. Do not use this skill for pure web applications (a browser app, not a website), or to hand-write a throwaway HTML mockup with no project (the freestyle anti-pattern). A small or single-page site IS in scope: build it as a real Astro project, not loose HTML.
 
 ---
 
@@ -135,6 +136,26 @@ Provide: client name, domain, brief. Optional: `--stage=preview|production` (pre
 
 ---
 
+## Mode: Continue an existing site
+
+The plugin as the ongoing partner, not just the scaffolder: add a page or section, restyle, extend copy, add a feature, on a site that already exists. It carries the SAME taste rigour as a fresh build (MCP-grounded per page, the anti-slop + rendered + visual-rubric gates, SEO on every page) MINUS the identity + scaffold machinery. It works whether or not the plugin built the site (a Palate scaffold, a Webflow migration it shipped, or a hand-built site it has never seen). Full doctrine: `references/continue-mode.md`.
+
+### The rule that defines the mode
+Identity is LOCKED. CONTINUE is always brand-provided: it NEVER runs DIVERGE / CONVERGE on colour, type or identity, because every addition must look like it was always part of the site. Diverge only WITHIN the locked brand (layout / motion / density) when a new section needs options. The existing site's brand always wins, so the mode never re-runs DIVERGE on identity. (The PreToolUse DIVERGE wall is scoped to an active BUILD SITE and structurally exempts edits + external sites; `references/continue-mode.md` has the exact mechanics.)
+
+### The loop (per page or section)
+1. **Orient**: resolve the project; detect provenance (Palate-scaffolded -> inherit its brand-record + state; external -> LOCK the site's own tokens / Tailwind preset / CSS vars / layout). Read the conventions the addition must match (framework, layout + SEO wiring, token source, components, routing, nav, sitemap). New work is surgical and native.
+2. **MCP liveness probe** (`refs_list_verticals`) - STOP if the `mcp__palate__*` tools are absent (`claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp` + restart); honour the free-cap STOP (6.1). No MCP, no build: the depth gate fails open.
+3. **Ground per page/section** via the section-build recipe (`references/reference-library-usage.md`): `refs_search { pageType, uiElement, conversionPrimitive, query }` -> view a donor's real inner page (`refs_get_screenshot { page }`) -> build from its `layer: signature_moves / do_dont / component_prompts` + `refs_get_astro_recipe`, re-skinned to the locked brand.
+4. **Build as real code IN the project**, matching its conventions and reusing its components + tokens (never a parallel design language, never a loose HTML file).
+5. **SEO on the page**: real title / description / canonical / social card, added to the sitemap + nav where it belongs, with the structured data the site uses.
+6. **Gate the CHANGE** (only what applies to an edit): `scripts/ux-lint.sh` on the changed files, then the rendered gates on the CHANGED page(s), `scripts/verify-rendered.sh` + the visual rubric via `scripts/reference-capture/screenshot-build.mjs` at 1440 + 390, judged against `references/visual-rubric.md` + `references/ai-slop-tells.md` (spawn `palate-verifier`, scoped to the changed page). SKIP: DIVERGE/CONVERGE/EXPLORE, scaffold + `verify-is-real-astro.sh`, and Phases B-F (the infra already exists).
+
+### The plan checkpoint
+Show a short plan and get a go for a SUBSTANTIAL addition (a whole new page, a nav / IA change, anything touching money / forms / auth). SKIP it for tiny reversible work (one section, a copy fix, a restyle). Do not make a quick edit wait on a confirmation.
+
+---
+
 ## Mode: Build a brand package
 
 Converts raw brand assets into a published private npm package `@palate-projects/{slug}-brand`: four-format design tokens (W3C DTCG JSON source of truth, CSS custom properties, typed TS, Tailwind preset), a unified fonts.css, kebab-cased assets, reference React + Tailwind components, full-page examples, and seven markdown brand docs. The package feeds Claude Design, v0, Cursor, Figma Make, and is consumed by the BUILD SITE mode.
@@ -183,7 +204,7 @@ See `references/gotchas.md` (build) and `references/brand/gotchas.md` (brand). T
 
 ## References
 
-Build operational: `build-stages` (preview vs production, the contract), `cms-and-draft-preview` (the SSR + Sanity + draft-mode architecture - read before any build), `production-handoff` (running provisioning hands-off via the user's Terminal), `naming`, `state`, `errors`, `idempotency`, `pipeline`, `phase-0-brand-detection`, `story-engine` (the divergent spine), `build-commission` (the ambition bar + the toolkit, issued post-CONVERGE / pre-Explore), `explore-stage`, `critique-discipline` (the four pre-emit habits), `audit-dimensions` (the reviewer pass), `anti-patterns` (the ux-lint rule source of truth), `build-memory` (cross-build diversification), `industry-patterns` (per-industry anti-patterns), `motion-and-3d` (the recipe layer, incl. the proven R3F hero recipe), `rendered-bug-classes` (the BOLD-build defects + the `verify-rendered.sh` gate that catches them), `brand-package-consumption`, `reference-library-usage`, `existing-infra`, `hosting-vercel`, `team-access`, `composition`.
+Build operational: `build-stages` (preview vs production, the contract), `continue-mode` (the ongoing-build mode: add / edit / extend an existing site), `cms-and-draft-preview` (the SSR + Sanity + draft-mode architecture - read before any build), `production-handoff` (running provisioning hands-off via the user's Terminal), `naming`, `state`, `errors`, `idempotency`, `pipeline`, `phase-0-brand-detection`, `story-engine` (the divergent spine), `build-commission` (the ambition bar + the toolkit, issued post-CONVERGE / pre-Explore), `explore-stage`, `critique-discipline` (the four pre-emit habits), `audit-dimensions` (the reviewer pass), `anti-patterns` (the ux-lint rule source of truth), `build-memory` (cross-build diversification), `industry-patterns` (per-industry anti-patterns), `motion-and-3d` (the recipe layer, incl. the proven R3F hero recipe), `rendered-bug-classes` (the BOLD-build defects + the `verify-rendered.sh` gate that catches them), `brand-package-consumption`, `reference-library-usage`, `existing-infra`, `hosting-vercel`, `team-access`, `composition`.
 Build detail: `assets`, `connective-tissue`, `testing`, `environments`, `cache-invalidation`, `schema-versioning`, `claude-md-template`, `agents-md-template`, `handover-format`, `versioning`, `webflow-migration`.
 Brand (`references/brand/`): `structure`, `opinionated-choices`, `perceptual-floors` (cited research-grounded minimums), `normalisation-rules` (raw extraction to usable brand), `asset-classification`, `token-generation`, `fonts-css-rules`, `photography-pipeline`, `voice-extraction`, `publishing`, `state`, `gotchas`, `handback`.
 Library: `reference-library-usage` (how BUILD SITE consumes the Palate MCP's library).
