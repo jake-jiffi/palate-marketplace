@@ -18,8 +18,8 @@ for f in DIVERGE CONVERGE COMMISSION EXPLORE "mcp__palate"; do
 done
 
 # 2. The free-cap number must match SKILL.md exactly.
-grep -q "25 deep" "$D" || fail "doctrine lost the '25 deep' free cap"
-grep -q "25 deep" "$S" || fail "SKILL.md '25 deep' cap changed but the doctrine still says it (re-curate)"
+grep -q "50 deep" "$D" || fail "doctrine lost the '50 deep' free cap"
+grep -q "50 deep" "$S" || fail "SKILL.md free cap changed but the doctrine disagrees (re-curate)"
 
 # 3. Every banned-as-default face the lint enforces (anti-patterns.md) must appear in the
 #    doctrine, so a new ban in the lint forces a doctrine update.

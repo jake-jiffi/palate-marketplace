@@ -1,9 +1,9 @@
 # {{CLIENT_NAME}} website
 
-Astro 6 + Cloudflare Workers + Sanity. Brand from @jiffi-projects/{{SLUG}}-brand (pinned {{BRAND_VERSION}}).
+Astro 6 + Vercel + Sanity. Brand from @palate-projects/{{SLUG}}-brand (pinned {{BRAND_VERSION}}).
 
 ## NON-NEGOTIABLES
-- Build happens in CI and deploys an artifact. NEVER switch to building on Cloudflare (private brand package auth breaks there).
+- Vercel owns the build and deploy (its GitHub integration): pushes to main auto-deploy, PRs get preview deployments. The cloud build installs the private brand package via GITHUB_PACKAGES_TOKEN.
 - Pin the brand package to an exact version. Updating it is deliberate: bump, review, deploy.
 - Australian English. No em dashes.
 - Only brand tokens for colour/type. Never hand-pick hex.
@@ -18,8 +18,8 @@ Astro 6 + Cloudflare Workers + Sanity. Brand from @jiffi-projects/{{SLUG}}-brand
 Use the palate-website-builder skill's **CONTINUE SITE** mode, not a fresh build: ask it to "add {the page or section} to this site". It grounds the addition in the Palate MCP per page, matches these brand tokens and this layout, adds the SEO + sitemap entry, and runs the anti-slop + rendered + visual gates on the changed page. It never re-invents the brand.
 
 ## Deploy
-Push to main -> CI builds (brand package via GITHUB_TOKEN) -> deploys dist/ to Workers.
-Content change in Sanity -> webhook -> revalidate workflow rebuilds.
+Push to main -> Vercel builds and deploys. PRs get preview deployments.
+Content change in Sanity -> served fresh (SSR), no code redeploy needed.
 
 ## Updating the brand
-npm install @jiffi-projects/{{SLUG}}-brand@latest, review visual diff, deploy.
+npm install @palate-projects/{{SLUG}}-brand@latest, review the visual diff, deploy.
