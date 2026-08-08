@@ -18,8 +18,13 @@ for f in DIVERGE CONVERGE COMMISSION EXPLORE "mcp__palate"; do
 done
 
 # 2. The free-cap number must match SKILL.md exactly.
-grep -q "50 deep" "$D" || fail "doctrine lost the '50 deep' free cap"
-grep -q "50 deep" "$S" || fail "SKILL.md free cap changed but the doctrine disagrees (re-curate)"
+#    NOTE what this does and does not prove. It proves the two DOCS agree; it cannot see the
+#    ENFORCED cap, which lives in mcp-server \`lib/auth.ts\` PLAN_LIMITS.free.monthlyEnrichedCap.
+#    Both docs said 50 for weeks after pricing v3 moved enforcement to 20, and this test passed
+#    the whole time because they were consistently wrong together. When the plan changes, change
+#    the number HERE as well, from the enforcing constant and not from the other doc.
+grep -q "20 deep" "$D" || fail "doctrine lost the '20 deep' free cap"
+grep -q "20 deep" "$S" || fail "SKILL.md free cap changed but the doctrine disagrees (re-curate)"
 
 # 3. Every banned-as-default face the lint enforces (anti-patterns.md) must appear in the
 #    doctrine, so a new ban in the lint forces a doctrine update.

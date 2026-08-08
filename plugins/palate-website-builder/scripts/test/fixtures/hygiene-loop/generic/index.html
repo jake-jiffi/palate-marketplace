@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northgate Plumbing</title>
+<meta name="description" content="Northgate Plumbing services.">
+<style>
+  /* Deliberately generic: the stock AI-build kit. Inter, Tailwind indigo-500, 14px body,
+     tap targets under WCAG 2.5.8's 24px. Every one of these is a thing the design gate
+     measures, so this fixture must fail it. */
+  :root { --accent: #6366f1; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Inter, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #1f2937;
+    background: #ffffff;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  header { display: flex; gap: 16px; align-items: center; justify-content: space-between; }
+  nav a { font-size: 13px; color: #6b7280; text-decoration: none; padding: 2px 4px; display: inline-block; }
+  .cta { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 4px 10px; font-size: 13px; }
+  h1 { font-family: Inter, sans-serif; font-size: 36px; font-weight: 700; letter-spacing: -0.5px; margin: 48px 0 12px; }
+  h2 { font-size: 20px; margin: 32px 0 12px; }
+  p { max-width: 640px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+  .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .card h3 { font-size: 16px; margin: 0 0 8px; }
+  footer { margin-top: 48px; padding: 24px 0; border-top: 1px solid #e5e7eb; font-size: 13px; color: #6b7280; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <strong>Northgate Plumbing</strong>
+    <nav aria-label="Main">
+      <a href="/services">Services</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <button class="cta" type="button">Get a quote</button>
+    </nav>
+  </header>
+
+  <h1>Plumbing services you can rely on</h1>
+  <p>We are a leading provider of plumbing solutions for homes and businesses. Our team
+     delivers quality workmanship and outstanding customer service on every job.</p>
+
+  <h2>What we do</h2>
+  <div class="grid">
+    <div class="card"><h3>Emergency repairs</h3><p>Fast response when things go wrong.</p></div>
+    <div class="card"><h3>Hot water</h3><p>Installation and replacement of hot water systems.</p></div>
+    <div class="card"><h3>Bathrooms</h3><p>Full bathroom renovations from start to finish.</p></div>
+  </div>
+
+  <h2>Why choose us</h2>
+  <div class="grid">
+    <div class="card"><h3>Experienced</h3><p>Years of experience in the industry.</p></div>
+    <div class="card"><h3>Reliable</h3><p>We turn up when we say we will.</p></div>
+    <div class="card"><h3>Affordable</h3><p>Competitive pricing with no hidden fees.</p></div>
+  </div>
+</main>
+<footer class="wrap">&copy; Northgate Plumbing</footer>
+</body>
+</html>

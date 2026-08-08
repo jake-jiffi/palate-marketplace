@@ -1,19 +1,27 @@
 @import "tailwindcss";
 
 /*
- * Vendored brand tokens (portable starter, no private brand package). Replace these with
- * the real brand: DIVERGE the identity first (see AGENTS.md), then set the palette, faces
- * and scale here. Tailwind 4 reads @theme, so bg-brand-bg / text-brand-ink / font-display
- * etc. are generated from these variables.
+ * PLACEHOLDER TOKENS. These are deliberately unattractive so that shipping them is
+ * obviously wrong. DIVERGE the identity first (see AGENTS.md), then replace every value
+ * here. Tailwind 4 reads @theme, so bg-brand-bg / text-brand-ink / font-display etc. are
+ * generated from these variables.
+ *
+ * WHY THEY ARE NOT A NICE DEFAULT ANY MORE. This file used to ship a warm off-white
+ * (#f6f5f2) with a terracotta accent (#e2553d) and a serif display, which is Palate's own
+ * brand and is also, near enough, the first cluster named in Anthropic's frontend-design
+ * skill as a look AI reaches for by default. A good-looking default is one an agent keeps,
+ * so every non-Claude scaffold that skipped DIVERGE shipped the same identity, and it was
+ * the one identity a widely-installed skill warns against. A starter's job is to be
+ * replaced, not to be liked.
  */
 @theme {
   --color-brand-bg: #ffffff;
-  --color-brand-surface: #f6f5f2;
-  --color-brand-ink: #16130f;
-  --color-brand-muted: #6b655c;
-  --color-brand-accent: #e2553d;
+  --color-brand-surface: #f2f2f2;
+  --color-brand-ink: #141414;
+  --color-brand-muted: #6b6b6b;
+  --color-brand-accent: #0044cc;
 
-  --font-display: "Georgia", "Times New Roman", serif;
+  --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 

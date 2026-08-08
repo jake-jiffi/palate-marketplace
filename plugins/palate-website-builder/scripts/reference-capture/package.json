@@ -4,11 +4,15 @@
   "version": "2.0.0",
   "type": "module",
   "description": "Headless Chromium capture engine for the palate-website-builder reference library. Drives a real browser over a top-tier site and extracts a deep, machine-readable record of how it is built.",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "capture": "node capture.mjs"
   },
   "dependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.49.0",
+    "axe-core": "^4.10.0",
+    "@huggingface/transformers": "^3.7.5"
   }
 }

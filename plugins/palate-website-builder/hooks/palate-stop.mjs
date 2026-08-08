@@ -88,17 +88,47 @@ function positiveFailures(proj) {
   // 4. The fresh-context verifier itself returned verdict:fail (it ran and judged it a fail).
   if (rep && rep.verdict === "fail") reasons.push("the fresh-context verifier returned verdict:fail (see verify-report.json) - resolve the named findings");
 
-  // 5. Interaction-state failures from the rendered interaction pass (verify-rendered.mjs
-  //    drives a real pointer / keyboard and asserts the state changed). Only the OBJECTIVE,
-  //    low-FP checks are written here (a dead hover, a deleted focus ring, a hover/expand nav
-  //    that never opens or traps Escape); the pass keeps its softer findings advisory. So a
-  //    PRESENT, non-empty list is a real, blockable failure; an absent file = the pass did
-  //    not run (never a false trap), consistent with every other signal above.
+  // 5. Rendered-page failures from verify-rendered.mjs: interaction state (it drives a real
+  //    pointer / keyboard and asserts the state changed) and accessibility (an axe pass over
+  //    the rules the GRADER scores, run at all three viewports because a pass only ever tests
+  //    what is on screen when it runs). Only the OBJECTIVE, low-FP checks are written here (a
+  //    dead hover, a deleted focus ring, a nav that never opens or traps Escape, an axe
+  //    violation but never an axe `incomplete`); softer findings stay advisory. So a PRESENT,
+  //    non-empty list is a real, blockable failure; an absent file = the pass did not run
+  //    (never a false trap), consistent with every other signal above.
   const ix = readJSON(path.join(proj, ".palate-shots", "interaction.json"));
   if (ix && Array.isArray(ix.interaction_failures) && ix.interaction_failures.length) {
-    const n = ix.interaction_failures.length;
-    const sample = ix.interaction_failures.slice(0, 3).map((f) => (f && f.msg ? f.msg : String(f))).join("; ");
-    reasons.push(`${n} interaction-state failure(s) on the rendered page (.palate-shots/interaction.json): ${sample}${n > 3 ? "; ..." : ""} - drive the state, fix it, and re-verify`);
+    const all = ix.interaction_failures;
+    const n = all.length;
+    // THE HYGIENE ENTRY IS HOISTED, not merely sampled. It carries the whole self-heal loop:
+    // the build hygiene score against the floor, whether the last iteration improved or
+    // regressed it, the ranked gaps with a fix each, and the exact command to re-run.
+    // verify-rendered already unshifts it to the head of the list, but sampling the first three
+    // entries is a silent dependency on that ordering, and behind five axe rows the one message
+    // the agent needs to converge would never reach it. Pick it explicitly.
+    const isHygiene = (f) => f && f.rule === "hygiene-below-floor";
+    const grade = all.find(isHygiene);
+    const rest = all.filter((f) => !isHygiene(f));
+    const picked = [...(grade ? [grade] : []), ...rest.slice(0, grade ? 2 : 3)];
+    const sample = picked.map((f) => (f && f.msg ? f.msg : String(f))).join("; ");
+    // Accessibility only: the design and vitals entries also carry a `check`, and counting a
+    // slow LCP or a Tailwind-default accent as "an accessibility violation you must not
+    // suppress" sends the agent at the wrong file. The interaction entries (focus-visible,
+    // nav-escape-dismiss) carry no `rule` and stay counted, as they always were.
+    const NOT_A11Y = new Set(["framework-default-accent", "tap-target-under-24px", "mobile-body-under-16px"]);
+    const a11y = rest.filter((f) => f && f.check && !NOT_A11Y.has(f.rule)
+      && !String(f.rule ?? "").startsWith("vitals-")).length;
+    // Contrast is the one worth naming a number against: the grader reads it as a binary,
+    // so a single failing node anywhere costs 22 of the 100 accessibility points.
+    const tail = a11y
+      ? ` - ${a11y} of these are accessibility violations the grader scores; fix the markup or the token, do not suppress the rule`
+      : " - drive the state, fix it, and re-verify";
+    const heal = grade && grade.stalled
+      ? " - the build hygiene score has STALLED: stop iterating and escalate the named gaps to the human"
+      : grade
+        ? " - fix the ranked gaps above, rebuild, and RE-RUN the command in that message so the next run reports whether it moved"
+        : "";
+    reasons.push(`${n} rendered-page failure(s) (.palate-shots/interaction.json): ${sample}${n > picked.length ? "; ..." : ""}${tail}${heal}`);
   }
 
   return reasons;

@@ -36,7 +36,15 @@
  *   3  a browser could not be launched - the gate is BLOCKED, never a pass
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { createRequire } from 'module';
+import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
+import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
+import { score as scoreRubric } from './rubric.mjs';
+import {
+  HISTORY_FILE, DEFAULT_STALL_ITERS, basisOf, entryFor, readHistory, writeHistory,
+  comparableTail, compare, detectStall, blockMessage, summaryLine,
+} from './hygiene-loop.mjs';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -73,6 +81,91 @@ const RANK = { High: 3, Medium: 2, Cosmetic: 1 };
 // visible control with no focus ring; an aria-expanded nav that never opens / won't dismiss);
 // softer interaction signals stay advisory in findings[] for the verifier to judge.
 const interactionFailures = [];
+// Computed-style design facts, keyed by viewport. Collected on the home route only: the
+// palette, the type scale and the mobile control sizes are properties of the design system,
+// not of a route, and measuring every route would multiply the cost for the same answer.
+const designFacts = {};
+
+// ------------------------------------------------------------------ axe ----
+// The accessibility checks the GRADER scores, run locally against the same
+// rendered page. The rule list is explicit rather than axe's default set for two
+// reasons: the results stay deterministic across axe versions, and every rule here
+// maps to a check the grader actually weights, so a build that clears this gate
+// cannot lose those points on a re-grade.
+//
+// WHY THIS RUNS AT EVERY VIEWPORT. Our own contrast sweep ran only at 412px, where
+// the nav collapses to a burger, so the desktop nav CTA (white on persimmon, 3.74:1,
+// on every page) was never rendered and never tested. A hover-only control and a
+// closed mobile sheet hid two more. An accessibility pass only ever tests what is on
+// screen when it runs, so it runs at all three.
+//
+// Only `violations` count. Axe reports text over imagery and gradients as
+// `incomplete`, which is a request for a human look, not a failure.
+const AXE_RULES = {
+  // grader: text_contrast (3.08 overall pts). The grader reads this as a BINARY off
+  // Lighthouse's axe audit: ONE failing node anywhere zeroes 22 of the 100
+  // accessibility points. There is no partial credit, so there is no soft version.
+  'color-contrast':        { check: 'text_contrast' },
+  // grader: control_accessible_names (2.80)
+  'button-name':           { check: 'control_accessible_names' },
+  'link-name':             { check: 'control_accessible_names' },
+  'input-button-name':     { check: 'control_accessible_names' },
+  'select-name':           { check: 'control_accessible_names' },
+  // grader: forms_and_errors (1.40). Catches the programmatic label association that
+  // the placeholder-as-label and input-missing-name lints cannot see at runtime.
+  'label':                 { check: 'forms_and_errors' },
+  'form-field-multiple-labels': { check: 'forms_and_errors' },
+  // grader: structure_and_landmarks (1.96) + quotable_chunk_structure (1.96)
+  'html-has-lang':         { check: 'structure_and_landmarks' },
+  'document-title':        { check: 'structure_and_landmarks' },
+  'image-alt':             { check: 'structure_and_landmarks' },
+  'landmark-one-main':     { check: 'structure_and_landmarks' },
+  'heading-order':         { check: 'quotable_chunk_structure' },
+};
+
+// Resolve axe-core once. A MISSING DEPENDENCY IS A BLOCKED GATE, NOT A PASS: every
+// silent-skip in this product's history (the taste head gated on a capture verdict, the
+// design ladder waiting on a token nobody set, the motion probe reading only declared
+// CSS) reported a clean result while measuring nothing, and each one cost more to find
+// than it would have to fail loudly on day one.
+let axeSource = null, axeLoadError = null;
+try {
+  axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
+} catch (e) {
+  axeLoadError = e && e.message ? e.message : String(e);
+}
+
+async function runAxe(page, route, vpName) {
+  if (!axeSource) return;
+  let res;
+  try {
+    await page.addScriptTag({ content: axeSource });
+    res = await page.evaluate(
+      (rules) => window.axe.run(document, { runOnly: { type: 'rule', values: rules }, resultTypes: ['violations'] }),
+      Object.keys(AXE_RULES),
+    );
+  } catch (e) {
+    // A page that cannot be scanned has not passed. Say so.
+    add('High', route, vpName, 'accessibility scan could not run on this route (' + (e && e.message ? e.message : e) + '). This is UNMEASURED, not clean.');
+    return;
+  }
+  for (const v of res.violations || []) {
+    const meta = AXE_RULES[v.id];
+    if (!meta) continue;
+    const n = v.nodes.length;
+    // The first offending selector is what makes this actionable rather than a count.
+    const where = v.nodes[0] && v.nodes[0].target ? String(v.nodes[0].target[0]).slice(0, 120) : 'unknown element';
+    const extra = v.nodes[0] && v.nodes[0].failureSummary
+      ? ' ' + v.nodes[0].failureSummary.replace(/\s+/g, ' ').replace(/^Fix any of the following:\s*/i, '').slice(0, 200)
+      : '';
+    const msg = 'a11y ' + v.id + ' [grader: ' + meta.check + ']: ' + n + ' node' + (n === 1 ? '' : 's') + ', first at `' + where + '`.' + extra;
+    add('High', route, vpName, msg);
+    // `msg` is the field the stop hook samples when it blocks. Without it the hook
+    // prints [object Object], which blocks the build while telling the agent nothing
+    // it can act on, and an unfixable block just gets the gate switched off.
+    interactionFailures.push({ msg: route + ' @' + vpName + ': ' + msg, route, viewport: vpName, rule: v.id, check: meta.check, nodes: n, target: where });
+  }
+}
 
 // --------------------------------------------------------------- launch ----
 // GPU off is the FAST default. --disable-software-rasterizer also kills CPU
@@ -119,6 +212,14 @@ try {
   console.error('verify-rendered: could not launch a browser (' + (e && e.message ? e.message : e) + ').');
   console.error('verify-rendered: run scripts/reference-capture/setup.sh, or run this gate where a browser is available. This is BLOCKED, not a pass.');
   process.exit(3);
+}
+
+// Announced once, before the audit, so it cannot be mistaken for a clean accessibility
+// result buried in a long report.
+if (!axeSource) {
+  console.error('verify-rendered: axe-core is not installed (' + axeLoadError + '); accessibility is UNMEASURED.');
+  console.error('verify-rendered: run scripts/reference-capture/setup.sh. These checks are worth 9.2 of the 100 points the grader scores, and contrast alone zeroes 22 of the accessibility dimension on a single failing node.');
+  add('High', '-', 'all', 'accessibility was NOT measured: axe-core is not installed (' + axeLoadError + '). Run scripts/reference-capture/setup.sh. Treat this build as unverified for contrast, control names, form labels and landmarks.');
 }
 
 // --------------------------------------------------------------- audit -----
@@ -174,6 +275,18 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
 
     const textLen = await page.evaluate(() => (document.body && document.body.innerText ? document.body.innerText.trim().length : 0));
     if (textLen < 1) add('High', route, vpName, 'page renders blank (no text content)');
+
+    // Accessibility, on the settled post-scroll state so reveals have finished and
+    // contrast is read on what a visitor actually sees. Skipped on a blank page, where
+    // the blank IS the finding and axe would only add noise to it.
+    if (textLen > 0) await runAxe(page, route, vpName);
+
+    // Design measurement, from the SAME module the public grader runs (hash-pinned in both
+    // repos). This is what stops a build passing here and scoring badly there.
+    if (textLen > 0 && route === '/' && (vpName === 'desktop' || vpName === 'mobile')) {
+      try { designFacts[vpName] = await measurePage(page); }
+      catch (e) { add('Medium', route, vpName, 'design measurement failed: ' + (e && e.message ? e.message : e)); }
+    }
 
     // (b) MOTION-ON reveal reaches the finished state: count substantial elements still
     // fully transparent or hidden after the real wheel scroll. >0 = a reveal that never
@@ -519,14 +632,281 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   await context.close();
 }
 
+// Core Web Vitals, on a FRESH page under slow-4G + 4x CPU emulation. It needs its own page
+// because the observers must be installed before navigation, and its own throttled context
+// because throttling the audit pass would distort every other measurement in this file.
+// Skipped with --no-vitals for a fast inner loop; the gate says so rather than going quiet.
+let vitalsScored = null, vitals = null;
+if (args['no-vitals'] !== 'true') {
+  try {
+    const vctx = await browser.newContext({ viewport: VIEWPORTS.mobile });
+    const vpage = await vctx.newPage();
+    vitals = await measureVitals(vpage, base + '/');
+    await vctx.close();
+    vitalsScored = scoreVitals(vitals);
+    if (!vitals.applicable) {
+      add('Medium', '/', 'mobile', 'performance was not measured: ' + vitals.reason);
+    } else {
+      // LCP and CLS block; TBT and payload advise. The split is about how directly the build
+      // controls the number: a slow hero and a shifting layout are the build's, while blocking
+      // time under 4x CPU emulation moves with what third parties the site carries.
+      const by = (id) => vitalsScored.find((c) => c.id === id);
+      for (const id of ['lcp', 'cls']) {
+        const c = by(id);
+        if (c && c.raw !== null && c.raw < 0.5) {
+          add('High', '/', 'mobile', 'performance: ' + c.detail);
+          interactionFailures.push({ msg: '/ @mobile: performance ' + id + ': ' + c.detail, route: '/', viewport: 'mobile', rule: 'vitals-' + id, check: id });
+        }
+      }
+      for (const id of ['responsiveness', 'js_execution_and_payload']) {
+        const c = by(id);
+        if (c && c.raw !== null && c.raw < 0.5) add('Medium', '/', 'mobile', 'performance: ' + c.detail);
+      }
+    }
+  } catch (e) {
+    add('Medium', '/', 'mobile', 'performance measurement failed: ' + (e && e.message ? e.message : e));
+  }
+} else {
+  console.error('verify-rendered: --no-vitals set; performance is UNMEASURED (17 of the grader\'s 100 points).');
+}
+
+
 await browser.close();
 
 // Write the objective interaction failures for the enforce-on-evidence hook (palate-stop.mjs
 // reads <proj>/.palate-shots/interaction.json). Only with --out; best-effort - the findings
 // and the exit code below still stand without the artefact.
+// ------------------------------------------------------- design measurement ----
+// Score the facts with the grader's own module, then split the result in two.
+//
+// BLOCKING is reserved for the three findings that are objective and conformance-anchored,
+// in keeping with this file's enforce-on-evidence rule: a framework-default accent (deltaE
+// under 8 from the lead accent, which is THE tell and is not a matter of taste), a control
+// under WCAG 2.5.8's 24px, and body text under 16px on a phone. Each is a fact about the
+// rendered page that a reasonable person cannot dispute.
+//
+// EVERYTHING ELSE IS EVIDENCE, not a verdict. Spacing rhythm and the component vocabulary
+// go to the verifier and the report. That line was drawn by measurement, not preference:
+// scoring the count of hues and radii ranked Linear and Stripe below a page with no palette
+// at all, because counting measures how rich a design system is and rich is not worse.
+let designScored = null;
+if (designFacts.desktop || designFacts.mobile) {
+  designScored = scoreDesignFacts(designFacts);
+  const by = (id) => designScored.find((c) => c.id === id);
+
+  const colour = by('colour_accent_discipline');
+  if (colour && colour.raw !== null && colour.raw <= 0.3) {
+    add('High', '/', 'desktop', 'design: ' + colour.detail);
+    interactionFailures.push({ msg: '/ @desktop: design colour_accent_discipline: ' + colour.detail, route: '/', viewport: 'desktop', rule: 'framework-default-accent', check: 'colour_accent_discipline' });
+  }
+
+  const resp = by('responsive_integrity');
+  const rm = resp && resp.measured;
+  if (rm && rm.failAA > 0) {
+    add('High', '/', 'mobile', 'design: ' + rm.failAA + ' of ' + rm.controls + ' controls are under 24px on a phone, missing WCAG 2.5.8 AA.');
+    interactionFailures.push({ msg: '/ @mobile: design responsive_integrity: ' + rm.failAA + ' of ' + rm.controls + ' controls under 24px (WCAG 2.5.8 AA)', route: '/', viewport: 'mobile', rule: 'tap-target-under-24px', check: 'responsive_integrity', nodes: rm.failAA });
+  }
+  if (rm && rm.mobileBody != null && rm.mobileBody < 16) {
+    add('High', '/', 'mobile', 'design: body text sets at ' + rm.mobileBody + 'px on a phone, below the 16px floor.');
+    interactionFailures.push({ msg: '/ @mobile: design responsive_integrity: body text at ' + rm.mobileBody + 'px, below the 16px mobile floor', route: '/', viewport: 'mobile', rule: 'mobile-body-under-16px', check: 'responsive_integrity' });
+  }
+
+  for (const c of designScored) {
+    if (c.raw !== null && c.raw < 0.6 && !['colour_accent_discipline', 'responsive_integrity'].includes(c.id)) {
+      add('Medium', '/', 'desktop', 'design ' + c.id + ': ' + c.detail);
+    }
+  }
+}
+
+// THE BUILD HYGIENE SCORE. It runs the grader's OWN rubric arithmetic (rubric.mjs, vendored
+// and diffed byte-for-byte in palate-product's lint) over the checks that can be measured on a
+// rendered page here, so "the plugin approved this build" carries a number rather than a promise.
+//
+// IT WAS CALLED A PROJECTED GRADE AND THAT NAME WAS A FALSE CLAIM. Across 23 fresh re-grades it
+// correlated with the public grade at r = -0.074 like for like, mean absolute gap 18.0 points. No
+// predictive power, and the cause is now evidenced rather than guessed: a local number that DOES
+// carry the vision half (local-grade's tier 2, SigLIP head plus pairwise ladder) tracks the same
+// reference at r = +0.83. Vision is what the grade rests on, and this number has none in it by
+// construction. See hygiene-loop.mjs for the sample sizes, the pre-deploy caveat on both figures,
+// and the prediction the re-measure should falsify. Either way this measures HYGIENE and must not
+// be reported as a grade. `measuredWeight` reports how much of the 100 the number rests on, and
+// the message says the rest out loud, because an agent that reads 80 as "will score 80" stops
+// working exactly where the real gap is.
+//
+// The gate stays. These are real faults and fixing them is real work. Only the claim was wrong.
+// See hygiene-loop.mjs. The design half is grade-local.mjs (free, on this machine); the shareable
+// number comes from palatemcp.com/grade.
+let projected = null;
+// The self-heal trend for this run, written into design.json so the verifier and the human
+// see the same convergence story the agent was given.
+let hygieneLoop = null;
+if (designScored || vitalsScored) {
+  try {
+    const m = new Map();
+    for (const c of [...(designScored ?? []), ...(vitalsScored ?? [])]) {
+      if (c.raw === null || c.applicable === false) continue;
+      m.set(c.id, { id: c.id, raw: c.raw, detail: c.detail, lowConfidence: !!c.lowConfidence });
+    }
+    // Every axe rule the grader treats as a binary. One failing contrast node zeroes 22 of the
+    // accessibility dimension there, so it must zero it here or the hygiene score flatters.
+    const axeHit = (check) => interactionFailures.some((f) => f.check === check);
+    for (const id of ['text_contrast', 'control_accessible_names', 'forms_and_errors', 'structure_and_landmarks']) {
+      if (axeHit(id)) m.set(id, { id, raw: 0, detail: 'An axe violation was found on the rendered page.', lowConfidence: false });
+    }
+    if (m.size) projected = scoreRubric(m);
+  } catch (e) {
+    add('Medium', '/', 'all', 'the build hygiene score could not be computed: ' + (e && e.message ? e.message : e));
+  }
+}
+/**
+ * THE HYGIENE FLOOR GATES, IT SAYS WHY, AND IT SAYS WHETHER THE LAST FIX HELPED.
+ *
+ * Printing a number and moving on is what made the plugin and the grader two disconnected
+ * systems in the first place. A build below the floor blocks, and the block names the specific
+ * checks holding it down, ranked by how many points each is worth, with the fix for each. That
+ * is what turns "you scored 57" into work an agent can actually do.
+ *
+ * Blocking is still not HEALING. An agent that is told it failed, fixes something, and re-runs
+ * has no way to tell a real gain from the +/-2 the instrument moves on its own, so it thrashes.
+ * hygiene-loop.mjs persists each run next to the build and turns the next one into a comparison:
+ * up, down, or unchanged, per gap as well as overall, and a stall once two iterations pass with
+ * no material gain. See that file for why the noise band is 2, why a run measured on a different
+ * set of checks reports NO COMPARISON instead of a delta, and why a stall escalates rather than
+ * releasing the gate.
+ *
+ * THE FLOOR IS 80, AND IT IS A HYGIENE FLOOR, NOT A PREDICTED GRADE. Measured: a Palate demo
+ * scores 97 here and an ordinary plumber site 52, so 80 separates them cleanly on hygiene. That
+ * separation is real and is all it claims. It does NOT transfer to the public grade (r = -0.074
+ * over 23 re-grades), so nothing here may be reported as a grade the build will get.
+ *
+ * PALATE_MIN_HYGIENE=0 turns it off for a deliberate exception; it is not silent when it does.
+ */
+// A garbage value must not disable the gate. `Number('eighty')` is NaN, and NaN fails BOTH
+// `> 0` and `<= 0`, so a typo used to skip the block and print nothing about it - the exact
+// silent-skip shape this file exists to prevent. Fall back to the default and SAY SO.
+//
+// `legacy` is the pre-rename name. It is still READ, because the alternative is worse than the
+// churn: someone who sets PALATE_MIN_GRADE=0 expecting the gate off would otherwise be blocked
+// at 80 by a variable that was silently ignored, which is the same silent-skip class again. It
+// is honoured once, loudly, and named as deprecated.
+const numEnv = (name, fallback, legacy = null) => {
+  let raw = process.env[name], used = name;
+  const legacySet = legacy && process.env[legacy] !== undefined && process.env[legacy] !== '';
+  if ((raw === undefined || raw === '') && legacySet) {
+    raw = process.env[legacy]; used = legacy;
+    console.error(`verify-rendered: ${legacy} is DEPRECATED and was renamed ${name} (the number is a build hygiene score, not a projected grade). Honouring it this run.`);
+  } else if (legacySet) {
+    // Both set. The new name wins, but dropping the old one without a word is the same silent
+    // skip in miniature: someone would be left wondering why their =0 did nothing.
+    console.error(`verify-rendered: both ${name} and the deprecated ${legacy} are set. Using ${name}="${raw}" and IGNORING ${legacy}="${process.env[legacy]}".`);
+  }
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    console.error(`verify-rendered: ${used}="${raw}" is not a number; using the default ${fallback}. The gate is NOT off.`);
+    return fallback;
+  }
+  return n;
+};
+const MIN_HYGIENE = numEnv('PALATE_MIN_HYGIENE', 80, 'PALATE_MIN_GRADE');
+const STALL_ITERS = Math.max(1, Math.round(numEnv('PALATE_HYGIENE_STALL_ITERS', DEFAULT_STALL_ITERS, 'PALATE_GRADE_STALL_ITERS')) || DEFAULT_STALL_ITERS);
+// The exact command to re-run, reconstructed from this invocation so the agent can copy it
+// rather than reconstruct it. A "re-run the gate" instruction with no command is an instruction
+// to guess.
+const RERUN = ['node', process.argv[1], '--url', base, '--routes', routes.join(','),
+  ...(outDir ? ['--out', outDir] : []), ...(args['no-vitals'] === 'true' ? ['--no-vitals'] : [])].join(' ');
+
+if (projected) {
+  const historyFile = outDir ? `${outDir}/${HISTORY_FILE}` : '';
+  // Bookkeeping problems are REPORTED, never swallowed and never fatal: losing the trend is
+  // exactly the silent skip this loop exists to prevent, but it must not fail a good build.
+  const notes = [];
+  let hist = { entries: [], error: null };
+  if (!historyFile) {
+    notes.push('NOTE: this run had no --out, so no hygiene history was kept and no trend can be reported. Pass --out <dir> to make the loop measurable.');
+  } else {
+    hist = readHistory(historyFile);
+    if (hist.error) notes.push(`NOTE: the hygiene history at ${historyFile} ${hist.error}, so this run is treated as a first measurement. The trend is LOST, not clean.`);
+  }
+
+  // The measurement CONFIGURATION, not the outcome: see basisOf() for why keying it on the
+  // scored checks made a successful fix read as NO COMPARISON.
+  const measuredWith = { routes, vitals: args['no-vitals'] !== 'true', axe: !!axeSource };
+  const basis = basisOf(measuredWith);
+  const tailBefore = comparableTail(hist.entries, basis);
+  const entry = entryFor(projected, {
+    ...measuredWith, url: base, minScore: MIN_HYGIENE,
+    blocked: MIN_HYGIENE > 0 && projected.overall < MIN_HYGIENE,
+  });
+  const cmp = compare(entry, hist.entries[hist.entries.length - 1] ?? null);
+  const stall = detectStall([...tailBefore, entry], STALL_ITERS);
+
+  if (historyFile) {
+    const w = writeHistory(historyFile, hist.entries, entry);
+    if (w.error) notes.push(`NOTE: the hygiene history at ${historyFile} ${w.error}, so the NEXT run will not see this one and cannot report a trend.`);
+  }
+
+  if (MIN_HYGIENE > 0 && projected.overall < MIN_HYGIENE) {
+    const msg = blockMessage({ scored: projected, cmp, stall, minScore: MIN_HYGIENE, rerun: RERUN, notes });
+    add('High', '/', 'all', msg);
+    // FIRST, not appended: palate-stop.mjs samples the head of this list, and behind five axe
+    // entries the whole self-heal message would never reach the agent that has to act on it.
+    interactionFailures.unshift({
+      msg, route: '/', viewport: 'all', rule: 'hygiene-below-floor', check: 'build_hygiene',
+      score: projected.overall, floor: MIN_HYGIENE, trend: cmp.verdict, delta: cmp.delta,
+      iteration: stall.iterations, stalled: stall.stalled, rerun: RERUN,
+    });
+    console.error('verify-rendered: BLOCKED.\n' + msg);
+  } else if (MIN_HYGIENE <= 0) {
+    console.error('verify-rendered: PALATE_MIN_HYGIENE=0, the build-hygiene gate is OFF for this build.');
+  }
+  // Printed on every run, pass or fail: an agent that has just cleared the floor still needs to
+  // know whether it cleared it by 1 point on a rising trend or by luck on a flat one.
+  console.error(summaryLine({ scored: projected, cmp, stall, minScore: MIN_HYGIENE }));
+  for (const n of notes) console.error('verify-rendered: ' + n);
+  hygieneLoop = { basis, trend: cmp.verdict, delta: cmp.delta, previous: cmp.previous?.overall ?? null,
+    iteration: stall.iterations, stalled: stall.stalled, blockers: stall.blockers, rerun: RERUN, notes };
+}
+
 if (outDir) {
-  try { writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2)); }
-  catch { /* artefact is a convenience for the deterministic hook, never fatal */ }
+  // NEVER FATAL IS RIGHT. SILENT IS NOT, AND THIS ONE WAS THE WORST CASE IN THE FILE.
+  //
+  // hooks/palate-stop.mjs BLOCKS on a present, non-empty interaction.json and treats an ABSENT
+  // file as "could not verify", which is the correct fail-open rule for a pass that never ran.
+  // But a failed WRITE is indistinguishable from a pass that never ran: a full disk, a
+  // read-only mount or a deleted --out directory would take a build with real blocking failures
+  // and turn it into one the Stop hook waves through, saying nothing. The findings and the exit
+  // code still stand for anyone reading them, and the hook reads neither.
+  //
+  // So it stays non-fatal and becomes loud, and the message names the consequence rather than
+  // the operation, because "could not write interaction.json" does not tell the reader their
+  // gate just stopped working.
+  try {
+    writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2));
+  } catch (e) {
+    const n = interactionFailures.length;
+    console.error(
+      `verify-rendered: FAILED to write ${outDir}/interaction.json (${e?.message ?? e}). ` +
+      (n
+        ? `${n} blocking failure(s) were found and the Stop hook will NOT see them, so this build can finish as though it passed. Treat it as FAILED and fix the write path.`
+        : 'No failures were found, so nothing is being hidden, but the gate artefact is missing.'),
+    );
+  }
+  // The full scored set, for the verifier and for the human. `hygiene` is deliberately NOT
+  // named `projected`: the field is read by people, and a field called `projected` invites the
+  // reading the measurement retired.
+  try {
+    writeFileSync(`${outDir}/design.json`, JSON.stringify({
+      version: DESIGN_MEASURE_VERSION, sha: DESIGN_MEASURE_SHA, vitalsSha: VITALS_SHA,
+      scored: designScored, facts: designFacts,
+      vitals, vitalsScored,
+      hygiene: projected, hygieneLoop,
+    }, null, 2));
+  } catch (e) {
+    // Nothing gates on design.json, so this one only costs the evidence and the trend, not the
+    // block. Still said out loud: a missing artefact should never be discovered by its absence.
+    console.error(`verify-rendered: FAILED to write ${outDir}/design.json (${e?.message ?? e}). The scored evidence and the hygiene trend are LOST for this run.`);
+  }
 }
 
 // ------------------------------------------------------------- helpers -----
