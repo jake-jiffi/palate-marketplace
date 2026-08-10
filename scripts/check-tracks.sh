@@ -98,6 +98,22 @@ else
   echo "skip - no skill clone at $SKILL, cannot check prod/main correspondence"
 fi
 
+# 7. THIS CLONE IS NOT BEHIND ORIGIN. There is more than one clone of this repo on
+#    a typical machine (the plugin cache under ~/.claude/plugins/marketplaces, plus
+#    however many working clones), and they drift. Releasing from a stale one
+#    pushes marketplace.json BACKWARDS and silently clobbers whatever pin the last
+#    release set: a customer's `/plugin marketplace update palate` then quietly
+#    downgrades them. This has already been documented as a near-miss once.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  git fetch -q origin 2>/dev/null || true
+  behind=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+  if [ "${behind:-0}" -eq 0 ]; then
+    ok "this clone is up to date with origin"
+  else
+    bad "this clone is $behind commit(s) BEHIND origin/main. Pull before releasing, or you will push the pin backwards. Clone: $(pwd)"
+  fi
+fi
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
