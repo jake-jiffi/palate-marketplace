@@ -1,0 +1,19 @@
+{
+  "_comment": "Merged into the project package.json by scripts/add-sanity.sh. These are the packages the default scaffold deliberately does NOT carry. React (react, react-dom, react-is, styled-components, @astrojs/react) is already in the base scaffold and is a peer of both @sanity/astro and sanity, so it is not repeated here. NOTE the merge lets the PROJECT win on conflict, so this file cannot raise a base pin: the base floors (react/react-dom ^19.2.2, styled-components ^6.1.19) are set to satisfy sanity@6's peers and must move with any future Sanity major.",
+  "dependencies": {
+    "@sanity/astro": "^3.5.0",
+    "@sanity/client": "^7.26.2",
+    "@sanity/image-url": "^2.1.1",
+    "@sanity/vision": "^6.9.1",
+    "sanity": "^6.9.1",
+    "@portabletext/to-html": "^5.0.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  },
+  "scripts": {
+    "seed": "tsx scripts/seed-content.mjs",
+    "seed-collection": "tsx scripts/seed-collection.mjs",
+    "publish-all": "tsx scripts/publish-all.mjs"
+  }
+}

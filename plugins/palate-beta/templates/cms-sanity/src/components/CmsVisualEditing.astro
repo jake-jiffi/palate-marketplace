@@ -1,0 +1,18 @@
+---
+/**
+ * CMS visual-editing overlay. SANITY WIRED.
+ *
+ * Installed over the no-op default by `scripts/add-sanity.sh`, so BaseLayout
+ * (which already mounts <CmsVisualEditing enabled={visualEditing} />) is never
+ * patched. Overlays appear only on the deployment built with
+ * PUBLIC_SANITY_VISUAL_EDITING_ENABLED=true, i.e. the preview deployment.
+ */
+import { VisualEditing } from "@sanity/astro/visual-editing";
+
+interface Props {
+  enabled?: boolean;
+}
+const { enabled = false } = Astro.props;
+---
+
+<VisualEditing enabled={enabled} />

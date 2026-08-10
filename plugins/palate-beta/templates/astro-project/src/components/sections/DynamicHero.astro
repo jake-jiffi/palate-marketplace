@@ -1,0 +1,48 @@
+---
+// Optional CRO component: swaps hero copy by ?variant= or ?utm_campaign= so a
+// single page can serve per-ad landing variants. Falls back to the default
+// hero from content.ts. Only wire this in when the CRO/Ads module is enabled.
+// See references/cro-module.md and references/cms-and-draft-preview.md.
+import { loadPage } from "../../lib/load";
+import { home } from "../../lib/content";
+
+type Hero = typeof home.hero;
+type Variant = { eyebrow?: string; heading: string; sub: string; ctaLabel?: string; ctaHref?: string };
+
+const url = new URL(Astro.request.url);
+const variant = url.searchParams.get("variant") ?? url.searchParams.get("utm_campaign");
+
+let hero: Hero = home.hero;
+if (variant) {
+  const v = await loadPage<Variant | null>(
+    `*[_type == "heroVariant" && slug.current == $v][0]`,
+    { v: variant },
+    null,
+  );
+  if (v) {
+    hero = {
+      eyebrow: v.eyebrow ?? "",
+      heading: v.heading,
+      sub: v.sub,
+      cta: { label: v.ctaLabel ?? home.hero.cta.label, href: v.ctaHref ?? home.hero.cta.href },
+    };
+  }
+}
+---
+<section class="bg-brand-bg px-6 py-24 text-center">
+  {hero.eyebrow && (
+    <p class="text-brand-muted text-sm font-medium uppercase tracking-wide">{hero.eyebrow}</p>
+  )}
+  <h1 class="font-display text-brand-text mx-auto mt-3 max-w-3xl text-4xl md:text-6xl">
+    {hero.heading}
+  </h1>
+  <p class="text-brand-muted mx-auto mt-6 max-w-xl text-lg">{hero.sub}</p>
+  <div class="mt-8">
+    <a
+      href={hero.cta.href}
+      class="rounded-brand bg-brand-accent text-brand-inverse inline-flex px-6 py-3 font-semibold"
+    >
+      {hero.cta.label}
+    </a>
+  </div>
+</section>

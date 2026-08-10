@@ -1,0 +1,91 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # The Palate gates below are fetched from the skill repo at this ref.
+      # `main` tracks the latest published rules; pin it to a tag or a commit
+      # SHA if you would rather the gate never change under you.
+      PALATE_REF: main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@palate-projects'
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
+          SANITY_API_READ_TOKEN: ${{ secrets.SANITY_API_READ_TOKEN }}
+      # --- The Palate gates. Everything above only proves the site COMPILES.
+      # These two are what let this CI fail on craft. Both are deterministic,
+      # both need only bash/perl/node (all present on ubuntu-latest), and both
+      # exit non-zero on a real fault. Nothing here is suppressed: if one fails,
+      # the pull request goes red, which is the whole point.
+      - name: Fetch the Palate gates
+        shell: bash
+        run: |
+          base="https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/${PALATE_REF}"
+          mkdir -p "$RUNNER_TEMP/palate"
+          curl -fsSL "$base/scripts/bootstrap.sh"              -o "$RUNNER_TEMP/palate/palate-check.sh"
+          curl -fsSL "$base/scripts/phantom-utility-check.mjs" -o "$RUNNER_TEMP/palate/phantom-utility-check.mjs"
+
+      # Fails on High-severity findings only (the shipped scaffold is clean at
+      # that bar). PALATE_GATE_STRICT=1 tightens it to Medium, which is a choice
+      # to make once the site is settled, not on day one.
+      - name: Anti-slop lint (AI tells, banned default faces, eyebrow kickers)
+        shell: bash
+        run: bash "$RUNNER_TEMP/palate/palate-check.sh" src
+
+      # Uses the build's own compiled CSS as the oracle: a utility class written
+      # in source that produced no CSS rule anywhere is a hallucinated class, and
+      # it ships as unstyled text. --no-build reuses the dist the step above just
+      # produced, so this adds no second build.
+      - name: Phantom utility classes (classes that compile to nothing)
+        shell: bash
+        run: |
+          dist=""
+          for d in dist .vercel/output/static dist/client; do
+            if [ -d "$d" ] && [ -n "$(find "$d" -name '*.css' -type f -print -quit)" ]; then
+              dist="$d"; break
+            fi
+          done
+          if [ -z "$dist" ]; then
+            echo "::warning::Phantom-utility check did NOT run: no compiled CSS found under dist/, .vercel/output/static or dist/client. The class oracle is the build's own CSS, so without it this check cannot judge. Say so rather than passing quietly."
+            exit 0
+          fi
+          echo "Gating source classes against the compiled CSS in $dist"
+          node "$RUNNER_TEMP/palate/phantom-utility-check.mjs" . --dist "$dist" --no-build --ci
+
+      # Lighthouse audits a DEPLOYED url, not a local build. The Astro scaffold is
+      # output: "server" with nothing prerendered, so `astro build` leaves no
+      # static HTML behind and `lhci autorun` has nothing to serve locally: it
+      # errors out with "Failed to automatically determine staticDistDir" before
+      # it reaches a single audit. So it runs against a real URL or not at all.
+      #
+      # To switch it on: Settings > Secrets and variables > Actions > Variables,
+      # add LHCI_URL pointing at a publicly reachable URL (your production site,
+      # or a preview with deployment protection off - a protected preview serves
+      # the login wall and every audit would be measuring that).
+      #
+      # Thresholds live in lighthouserc.yml, measured against real Palate builds.
+      # The @lhci/cli version is pinned on purpose: a newer Lighthouse can rename
+      # an audit, and an unknown audit id is a HARD failure, not a skip.
+      - name: Lighthouse CI
+        if: vars.LHCI_URL != ''
+        shell: bash
+        env:
+          LHCI_URL: ${{ vars.LHCI_URL }}
+        run: npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.yml --collect.url="$LHCI_URL"

@@ -1,0 +1,65 @@
+---
+// Base layout: SEO meta, OG tags, brand tokens + fonts, analytics, view
+// transitions, and Sanity visual-editing wiring.
+import "@palate-projects/{{SLUG}}-brand/tokens.css";
+import "@palate-projects/{{SLUG}}-brand/fonts.css";
+import "../styles/globals.css";
+import { ClientRouter } from "astro:transitions";
+import CmsVisualEditing from "../components/CmsVisualEditing.astro";
+import ExploreSwitcher from "../components/ExploreSwitcher.astro";
+import Motion from "../components/Motion.astro";
+import { business, businessJsonLd } from "../lib/business";
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  noindex?: boolean;
+}
+const { title, description = business.description, image = "/og/default.png", noindex = false } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+
+// Visual editing is gated by a build-time env var, set "true" only on the
+// preview deployment. When on: mount the overlay, never edge-cache, noindex.
+// See references/cms-and-draft-preview.md.
+const visualEditing = import.meta.env.PUBLIC_SANITY_VISUAL_EDITING_ENABLED === "true";
+if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
+---
+<!doctype html>
+<html lang="en-AU" data-brand-mode="{{DESIGN_MODE_DATA}}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {(noindex || visualEditing) && <meta name="robots" content="noindex" />}
+    <!-- Open Graph -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(image, Astro.site)} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- JSON-LD: the business entity, built from src/lib/business.ts so the
+         structured data and the copy can never describe different businesses.
+         Never hardcode a name, phone or address here; edit the record. -->
+    <script type="application/ld+json" set:html={JSON.stringify(businessJsonLd(Astro.site?.toString()))} />
+    <!-- Per-page head content: page-specific structured data (BlogPosting,
+         Product, FAQPage), preloads, alternates. Without this slot a page's
+         JSON-LD is silently dropped rather than rendered, which is invisible
+         until an audit months later. -->
+    <slot name="head" />
+    <!-- Analytics: Humblytics (swap for Plausible via flag). Skipped in preview. -->
+    {!visualEditing && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
+    <ClientRouter />
+  </head>
+  <body>
+    <ExploreSwitcher />
+    <Motion />
+    <slot name="header" />
+    <main><slot /></main>
+    <slot name="footer" />
+    <CmsVisualEditing enabled={visualEditing} />
+  </body>
+</html>

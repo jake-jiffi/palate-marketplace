@@ -1,0 +1,48 @@
+/* GENERATED from tokens.json. Do not hand-edit; edit tokens.json and regenerate. */
+:root {
+  /* palette primitives */
+  --palette-white: #ffffff;
+  --palette-ink-900: #0f172a;
+  --palette-ink-500: #64748b;
+  --palette-accent-500: #2563eb;
+  --palette-accent-600: #1d4ed8;
+  --palette-border: #e2e8f0;
+
+  /* semantic aliases (consume these, not the primitives) */
+  --brand-bg-default: var(--palette-white);
+  --brand-bg-inverse: var(--palette-ink-900);
+  --brand-text-primary: var(--palette-ink-900);
+  --brand-text-muted: var(--palette-ink-500);
+  --brand-text-inverse: var(--palette-white);
+  --brand-accent-default: var(--palette-accent-500);
+  --brand-accent-hover: var(--palette-accent-600);
+  --brand-border-default: var(--palette-border);
+
+  /* type */
+  --brand-font-display: "BrandDisplay", system-ui, sans-serif;
+  --brand-font-body: "BrandSans", system-ui, sans-serif;
+  --brand-text-sm: 0.875rem;
+  --brand-text-base: 1rem;
+  --brand-text-lg: 1.25rem;
+  --brand-text-xl: 1.5rem;
+  --brand-text-2xl: 2rem;
+  --brand-text-3xl: 3rem;
+
+  /* space + radius */
+  --brand-space-1: 0.25rem;
+  --brand-space-2: 0.5rem;
+  --brand-space-4: 1rem;
+  --brand-space-8: 2rem;
+  --brand-space-16: 4rem;
+  --brand-radius-sm: 0.25rem;
+  --brand-radius: 0.5rem;
+  --brand-radius-lg: 1rem;
+}
+
+/* mode switch: one-line override via the data attribute */
+[data-brand-mode="dark"] {
+  --brand-bg-default: var(--palette-ink-900);
+  --brand-bg-inverse: var(--palette-white);
+  --brand-text-primary: var(--palette-white);
+  --brand-text-inverse: var(--palette-ink-900);
+}

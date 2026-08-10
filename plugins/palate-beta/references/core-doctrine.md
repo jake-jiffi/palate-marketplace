@@ -1,0 +1,149 @@
+# Palate core doctrine
+
+> Canonical portable Palate doctrine. Hand-authored source of truth for the per-tool skill-lite. Edit here; the per-tool files are generated.
+
+Palate builds production-grade sites that do not read as AI-made. Taste comes from the Palate MCP (260+ deeply-analysed real sites); craft and discipline come from these rules.
+
+## Tier 0: the four load-bearing rules
+
+- **[T0.1] The MCP is the read path. Never clone, never build from memory.** Read references only through the `palate` MCP `refs_*` tools (`mcp__palate__*`). Probe once before any survey/compose with `refs_list_verticals`. If the tools are absent or it errors, STOP: tell the user to connect (`claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp`) and restart.
+- **[T0.2] DIVERGE before any source file, and it is gated.** Recorded before a single `.astro`/`.css`/`.tsx`/`.svelte`/`.vue` is written. Spine: **DIVERGE -> CONVERGE -> COMMISSION -> EXPLORE -> VISUAL-LOOP -> VERIFY.** Concept before composition. **Reference = craft + buildability (HOW, CAN); concept layer = novelty (the new WHAT).** Never let a safe default replace a concept, or a concept exceed what the stack can build.
+- **[T0.3] The banned tells are a hard floor:** banned faces, the gradient-text headline, untuned framework accents, glassmorphism-as-decoration, the eyebrow-pill hero, AI-tell copy, the 12 imagery cliches (closed lists below, verbatim; do not paraphrase).
+- **[T0.4] The free-cap is a HARD STOP, not a donor gap.** Free plan: **20 deep reference reads a month** (search unlimited). If any `refs_*` call errors with the limit (`used all ... enriched requests`, `quota_exceeded`, `Upgrade to Pro`), STOP: do not fall back to a template recipe, do not keep calling `refs_*`. Tell the user to upgrade to Pro at https://app.palatemcp.com/dashboard/billing (the free allowance resets at the start of the month). The ONE library error that fails closed; every other thin-donor case fails open.
+
+## The stack and the scaffold (build in Astro, never freestyle)
+
+**Non-negotiable stack:** Astro 7 (SSR), Tailwind 4, self-hosted fonts, GSAP + Lenis for motion, the Vercel adapter. The references, `refs_get_astro_recipe` and the gates all ASSUME Astro; a raw-HTML, Next or Vite build cannot consume them and fails the brief. Loose `index.html` at the project root is the freestyle anti-pattern and the gate rejects it.
+
+**Scaffold FIRST, before any page work** (never hand-roll a project). ONE command gives a real Astro 7 + Tailwind 4 + Vercel project with the gate pre-wired (a git pre-push hook + CI): `curl -fsSL https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/main/scripts/create-palate.sh | bash -s -- my-site codex` (swap `codex` for `cursor`/`gemini`/`copilot`). Build pages as `.astro` under `src/pages`; never dump `.html` at the root; brand tokens are vendored in `src/styles/globals.css` (edit them, never the Google Fonts CDN).
+
+## The reference library
+
+- **Tool-chain:** `refs_for_business` / `refs_match_brief { brief }` -> `refs_search { vertical, style, pageType, conversionPrimitive, uiElement, hasWebgl, query }` + `refs_insights { topic }` -> `refs_get { slug, layer }` -> `refs_get_astro_recipe { slug }`. Retrieval is hybrid: name the exact font, library, move or category in `query` alongside the facets. Layers (raw `sections` is legacy): `concept`, `pages`, `tokens`, `signature_moves`, `do_dont`, `component_prompts`, `astro_recipe`; `format:"design"` returns a DESIGN.md; `refs_get_screenshot { slug, page }` reads the pixels.
+- **Section-build recipe (mandatory for every conversion section: pricing, booking, menu, services, contact, FAQ, hero):** find 2-3 donors by facet, view the inner-page screenshot, read `component_prompts` + `do_dont` + `pages`, reproduce the strongest donor's structure re-skinned, check against `do_dont` BEFORE emit. Pulling one DESIGN.md but never opening the rich layers leaves the taste layer unused.
+- **Two-layer doctrine + transplant.** Reproduce the **craft layer** faithfully and re-skin it; protect the **identity layer** absolutely (palette hexes, wordmark, fonts, photography, copy) and respect every `doNotCopy`. The lead's signature move MUST appear, re-skinned, named and located. Transplant not blend: lead's structure WHOLESALE + ONE motion organ + ONE type organ from two other donors. Provenance: no donor > half the sections, compose from three+. The client's brand colours always win.
+- **Buildability oracle (audacious concepts only):** decompose into named mechanics, resolve each to its closest precedent + `astro_recipe`; where the corpus fails closed on a frontier mechanic (shader, 3D, cursor-physics), fall back to the `motion-and-3d` recipe, never the wrong clone. Interactive widgets resolve to the vetted Zag.js behaviour layer.
+
+## The Story Engine (concept before composition)
+
+Research-led, not interview-led. **Five stages:** (1) research the real business, never the category; (2) find the customer at the moment of need; (3) name the before-feeling and after-feeling (the site's job is the gap); (4) find the **one true thing** (the most potent fact nobody else can claim); (5) state the transformation: "[ICP] arrives feeling [before], should leave feeling [after], because [the mechanism]." Feel gate before emit: would the ICP feel SEEN. Competent but unfelt is a fail.
+
+## DIVERGE and CONVERGE
+
+**Detect the brand mode first.** **provided** = a package resolves, real tokens/assets were extracted, or the brief states explicit colours AND fonts (partial counts: lock the provided half). Else **brand-creation**.
+- **brand-creation:** diverge the FULL identity space (colourway, type/faces, mood, layout, composition, motion, density); colour and type are REQUIRED varied axes; validity needs >= 3 distinct colourways AND >= 3 distinct type directions.
+- **brand-provided:** LOCK colour, type and identity; diverge only within the brand (layout, composition, section logic, motion, density, art direction); validity needs >= 6 distinct layout/motion skins.
+
+**Sample (Verbalized Sampling):** generate N = 8-10 concepts in ONE pass with constraints removed, each self-tagging `conventionality` (0..1; carry at least one <= 0.3), its `lens` (>= 2 varied lenses), and a cross-domain `analogical_seed`. Carry the low-typicality tail forward. **CONVERGE on two SEPARATE axes (0-5), never one creativity number:** **Originality** (distance from the category default AND the last N builds; anything matching the reflex set (Bricolage + Hanken, the status-pill eyebrow, the two-tone heading) scores near-zero and cannot advance) and **Craft-feasibility**. Combine harmonic-mean-style (`2*O*F/(O+F)`); advance the best 1-2 into EXPLORE, which elaborates them across the spectrum (safe-warm, bold, one-of-a-kind) as 8-10 variants, each cleared by the visual loop before it is shown.
+
+## The build commission (the ambition bar)
+
+Issued once after CONVERGE, before Explore; carried through Explore, Compose, Verify. Fail-open.
+- **Bar:** good enough to win its category on Awwwards / FWA. "Competent" is a fail.
+- **Intensity** `high` or `calm`, recorded machine-readably. HIGH binds the bold mandate + the bold gates (pairwise-vs-exemplar, ambition, built-Explore required); calm keeps the lighter floor. Mechanisms are chosen TO FIT (a few not all), grounded in a `motion-and-3d` recipe + an MCP precedent.
+- **Restraint clause CUTS BOTH WAYS.** A calm, anxious category (a conveyancer, a clinic) demands whisper-quiet; a HIGH-INTENSITY brand (a label, a consumer brand, a studio, a launch, a culture/type brand) DEMANDS the **bold mandate**, and a flat page fails the brief as surely as over-motioning a calm one. Bold mandate: one committed feeling; copy that risks something; ONE signature focal object that is the hero INTERACTION not a banner; a custom cursor + micro-physics; one signature easing + an entrance ritual; film-grain; a rich-dark surface + a warm off-white + ONE rare accent that detonates; scroll as a timeline; kinetic masked type. WebGL is amplification where it fits, not the price of admission. Bold still ships its no-JS / reduced-motion finished state and holds the mobile budget (the phone is 80% of traffic).
+
+## Creative principles (the soul)
+
+1. **The motion is the demo.** The strongest argument is a demonstration the visitor performs; a hero that only describes the value is unfinished.
+2. **Show the transformation**, do not list features.
+3. **Name the feeling, then protect it.** Anything that fights it goes.
+4. **Tension, then relief.** Set up the problem honestly, then resolve it.
+5. **Specific or kill it.** If a concept could be pasted onto a competitor it is generic.
+6. **Surprise them.** At least one variant should make the client say "I have never seen that".
+7. **Real, or honestly placeheld.** Never fake it, never ship a bad real asset.
+8. **The craft serves the concept.** Reference craft is HOW; the concept is WHAT; the feeling is WHY.
+9. **Treat type exactly as colour.** Reproduce the type SYSTEM, choose the FACE fresh per brief.
+
+## Type selection (fit over familiarity)
+
+No font is banned outright and none is the default; a face fits THIS brand's voice and vision, then is used with craft. The failure is the unconsidered choice: the same face on unrelated builds. **Banned-as-default display faces (justify-or-flag, verbatim from `anti-patterns.md`):** Inter, Roboto, Arial, Space Grotesk (the original four), plus Instrument Serif, Fraunces, Geist (excluding Geist Mono), system-ui, and Bricolage Grotesque. **Banned-as-default body face:** Hanken Grotesk. Each passes ONLY with an inline `ux-lint-disable banned-display-<face>` (or `banned-body-hanken`) plus a one-line brand reason. Bricolage Grotesque (display) + Hanken Grotesk (body) is the Palate self-tell. Also avoid by reflex: the of-the-moment display serif on a sans body, and the serif-italic accent word in a sans heading (the Reseed treatment).
+
+## Motion and 3D (the laws, not the recipes)
+
+- **The one law: the LCP is never a canvas.** It is always static text or a static image; every ceiling effect ships a static poster that is the LCP, the no-JS state and the reduced-motion state at once.
+- **Tier 0 (zero-JS, always ships):** CSS scroll-driven reveals (`animation-timeline: view()`, `fill-mode: both`), View Transitions, kinetic/variable-font type. Animate only `opacity` and `transform`. **Tier 1/2 are opt-in lazy-hydrated islands** (`client:visible` / `client:idle`), each with its own JS reduced-motion guard; Three.js / R3F is opt-in per build, never a default dependency.
+- **One signature moment, not twenty.** One RAF loop (Lenis synced to the GSAP ticker); one canvas per page; DPR capped at 2; triangles < 150k. Page-level transitions in the **150 to 300ms** band.
+
+## Imagery and assets
+
+**Imagery mode router (decide every slot in this order): real > procedural > generated > Unsplash-last.** Stock-photo-by-default is the tell Palate sells against, so most decorative/texture/background/abstract-hero slots should be procedural (SVG grain, gradient mesh, parametric/duotone pattern, seeded motif), a first-class output not a fallback. Unsplash only for a photograph of a real subject the client lacks, always a labelled placeholder; never pass it off as the client's own. **Quality bar:** reject low-resolution, blurry, badly-lit, yellow-cast, watermarked or off-brand assets. An empty frame reads as a wireframe and FAILS the rubric.
+
+**The 12 imagery cliches (closed list, verbatim from `ai-slop-tells.md`). Walk every image slot; any hit is a FAIL with the slot named:**
+
+1. The purple-to-blue (or teal-to-magenta) gradient blob / mesh as a hero or section background.
+2. Isometric people / tiny 3D characters at desks, the "corporate Memphis" / Alegria figures.
+3. Floating glassy 3D abstract shapes (spheres, toruses, ribbons) with no meaning.
+4. Generic diverse-team-at-laptop / handshake / "business people pointing at a screen" stock.
+5. A glowing AI brain / neural-network / circuit-board motif for anything "AI".
+6. Hexagon / connected-dots "network" or "blockchain" background texture.
+7. A lone founder-ish portrait that is obviously a stock model, not the real person.
+8. Mock device frames (a laptop/phone) wrapping a fabricated dashboard the product does not show.
+9. Hand-holding-phone / over-the-shoulder generic lifestyle filler.
+10. A world map with glowing connection arcs for "global".
+11. Overly-perfect flat-lay or "founder's desk" arranged props that read as a stock set.
+12. The same generic abstract texture reused across multiple slots (no per-slot intent).
+
+Also flag trademark / likeness: a recognisable third-party logo, mascot, or a real identifiable face that is not the client's.
+
+## The visual rubric (ship against the render, not the code)
+
+A build is not done until its RENDERED page (the screenshots) clears the rubric. **The six axes (closed list, verbatim from `visual-rubric.md`), 1-5 each:** **Philosophy**, **Hierarchy** (lands first AND sits where attention lands), **Execution**, **Specificity** (names the actual product/user/situation), **Restraint**, **Variety** (reproduces a named, located signature move from the lead reference; no fallback to hero+three-cards+CTA unless that shape is the reproduced move). **The bar: every axis >= 4, no axis below 3.** Anchor the scale to a `craftBand:"strong"` and a `craftBand:"commodity"` exemplar.
+
+**Defect checklist (each yes/no; a "yes" REQUIRES a named location):** overflow; overlap; contrast below the floor; missing OR fabricated imagery (incl. glossy fake mockups); mobile hero legibility; default/genre-cliche accent; decorative tell shape (an eyebrow/status pill/console-chrome above a heading is an AUTOMATIC FAIL on the hero; also kinetic heading splitting mid-word, two-tone or gradient heading, the recurring default face (mode-aware), glassmorphism/bento as decoration, the icon-tile feature card, decorative motion, inconsistent visual language across sections); composition/attention; static-defensive mobile; duplication; padding/spacing inconsistency. A non-zero console-error count is an automatic `visual: fail`.
+
+**AI-slop Quick QA pass (closed list, verbatim from `ai-slop-tells.md`). Tick more than two and the build has regressed to the AI default:**
+
+- Gradient text headline, especially indigo to pink
+- Untuned purple, cyan-on-dark, or default-green accent
+- Instrument Serif or a serif-italic accent word used by reflex
+- Eyebrow-pill, centred-hero, two-button formula left untouched
+- Rounded icon-tile feature cards, or a thick coloured side-border on cards
+- Feature pill row (bonus tell if any pill repeats)
+- Bento grid or glassmorphism used as decoration, not for clarity
+- Different sections that look like different sites (no shared constraints)
+- "Simple, honest pricing" or an equivalent stock phrase
+- Tapestry talk, contrast framing, or everything emphasised at once
+- Cookie banner, Product Hunt badge, or dual free-call CTA with nothing behind them
+- Glossy mockups where real product screenshots should be
+- Remove the word "AI" and the product is unchanged
+
+**Loop guardrails.** Accept a revision only if the score improves (axis sum strictly up, OR a named defect resolved with no new defect). The critic must name a concrete located defect before any axis passes below 5; "no issues found" is SUSPECT. Cap at 2-3 iterations, then escalate. Never lower the bar to pass.
+
+## Composition and attention (the floor against broken layout)
+
+A floor against BROKEN composition, never a centring rule (bold, off-centre, asymmetric is good; fire only on the confluence of faults). **The five criteria, per section:** (1) **Focal placement** (not stranded in the dead bottom-left fallow); (2) **Eye path** (led TOWARD the primary action); (3) **Balance and voids**; (4) **Integration** (elements that share a meaning sit together); (5) **Orphans**. A High finding (the hero focal in the fallow, the signature move divorced from the headline, a key element orphaned) blocks the done gate.
+
+## Perceptual floors (the numbers, cited, never silently violated)
+
+Research-grounded minimums (WCAG, Material 3, NNGroup, APCA, Apple HIG). Stronger values are fine, never below:
+- **Body text on dark:** `#E2E8F0` or lighter, NEVER pure `#FFFFFF`. Body contrast >= **4.5:1**; large text (18pt+ regular, 14pt+ bold) >= **3:1**.
+- **Interactive states:** disabled opacity **40%** (not 50%); hover lightness shift >= **8%**; a visible pressed (`:active`) state; focus ring min **2px**, contrast >= **3:1**; tap target min **44 x 44 px**.
+- **Type:** mobile body size >= **16px**; line-height **1.5 to 1.7**; body letter-spacing **0 to 0.01em**; display letter-spacing floor **-0.03em**; line length **50 to 80 characters**.
+- **Motion:** no animation on body text unless user-triggered; non-essential motion respects `prefers-reduced-motion`; page transition **150 to 300ms**.
+- **Spacing:** min gap between adjacent interactive controls **8px**; a documented section padding scale (e.g. **16 / 24 / 32 / 48 / 80**).
+
+## The runbook (no hooks here, so run the spine yourself)
+
+On Claude Code the hooks fire the gates for you; here YOU run them, in order, every build:
+1. **Probe + survey.** `refs_list_verticals` once, then `refs_for_business` / `refs_match_brief` -> `refs_search` -> `refs_get` the layers of the backbone + donors. No survey, no ground.
+2. **Story + DIVERGE -> CONVERGE.** Run the Story Engine, sample 8-10 concepts, score Originality x Craft-feasibility, carry the best 1-2. Record it (write a `PALATE_COMMISSION.md`) BEFORE a single source file.
+3. **Scaffold.** Run `create-palate` (above) before any page. Never freestyle root `.html`.
+4. **Build by the section recipe.** Per conversion section: 2-3 donors -> screenshot -> `component_prompts` + `do_dont` + `pages` -> reproduce the strongest re-skinned -> check `do_dont` before emit.
+5. **Gate, then stop.** Run `palate-verify` (below) and fix what it flags. You are NOT done until it exits 0.
+6. **Grade it locally, free.** `grade-local.mjs --url <url>` runs the grader's own rubric, prompt and SigLIP head: score, dimensions, ranked findings with fixes. `palate_grade` is internal-only and refuses; the cloud grader is funded by the free public one at https://palatemcp.com/grade, where a shareable number comes from.
+7. **Fetch deeper doctrine on demand** (this file is the lite floor): `curl` `references/{stack,build-stages,motion-and-3d,visual-rubric,industry-patterns,composition-and-attention}.md` from the repo at that stage.
+
+## Running the gates on any model
+
+The deterministic floor is a real command, not a claim. **Before you tell the user the build is done, run the full gate on the project and fix what it flags:**
+
+```
+curl -fsSL https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/main/scripts/palate-verify.sh | bash -s -- ./
+```
+
+It runs BOTH floors the plugin runs: the **anti-freestyle** check (`verify-is-real-astro` - a real Astro scaffold, no loose root `.html`, it compiles; the gate that catches "raw HTML, not Astro") AND the **anti-slop** lint (`ux-lint` + `anti-patterns.md` - the banned faces, the tracked-mono eyebrow, the status pill, the closed list). Exit 1 = a real finding: read it, fix the cause (never silence a rule without a one-line brand reason), re-run, max 3 attempts, then HALT. `PALATE_GATE_STRICT=1` fails on Medium-and-up. Wire it into a git pre-push hook or CI so it cannot be skipped. Library DEPTH (did you actually survey) is enforced server-side by the MCP; the visual-rubric + verifier loop is the Claude Code plugin, so for those run on honour: survey before you build, ship against the render, never weaken a gate to pass. The gates catch mechanical failures, not taste; the model sets the ceiling.
+
+## What this is NOT
+
+The portable doctrine + the runbook + the Astro scaffold + the `palate-verify` gate: enough for a non-Claude tool (Cursor, Codex, Gemini, Copilot) to run the same spine, build the same Astro stack, and gate itself. What stays Claude-Code-only is the AUTO-firing enforcement (the PreToolUse DIVERGE wall, the Stop done-gate) and the context-isolated surveyor/verifier subagents, plus the full provisioning harness (Sanity, hosting, domains). Here YOU run `palate-verify` and follow the runbook yourself; without hooks, treat it as disciplined honour-system, and wire `palate-verify` into a git pre-push hook or CI so the floor cannot be skipped.

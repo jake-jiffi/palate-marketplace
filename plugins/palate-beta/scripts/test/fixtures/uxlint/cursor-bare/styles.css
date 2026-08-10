@@ -1,0 +1,2 @@
+/* A bare disable with no reason must NOT suppress a JUSTIFY-OR-FLAG rule. */
+.layer { cursor: none; } /* ux-lint-disable custom-cursor-not-gated */

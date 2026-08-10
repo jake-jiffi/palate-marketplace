@@ -1,0 +1,479 @@
+name: Palate contract
+
+# The contribution gate, running without being asked.
+#
+# `ci.yml` proves the site COMPILES. This proves the CHANGE is fit to merge, and it is
+# scoped to the diff: the contract classifies what changed (content / structural /
+# config), works out which routes that change can reach, and runs only the lanes that
+# class earns. A typo fix checks two routes in seconds; a layout change checks
+# everything. Guess high and nobody keeps the gate, guess low and it misses the
+# regression it exists to catch.
+#
+# EVERY STEP HERE CAN FAIL. That is the point, and it is the thing to preserve when
+# editing this file. A step that can only pass is not a gate, it is a green tick that
+# retires the question. Two specific traps, both of which have been shipped before:
+#   - `verify-rendered.sh` exits 3 when no browser could be launched. 3 means BLOCKED,
+#     never "clean". Any wrapper that only tests for exit 1 inverts it.
+#   - `gate-mcp-depth.sh` exits 3 for UNGROUNDED, which is a LABEL and must never block.
+#     Same number, opposite meaning, different script. They are handled separately below.
+#
+# LANES NOT RUN HERE, and why. `caps` (new dead internal links) needs the index built at
+# the BASE commit as well as the head, because the contract judges the delta and a site
+# adopted with dead links must still be able to merge a typo fix; the weekly
+# `palate-sweep.yml` reports dead links site-wide instead. `drift` needs the local
+# appearance model (a ~356MB download per run, and no baseline history survives between
+# runners). `taste` is the paid layer and is what /palate-website-builder:grade answers.
+# None of them are silently skipped: they were never in scope for a PR runner.
+#
+# ------------------------------------------------------------------ WHAT THIS COSTS
+#
+# GitHub Actions: free on public repos. On a Free private repo you get 2,000 minutes a
+# month, and a full run of this (npm ci + build + Playwright + a three-viewport render)
+# is roughly 4-7 minutes, so ~300 runs a month before you are buying minutes.
+#
+# Cloudflare Pages / Workers Builds on the Free plan: 500 builds a month and ONE
+# concurrent build. This workflow does not trigger those, your pushes do, but the two
+# add up on the same pull request: a branch pushed twenty times spends twenty of the 500
+# and each preview build queues behind the last, so the preview you are waiting on can be
+# minutes behind the commit. To scope it:
+#   - the `concurrency` block below cancels superseded runs of THIS workflow (it cannot
+#     cancel a Cloudflare build; nothing here can);
+#   - on Cloudflare, turn off automatic preview deployments for non-production branches,
+#     or set build watch paths, so a docs-only commit does not spend a build;
+#   - keep pull requests short. The concurrency limit punishes long chatty branches far
+#     harder than it punishes big ones.
+#
+# ------------------------------------------------------------------- OVERLAP WITH ci.yml
+#
+# ci.yml also runs typecheck + build on pull_request. If you keep both, you pay for that
+# twice. Keeping both is fine while you settle in; once you trust this one, the honest
+# move is to narrow ci.yml to push-on-main, or delete it. Do not disable this one to save
+# the minutes: ci.yml cannot fail on anything the contract measures.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  # npm ci resolves the brand package from GitHub Packages. Without this the install
+  # step 403s on a private package, which reads as a broken workflow rather than as a
+  # missing scope.
+  packages: read
+
+concurrency:
+  # One live run per pull request. Superseded runs are cancelled rather than queued,
+  # which is the only lever here that also relieves a one-concurrent-build host.
+  group: palate-contract-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    env:
+      # ================================= THE PIN =================================
+      # Which version of the Palate gates judges this repository.
+      #
+      # It is PINNED by default and it must stay pinned. An unpinned CI executes
+      # whatever happens to be on our default branch at the moment your job runs, on
+      # your runner, with your repository checked out. That is a supply-chain problem
+      # even when everyone involved is friendly, and it also means a rule we merge on a
+      # Tuesday can turn your pull request red on a Wednesday with no commit of yours in
+      # between.
+      #
+      # To move the pin: Settings > Secrets and variables > Actions > Variables, add
+      # PALATE_REF and set it to a full 40-character commit SHA, or a release tag once
+      # one exists. Read the release notes first, the same as any other dependency bump.
+      #
+      # THE DEFAULT IS A SHA, NOT A TAG, AND THAT IS DELIBERATE. The gate repo has no
+      # tags at all, so an earlier default of `v1.13.0` made `actions/checkout` fail with
+      # "Ref not found" on the second step of every scaffolded site's first run: a pin
+      # whose own promise, to refuse rather than drift, resolved to refusing always.
+      # A SHA cannot move and cannot be missing.
+      #
+      # RELEASE REQUIREMENT: bumping the plugin version must also bump this default (or
+      # tag the release and switch to the tag). A pin nobody advances is a pin that
+      # freezes every customer's gates at the day they scaffolded.
+      #
+      # `main` is accepted, and the run will warn every time. That warning is not noise,
+      # it is the cost of the convenience.
+      PALATE_REF: ${{ vars.PALATE_REF || '4669dcfc249deb5e0c30424b24fd0c95c4b1bc62' }}
+
+      # github.base_ref reaches the shell through the environment, never through a
+      # ${{ }} interpolation inside a run block, so a branch name can never be parsed as
+      # shell. Same rule for every other context value used below.
+      BASE_REF: ${{ github.base_ref }}
+
+      # The rendered gate loads each route at three viewports. A wide blast radius is
+      # real but it is also minutes; past this many routes the rest are NAMED and
+      # skipped, never dropped quietly.
+      PALATE_MAX_ROUTES: '12'
+
+    steps:
+      - name: Check out the site
+        uses: actions/checkout@v4
+        with:
+          # The contract is judged on the DELTA. A shallow clone has no base commit to
+          # diff against, so the change set would come back empty and every lane would
+          # be skipped on a green tick.
+          fetch-depth: 0
+
+      - name: Check out the Palate gates at the pinned ref
+        uses: actions/checkout@v4
+          # If this step fails with "Ref ... not found", the pin below points at a tag or
+          # SHA that does not exist in the gate repository. That is the pin doing its job:
+          # it refuses rather than silently falling back to a moving branch. Set the
+          # PALATE_REF repository variable to a ref that exists.
+        with:
+          repository: jake-jiffi/palate-website-builder
+          ref: ${{ env.PALATE_REF }}
+          path: .palate-skill
+          # A whole checkout rather than curling the four scripts by name. The scripts
+          # are not standalone: ux-lint.sh reads ../references/anti-patterns.md,
+          # palate-contract.mjs imports palate-index.mjs, and verify-rendered.mjs pulls
+          # in design-measure, vitals, rubric and hygiene-loop from beside it. A curl
+          # manifest works until one of those files gains an import, and then it breaks
+          # in every customer's CI at once, for a change none of them made.
+          sparse-checkout: |
+            scripts
+            references
+
+      - name: Name the gate that is judging this
+        run: |
+          set -euo pipefail
+          sha="$(git -C .palate-skill rev-parse HEAD)"
+          echo "PALATE_SHA=$sha" >> "$GITHUB_ENV"
+          echo "Palate gates: ref=$PALATE_REF sha=$sha"
+          # A tag or a full SHA is pinned. Anything else is a moving target, and the run
+          # says so out loud rather than letting the pin rot quietly.
+          case "$PALATE_REF" in
+            v[0-9]*.[0-9]*.[0-9]*|[0-9]*.[0-9]*.[0-9]*) : ;;
+            ????????????????????????????????????????)  : ;;
+            *)
+              echo "::warning title=Palate gates are not pinned::PALATE_REF is '$PALATE_REF', which moves. Your CI is executing whatever is on that branch at run time. Set the PALATE_REF repository variable to a release tag or a full commit SHA."
+              ;;
+          esac
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@palate-projects'
+
+      - name: Install
+        # A pull request from a FORK gets a read-only token and no secrets, so a private
+        # brand package cannot resolve and this step fails. That is correct: the
+        # alternative is a build that quietly omits the brand and then judges the result.
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out what changed
+        id: diff
+        run: |
+          set -euo pipefail
+          base="origin/$BASE_REF"
+          if ! git rev-parse --verify --quiet "$base" >/dev/null; then
+            echo "::error title=No base to diff against::Could not resolve $base. The contract is judged on the delta, so without a base there is nothing to judge. Check that the checkout step still sets fetch-depth: 0."
+            exit 1
+          fi
+          git diff --name-only "$base...HEAD" > "$RUNNER_TEMP/changed.txt"
+          count="$(wc -l < "$RUNNER_TEMP/changed.txt" | tr -d ' ')"
+          echo "changed files ($count):"
+          sed 's/^/  /' "$RUNNER_TEMP/changed.txt"
+          if [ "$count" -eq 0 ]; then
+            # GitHub will not open a pull request with an empty diff, so an empty change
+            # set here means the diff computation is wrong, not that nothing changed.
+            # Passing on it would pass every future pull request too.
+            echo "::error title=Empty change set::git diff against $base returned no files. A pull request always has a diff, so this is a broken comparison, not a clean one."
+            exit 1
+          fi
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: The contract plan
+        id: plan
+        run: |
+          set -uo pipefail
+          # A read loop rather than `mapfile`, which needs bash 4. The runner has bash 5,
+          # but this file is also the thing people copy into other runners and into their
+          # own shells, and a builtin that silently does not exist is a change set that
+          # silently comes back empty.
+          changed=()
+          while IFS= read -r line; do
+            [ -n "$line" ] && changed+=("$line")
+          done < "$RUNNER_TEMP/changed.txt"
+          node .palate-skill/scripts/palate-contract.mjs . --changed "${changed[@]}" --json > "$RUNNER_TEMP/plan.json"
+          rc=$?
+          if [ "$rc" -eq 4 ]; then
+            echo "::error title=No site here::palate-contract found no Astro site at the repository root (it looks for src/pages). If the site lives in a subdirectory, this workflow needs a working-directory."
+            exit 1
+          fi
+          [ "$rc" -eq 0 ] || { echo "::error::palate-contract exited $rc"; exit "$rc"; }
+          # An empty plan on a zero exit is the dangerous shape: palate-contract.mjs only
+          # runs its CLI when process.argv[1] string-matches its own resolved module URL,
+          # so if the script is ever reached through a symlink or a wrapper it prints
+          # nothing and succeeds. Every lane below is gated on this file's contents, so
+          # "no plan" would read as "no lanes to run" and the pull request would go green
+          # having been checked by nothing.
+          if [ ! -s "$RUNNER_TEMP/plan.json" ]; then
+            echo "::error title=The contract planner produced nothing::palate-contract.mjs exited 0 and wrote an empty plan. Nothing has been checked. This is a fault in the gate, not a clean result."
+            exit 1
+          fi
+
+          # The plan is printed BEFORE anything runs. If a one-line content edit plans a
+          # wide scope, that is a structural change wearing a content change's clothes,
+          # and it should be visible here rather than discovered by someone waiting.
+          #
+          # The reader is written to a file rather than piped into `node -` so that a
+          # failure inside it is a distinguishable exit code and not a swallowed pipe.
+          cat > "$RUNNER_TEMP/read-plan.cjs" <<'NODE'
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const max = Number(process.env.PALATE_MAX_ROUTES || 12);
+
+          const keep = [], dropped = [];
+          for (const r of p.routes) {
+            // A dynamic route path is a PATTERN, not a URL. Fetching /blog/[slug]
+            // literally returns 404 and the gate would report a fault the site does not
+            // have. Concrete children (/blog/welcome) are already in this list on their
+            // own account, resolved from the content entries.
+            if (r.includes('[')) { dropped.push(`${r} (dynamic pattern)`); continue; }
+            // Endpoints answer with JSON or plain text, and some refuse GET outright.
+            // The rendered gate judges PAGES: overflow, contrast, reveal state, vitals.
+            if (/^\/api\//.test(r)) { dropped.push(`${r} (api endpoint)`); continue; }
+            if (/\.[a-z0-9]+$/i.test(r)) { dropped.push(`${r} (non-HTML endpoint)`); continue; }
+            keep.push(r);
+          }
+          const rendered = keep.slice(0, max);
+          const over = keep.slice(max);
+
+          const lanes = new Set(p.lanes);
+          const out = [];
+          out.push(`class=${p.diffClass}`);
+          out.push(`scope=${p.scope}`);
+          out.push(`lanes=${p.lanes.join(' ')}`);
+          out.push(`routes=${rendered.join(',')}`);
+          out.push(`route_count=${rendered.length}`);
+          out.push(`run_schema=${lanes.has('schema')}`);
+          out.push(`run_voice=${lanes.has('voice')}`);
+          // One render pass covers functional, a11y, perf and geometry. It is worth
+          // running if the plan asked for any of them AND there is a real page to load.
+          const wantsRender = ['functional', 'a11y', 'perf', 'geometry'].some((l) => lanes.has(l));
+          out.push(`run_rendered=${wantsRender && rendered.length > 0}`);
+
+          console.error(`contribution class : ${p.diffClass}`);
+          console.error(`routes affected    : ${p.routes.length} (${p.scope})`);
+          console.error(`lanes              : ${p.lanes.join(', ')}`);
+          console.error(`blocking           : ${p.blocking.join(', ')}`);
+          console.error(`rendered routes    : ${rendered.join(', ') || '(none)'}`);
+          for (const d of dropped) console.error(`  not rendered: ${d}`);
+          if (over.length) {
+            console.error(`::warning title=Rendered routes capped::${over.length} affected route(s) were NOT rendered because PALATE_MAX_ROUTES is ${max}: ${over.join(', ')}. Raise the cap in this workflow, or split the change.`);
+          }
+          if (p.diffClass === 'none') {
+            console.error('::notice::Nothing in this change reaches the site (no content, source or config files). No lanes to run.');
+          }
+          console.log(out.join('\n'));
+          NODE
+          node "$RUNNER_TEMP/read-plan.cjs" "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/outputs.txt"
+          rc=$?
+          [ "$rc" -eq 0 ] || { echo "::error::could not read the plan (node exited $rc)"; exit 1; }
+          cat "$RUNNER_TEMP/outputs.txt" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------ schema
+      # Instant-to-seconds, blocking. astro sync is the content-collection schema: a
+      # frontmatter field the Zod schema rejects fails here rather than at deploy.
+      - name: schema - content collections, types and build
+        id: schema
+        if: steps.plan.outputs.run_schema == 'true'
+        run: |
+          set -euo pipefail
+          npx astro sync
+          npm run typecheck
+          npm run build
+        env:
+          # Inert until a CMS is added (scripts/add-sanity.sh). Left in place so wiring
+          # Sanity later needs no CI edit: @sanity/astro resolves the project at BUILD
+          # time, so the build step is where it has to arrive.
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
+          SANITY_API_READ_TOKEN: ${{ secrets.SANITY_API_READ_TOKEN }}
+
+      # ------------------------------------------------------------------- voice
+      # Seconds, blocking. 73 deterministic rules: AI tells, banned default faces,
+      # eyebrow kickers, em dashes.
+      #
+      # THE TARGET IS src/, NOT THE PROJECT ROOT, AND THAT COSTS SOMETHING. The scaffold
+      # commits `_claude/anti-patterns.md` (the doctrine copy for non-Claude tools), and
+      # ux-lint's exclusion list covers `.claude` but not `_claude`, so linting the root
+      # scores the rulebook's own examples and returns ~25 false High findings on a
+      # clean site. Narrowing to src/ removes them, and the price is that the handful of
+      # rules whose glob is path-scoped (src/components/**, src/pages/index.astro) match
+      # nothing when src/ is the root of the search. Every bare-glob rule (*.astro,
+      # *.css, *.tsx, *.md) still runs over the whole tree.
+      #
+      # --severity is passed to MATCH --fail-on deliberately. --fail-on High alone still
+      # PRINTS at the Medium floor, so the log shows findings the exit code ignores, and
+      # a green job full of red-looking lines teaches people to stop reading the log.
+      # Drop --severity if you would rather see the Medium context.
+      - name: voice - anti-slop lint
+        id: voice
+        if: steps.plan.outputs.run_voice == 'true'
+        run: bash .palate-skill/scripts/ux-lint.sh src --fail-on High --severity High
+
+      # ----------------------------------------------- functional / a11y / perf / geometry
+      - name: Cache the browser runtime
+        if: steps.plan.outputs.run_rendered == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            .palate-skill/scripts/reference-capture/node_modules
+          # Keyed on the pinned gate SHA: a new gate version can pin a new Playwright,
+          # and a stale browser against a new client is a launch failure that reads as a
+          # blocked gate.
+          key: palate-runtime-${{ runner.os }}-${{ env.PALATE_SHA }}
+
+      - name: Install the browser runtime
+        if: steps.plan.outputs.run_rendered == 'true'
+        run: |
+          set -uo pipefail
+          bash .palate-skill/scripts/reference-capture/setup.sh
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::error title=Browser runtime unavailable::The rendered lanes cannot run without a browser. This is BLOCKED, not clean."
+            exit 1
+          fi
+          # Best effort only. On the GitHub runner images Chromium's shared libraries are
+          # usually already present; where they are not, this supplies them. It is
+          # allowed to fail because the gate below fails hard on its own if the browser
+          # will not launch, and that is the honest place to find out.
+          ( cd .palate-skill/scripts/reference-capture && npx --yes playwright install-deps chromium ) \
+            || echo "::warning::playwright install-deps could not run. If the render step reports a blocked gate, missing system libraries are the first thing to check."
+
+      - name: functional, a11y, perf and geometry - the rendered gate
+        id: rendered
+        if: steps.plan.outputs.run_rendered == 'true'
+        env:
+          ROUTES: ${{ steps.plan.outputs.routes }}
+        run: |
+          set -uo pipefail
+          # Serve and verify in ONE step so the dev server's lifetime is bounded by this
+          # step. serve-preview.sh redirects the server's output into a log file rather
+          # than inheriting stdout, which is what stops a backgrounded server holding the
+          # step open after the work is done.
+          cleanup() { [ -n "${SERVE_PID:-}" ] && { kill -- "-$SERVE_PID" 2>/dev/null || kill "$SERVE_PID" 2>/dev/null; }; true; }
+          # There is no `astro dev stop`. Calling it STARTS a server, and in a trap that
+          # hangs the job to the 6-hour timeout on every run. Kill the PID we recorded.
+          trap cleanup EXIT
+
+          serve_out="$(bash .palate-skill/scripts/serve-preview.sh . 2>&1)"
+          printf '%s\n' "$serve_out"
+          url="$(printf '%s\n' "$serve_out"  | sed -n 's/^SERVE_URL=//p'  | head -1)"
+          http="$(printf '%s\n' "$serve_out" | sed -n 's/^SERVE_HTTP=//p' | head -1)"
+
+          if [ -z "$url" ]; then
+            echo "::error title=Preview server never came up::No SERVE_URL was printed, so nothing could be rendered. Treat this as blocked, not clean."
+            exit 1
+          fi
+          # serve-preview.sh exits 0 even when the URL is not yet answering 200 (it says
+          # "give it a moment"). Rendering against a server that is not up produces
+          # findings about the server, not the site, so the status is checked here.
+          if [ "$http" != "200" ]; then
+            echo "::error title=Preview server answered HTTP $http::The site never served a 200 at $url, so the rendered gate has nothing trustworthy to measure."
+            exit 1
+          fi
+
+          echo "rendering: $ROUTES"
+          bash .palate-skill/scripts/verify-rendered.sh "$url" --routes "$ROUTES" --out .palate-shots
+          rc=$?
+          case "$rc" in
+            0) echo "rendered gate clean" ;;
+            1) echo "::error title=Rendered gate found High-severity faults::See the findings above. Each one names the route, the viewport and the fix."; exit 1 ;;
+            2) echo "::error title=Rendered gate was called wrongly::exit 2 is bad arguments, which is a fault in this workflow rather than in the site."; exit 1 ;;
+            3) echo "::error title=Rendered gate BLOCKED::No browser could be launched, so functional, a11y, perf and geometry were NOT measured. Exit 3 is blocked, never a pass."; exit 1 ;;
+            *) echo "::error::verify-rendered exited $rc"; exit 1 ;;
+          esac
+
+      - name: Keep the evidence
+        if: failure() && steps.plan.outputs.run_rendered == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: palate-rendered-evidence
+          path: .palate-shots
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # --------------------------------------------------------------- grounding
+      # ORTHOGONAL TO THE VERDICT, AND IT NEVER BLOCKS. Exit 3 here means the build
+      # recorded no Palate MCP calls, so the change carries no taste layer. That is a
+      # label, said once. Exit 2 is a genuine depth failure and is reported as a warning
+      # rather than a block, because a contribution inherits the site's standing and the
+      # manifest describes the ORIGINAL build, not this pull request.
+      - name: Grounding label
+        if: always() && steps.plan.outputs.run_schema == 'true'
+        run: |
+          set -uo pipefail
+          # The gate exits 0 for two different things: "the build is grounded" and
+          # "there was nothing here to gate" (no jq, no manifest, unreadable manifest).
+          # Collapsing those into one line would print "grounded" about a site that has
+          # never recorded a single MCP call, which is precisely the claim the third
+          # state exists to prevent. So the not-gateable cases are ruled out first.
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "::notice title=Grounding unknown::jq is not on this runner, so the build manifest could not be read."
+            exit 0
+          fi
+          if [ ! -f build-manifest.json ] || ! jq -e . build-manifest.json >/dev/null 2>&1; then
+            echo "::notice title=Grounding unknown::No readable build-manifest.json in this repository, so CI cannot tell whether the site was built with the Palate taste layer."
+            exit 0
+          fi
+          bash .palate-skill/scripts/gate-mcp-depth.sh build-manifest.json
+          rc=$?
+          case "$rc" in
+            0) echo "grounded" ;;
+            2) echo "::warning title=Grounding is thin::The build manifest records Palate MCP calls, but not enough depth to claim the taste layer. This does not block a contribution." ;;
+            3) echo "::notice title=Ungrounded::The Palate MCP was not used for this build, so it carries no taste layer. claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp" ;;
+            *) echo "::warning::gate-mcp-depth exited $rc" ;;
+          esac
+
+      # ----------------------------------------------------------------- verdict
+      - name: Verdict
+        if: always()
+        # Every value reaches the shell through the environment. Route paths are derived
+        # from filenames in src/pages, a pull request can add a file with a backtick or a
+        # $(...) in its name, and an interpolated ${{ }} inside a run block would hand
+        # that straight to bash.
+        env:
+          P_CLASS: ${{ steps.plan.outputs.class }}
+          P_SCOPE: ${{ steps.plan.outputs.scope }}
+          P_LANES: ${{ steps.plan.outputs.lanes }}
+          P_ROUTES: ${{ steps.plan.outputs.routes }}
+          R_SCHEMA: ${{ steps.schema.outcome }}
+          R_VOICE: ${{ steps.voice.outcome }}
+          R_RENDER: ${{ steps.rendered.outcome }}
+        run: |
+          set -uo pipefail
+          note() { printf '%s\n' "$1" >> "$GITHUB_STEP_SUMMARY"; }
+          note "## Palate contract"
+          note ""
+          note "| | |"
+          note "|---|---|"
+          note "| gate | \`${PALATE_REF}\` (\`${PALATE_SHA:-unknown}\`) |"
+          note "| class | ${P_CLASS:-not planned} |"
+          note "| scope | ${P_SCOPE:--} |"
+          note "| lanes | ${P_LANES:--} |"
+          note "| rendered routes | ${P_ROUTES:-(none)} |"
+          note ""
+          note "| lane | result |"
+          note "|---|---|"
+          # `outcome` is the step's real result: success, failure or skipped. Printing it
+          # verbatim is the whole discipline here. A summary that prints "ran" for a step
+          # that was skipped is how a gate ends up reporting a pass it never made.
+          note "| schema | ${R_SCHEMA:-not run} |"
+          note "| voice | ${R_VOICE:-not run} |"
+          note "| rendered | ${R_RENDER:-not run} |"
+          note ""
+          note "Not measured here: caps (needs the base index), drift (local model), taste (paid)."
+          # This step reports; it does not decide. The job is already red if a lane
+          # failed, and exiting 0 here cannot turn that green.
+          cat "$GITHUB_STEP_SUMMARY"

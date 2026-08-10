@@ -1,0 +1,8 @@
+---
+// Static site search, powered by Pagefind. The astro-pagefind integration
+// (astro.config.mjs) builds the search index from the rendered site at build
+// time - no server, no Algolia bill. Drop <Search /> into the header or a
+// /search page. See references/connective-tissue.md.
+import Search from "astro-pagefind/components/Search";
+---
+<Search id="site-search" className="pagefind-ui" uiOptions={{ showImages: false }} />

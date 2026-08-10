@@ -1,0 +1,166 @@
+---
+// Accessible contact form. POSTs JSON to /api/contact (src/pages/api/contact.ts):
+//   { name, email, message, turnstileToken } -> { ok: true } | { error }.
+// Built to the form-usability floor: a visible label above every field, the right
+// input type + inputmode + autocomplete, validation on blur (never mid-typing on an
+// empty required field), the error cleared the moment the field becomes valid, and
+// explicit submitting / success / failure states announced via aria-live.
+// Turnstile renders only when PUBLIC_TURNSTILE_SITE_KEY is set (provisioned by
+// scripts/optional-services.sh); without it the widget is absent and the token blank.
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+---
+<form id="contact-form" class="mt-10 grid gap-6" novalidate>
+  <div class="grid gap-2">
+    <label for="cf-name" class="text-brand-text text-sm font-medium">Name</label>
+    <input
+      id="cf-name"
+      name="name"
+      type="text"
+      autocomplete="name"
+      required
+      aria-describedby="cf-name-error"
+      class="rounded-brand border-brand-border bg-brand-bg text-brand-text border px-4 py-3"
+    />
+    <p id="cf-name-error" class="cf-error text-sm" role="alert" hidden></p>
+  </div>
+
+  <div class="grid gap-2">
+    <label for="cf-email" class="text-brand-text text-sm font-medium">Email</label>
+    <input
+      id="cf-email"
+      name="email"
+      type="email"
+      inputmode="email"
+      autocomplete="email"
+      required
+      aria-describedby="cf-email-error"
+      class="rounded-brand border-brand-border bg-brand-bg text-brand-text border px-4 py-3"
+    />
+    <p id="cf-email-error" class="cf-error text-sm" role="alert" hidden></p>
+  </div>
+
+  <div class="grid gap-2">
+    <label for="cf-message" class="text-brand-text text-sm font-medium">Message</label>
+    <textarea
+      id="cf-message"
+      name="message"
+      rows="5"
+      required
+      aria-describedby="cf-message-error"
+      class="rounded-brand border-brand-border bg-brand-bg text-brand-text border px-4 py-3"
+    ></textarea>
+    <p id="cf-message-error" class="cf-error text-sm" role="alert" hidden></p>
+  </div>
+
+  {turnstileSiteKey && <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>}
+
+  <button
+    type="submit"
+    class="rounded-brand bg-brand-accent text-brand-inverse inline-flex items-center justify-center px-6 py-3 font-semibold disabled:opacity-40"
+  >
+    Send message
+  </button>
+
+  <p id="cf-status" class="text-brand-muted text-sm" role="status" aria-live="polite"></p>
+</form>
+
+{turnstileSiteKey && (
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+)}
+
+<style>
+  .cf-error {
+    color: var(--brand-error, var(--brand-accent));
+  }
+</style>
+
+<script>
+  function initContactForm() {
+    const form = document.getElementById("contact-form") as HTMLFormElement | null;
+    if (!form || form.dataset.bound === "true") return;
+    form.dataset.bound = "true";
+
+    const fields = ["name", "email", "message"].map((key) => ({
+      key,
+      input: document.getElementById("cf-" + key) as HTMLInputElement | HTMLTextAreaElement,
+      error: document.getElementById("cf-" + key + "-error") as HTMLElement,
+    }));
+    const status = document.getElementById("cf-status") as HTMLElement;
+    const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    function validate(field: (typeof fields)[number], allowEmpty: boolean) {
+      const value = field.input.value.trim();
+      if (!value) return allowEmpty ? "" : "Please enter your " + field.key + ".";
+      if (field.key === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return "Please enter a valid email address.";
+      }
+      return "";
+    }
+
+    function showError(field: (typeof fields)[number], message: string) {
+      if (message) {
+        field.error.textContent = message;
+        field.error.hidden = false;
+        field.input.setAttribute("aria-invalid", "true");
+      } else {
+        field.error.textContent = "";
+        field.error.hidden = true;
+        field.input.removeAttribute("aria-invalid");
+      }
+    }
+
+    for (const field of fields) {
+      // Validate on blur, but only once the field has a value, so an empty required
+      // field is never flagged mid-flow.
+      field.input.addEventListener("blur", () => showError(field, validate(field, true)));
+      // Clear the error the moment a flagged field becomes valid.
+      field.input.addEventListener("input", () => {
+        if (field.input.getAttribute("aria-invalid") === "true") {
+          showError(field, validate(field, true));
+        }
+      });
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      let firstInvalid: HTMLElement | null = null;
+      for (const field of fields) {
+        const message = validate(field, false);
+        showError(field, message);
+        if (message && !firstInvalid) firstInvalid = field.input;
+      }
+      if (firstInvalid) {
+        firstInvalid.focus();
+        return;
+      }
+
+      const turnstile = form.querySelector('[name="cf-turnstile-response"]') as HTMLInputElement | null;
+      button.disabled = true;
+      status.textContent = "Sending...";
+      try {
+        const res = await fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: fields[0].input.value.trim(),
+            email: fields[1].input.value.trim(),
+            message: fields[2].input.value.trim(),
+            turnstileToken: turnstile?.value || "",
+          }),
+        });
+        if (res.ok) {
+          form.reset();
+          status.textContent = "Thanks, your message is on its way. We will reply soon.";
+        } else {
+          status.textContent = "Something went wrong sending that. Please try again.";
+        }
+      } catch {
+        status.textContent = "We could not reach the server. Check your connection and try again.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
+  document.addEventListener("astro:page-load", initContactForm);
+</script>

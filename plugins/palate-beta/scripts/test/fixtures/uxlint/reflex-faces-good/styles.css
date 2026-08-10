@@ -1,0 +1,11 @@
+/* The same faces, but JUSTIFIED with a one-line brand reason on the line directly
+   above the matched font-family declaration. A justified disable suppresses; the rules
+   must NOT fire here. */
+h1, h2, h3 {
+  /* ux-lint-disable banned-display-bricolage the studio brandbook specifies Bricolage as the wordmark face */
+  font-family: "Bricolage Grotesque", sans-serif;
+}
+body {
+  /* ux-lint-disable banned-body-hanken the foundry licence ties the body to Hanken for this client */
+  font-family: "Hanken Grotesk", sans-serif;
+}
