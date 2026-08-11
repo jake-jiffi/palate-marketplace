@@ -83,7 +83,14 @@ Reached only via `--certified`, or because they asked for a number to show someo
 automatic next step after section 1: a command that quietly spends a dollar every time someone
 says "grade it" is a command people stop running.
 
-Only when every local gate is green. Confirm the cost before spending it:
+**`palate_grade` is allowlisted, not sold.** `mayStartGrade` admits the `internal` plan plus an
+explicit list of customer ids, and it fails closed, so on an ordinary account the tool refuses
+and charges nothing no matter what plan they are on. Do not offer it as something a subscription
+buys. **The route to a shareable number for everyone else is the free public grader at
+palatemcp.com/grade**, which returns the same certified score and the PDF. Say that first, not
+as a fallback after a refusal they did not need to see.
+
+If they are on the allowlist, confirm the cost before spending it:
 
 > A certified grade costs about US$1.06 and charges 10 units against your monthly allowance
 > (free 2, pro 4, studio 25 per month). It is the only number you can show anyone. Go ahead?

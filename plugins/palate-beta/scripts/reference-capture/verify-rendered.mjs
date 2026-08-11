@@ -58,8 +58,72 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const base = (args.url || '').replace(/\/+$/, '');
 if (!base) { console.error('verify-rendered: --url <base> is required'); process.exit(2); }
-const routes = (args.routes ? String(args.routes).split(',') : ['/', '/contact', '/blog'])
-  .map((r) => r.trim()).filter(Boolean);
+/**
+ * WHICH ROUTES GET RENDERED, and why this is not a hardcoded list any more.
+ *
+ * It used to default to ['/', '/contact', '/blog']. Nothing in the skill passes --routes, so in
+ * practice EVERY build was verified against three guessed paths, two of which often do not exist
+ * on the site being built. A real 57-page storefront was reported "all gates green" while the
+ * template behind 54 of those pages had never been rendered by anything, and a collection page
+ * opened with a 653px band of air and zero products above the fold. Grepping HTML passed it.
+ *
+ * The content graph already knows every route, so ask it:
+ *   - every STATIC route, because each is its own code and can fail on its own
+ *   - ONE representative per DYNAMIC template, because 54 pages sharing one source fail together;
+ *     rendering one catches the template, rendering all 54 buys nothing and costs minutes
+ *   - never endpoints, which have nothing to render
+ *
+ * NO SILENT TRUNCATION. Whatever is collapsed or dropped is printed, because a gate that quietly
+ * narrows its own coverage reads exactly like a gate that passed.
+ */
+function routesFromIndex(indexPath) {
+  try {
+    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    const all = Array.isArray(idx.routes) ? idx.routes : [];
+    if (!all.length) return null;
+    const statics = all.filter((r) => r.kind === 'static' && r.path);
+    const dynamic = all.filter((r) => r.kind === 'dynamic' && r.path);
+    const bySource = new Map();
+    for (const r of dynamic) if (!bySource.has(r.source)) bySource.set(r.source, r);
+    // Dynamic representatives first: each stands in for the most pages, so if anything is
+    // truncated below it must not be these.
+    const reps = [...bySource.values()];
+    const picked = [...reps, ...statics];
+    return {
+      routes: picked.map((r) => r.path),
+      reps: reps.length,
+      collapsed: dynamic.length - reps.length,
+      statics: statics.length,
+      endpoints: all.filter((r) => r.kind === 'endpoint').length,
+    };
+  } catch { return null; }
+}
+
+const MAX_ROUTES = Number(args['max-routes'] && args['max-routes'] !== 'true' ? args['max-routes'] : 14);
+let routes;
+if (args.routes) {
+  routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
+} else {
+  const indexPath = args.index && args.index !== 'true' ? args.index : '.palate/index.json';
+  const found = routesFromIndex(indexPath);
+  if (found) {
+    routes = found.routes.slice(0, MAX_ROUTES);
+    const dropped = found.routes.length - routes.length;
+    console.error(
+      `verify-rendered: ${routes.length} route(s) from ${indexPath} ` +
+      `(${found.reps} dynamic template representative(s) standing in for ${found.reps + found.collapsed} page(s), ` +
+      `${found.statics} static, ${found.endpoints} endpoint(s) not rendered)` +
+      (dropped > 0 ? ` — ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : ''),
+    );
+  } else {
+    routes = ['/', '/contact', '/blog'];
+    console.error(
+      `verify-rendered: no readable ${indexPath}, so falling back to ${routes.join(', ')}. ` +
+      'THESE ARE GUESSES AND MAY NOT EXIST. Run palate-index.mjs first, or pass --routes, ' +
+      'or this gate is checking three paths instead of your site.',
+    );
+  }
+}
 const outDir = args.out && args.out !== 'true' ? args.out : '';
 if (outDir) mkdirSync(outDir, { recursive: true });
 
