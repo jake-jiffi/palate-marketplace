@@ -28,7 +28,20 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    reference donor's craft from the MCP (see `reference-library-usage.md`).
    plus 1-3 landing-page variants as `/lp1`..`/lpN` if the brief warrants. Each
    is a real `.astro` page composed of section components, with section labels
-   visible in Explore mode. The bottom-right `<ExploreSwitcher />` picker lists
+   visible in Explore mode.
+
+   **NO VARIANT IS REGISTERED UNTIL IT PASSES THE ANTI-AI GATE.** Run, per
+   variant, before it enters `src/lib/variants.ts`: `scripts/ux-lint.sh` (the
+   mechanical ruleset), `scripts/verify-rendered.sh` on its route (the structural
+   tells a text rule cannot see, including the eyebrow/kicker), and the visual
+   loop against `visual-rubric.md` + `ai-slop-tells.md`. Critical/High is a hard
+   BLOCK: fix and re-run, and after 3 attempts drop the variant and resample its
+   rung rather than show it. These gates used to run only at Compose, which is
+   downstream of the thing they protect: the client had already seen the tells.
+   The preview is the first impression of the product, so a variant that looks
+   AI-made has lost the argument before anyone reads a word.
+
+   The bottom-right `<ExploreSwitcher />` picker lists
    them by id + name (give each variant an evocative `name` in
    `src/lib/variants.ts`), **in ladder order, with its rung shown**: the range is
    only useful if the client can SEE it is a range. Add `ambition` to each entry

@@ -373,6 +373,54 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       }
       return { firstY, total, vh };
     });
+    /**
+     * THE EYEBROW / KICKER, CAUGHT AS A PATTERN RATHER THAN A STYLING.
+     *
+     * `anti-patterns.md` is absolute: "Do not place a small label above a section heading at
+     * all ... it is a generic-AI tell REGARDLESS OF STYLING - it is the PATTERN". The ux-lint
+     * rule cannot enforce that, because it reads CSS blocks and BOTH its branches require a mono
+     * font, so the commonest form of all - `<p class="text-sm uppercase tracking-widest">What we
+     * do</p>` in the brand sans, styled entirely by utility classes with no CSS block to parse -
+     * matches nothing. Measured: that markup, and a mono eyebrow in the same folder, both produce
+     * zero findings while an em dash in the same folder fires Critical.
+     *
+     * The relationship "a small label immediately above a heading" is structural, so it is found
+     * here, where the DOM and the computed styles both exist, instead of guessed from a regex.
+     */
+    const eyebrows = await page.evaluate(() => {
+      const root = document.querySelector('main') || document.body;
+      if (!root) return [];
+      const out = [];
+      for (const h of root.querySelectorAll('h1, h2, h3')) {
+        const prev = h.previousElementSibling;
+        if (!prev) continue;
+        if (prev.closest('nav, header, [role="navigation"], [role="banner"]')) continue;
+        // A link or a control above a heading is a breadcrumb or an action, not a kicker.
+        if (prev.matches('a, button, nav, ul, ol, img, picture, video, svg, figure, hr')) continue;
+        const text = (prev.textContent || '').trim();
+        if (!text || text.length > 40) continue;          // a real paragraph is not a kicker
+        if (/[.!?]$/.test(text)) continue;                 // a sentence is not a label
+        const ps = getComputedStyle(prev), hs = getComputedStyle(h);
+        if (ps.display === 'none' || ps.visibility === 'hidden') continue;
+        const pSize = parseFloat(ps.fontSize) || 0, hSize = parseFloat(hs.fontSize) || 0;
+        if (!(pSize < hSize)) continue;                    // it has to be SMALLER than the heading
+        const pr = prev.getBoundingClientRect(), hr = h.getBoundingClientRect();
+        if (hr.top - pr.bottom > 48) continue;             // far apart is not "above the heading"
+        out.push({
+          label: text.slice(0, 32),
+          heading: (h.textContent || '').trim().slice(0, 32),
+          upper: ps.textTransform === 'uppercase' || text === text.toUpperCase(),
+        });
+      }
+      return out.slice(0, 4);
+    });
+    for (const e of eyebrows) {
+      add('High', route, vpName,
+        `eyebrow/kicker: the small label "${e.label}" sits immediately above the heading "${e.heading}"` +
+        (e.upper ? ' (uppercase)' : '') +
+        '. The kicker PATTERN is the AI tell regardless of styling. Default fix: DELETE the label and let the heading carry the section.');
+    }
+
     if (firstScreen && firstScreen.total > 0 && firstScreen.firstY !== null && firstScreen.firstY >= firstScreen.vh) {
       // Only a finding when the page HAS content and buried it. A page with nothing to show is a
       // different fault and is already caught by the thin-content check below.
