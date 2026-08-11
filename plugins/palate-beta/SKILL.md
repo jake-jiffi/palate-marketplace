@@ -1,13 +1,55 @@
 ---
 name: palate-website-builder
 description: >
-  The Palate website builder skill. Builds AND maintains production-grade Astro websites grounded by the Palate MCP (2,000+ deeply-analysed real websites with inner-page depth, design tokens, and a taste layer). Three modes: (1) BUILD SITE, scaffold a new site grounded by the Palate MCP for real design taste. (2) CONTINUE SITE, extend an existing site (add a page or section, restyle, add a feature) with the same MCP grounding and gates, minus the scaffold and identity machinery. (3) BUILD BRAND, convert raw brand assets into a four-format design token package. Trigger when asked to build, scaffold or start a website; to add to, edit, restyle, extend, continue or improve an existing site; or to build/convert a brand package.
+  The Palate website builder skill. Builds AND maintains production-grade Astro websites grounded by the Palate MCP (2,000+ deeply-analysed real websites with inner-page depth, design tokens, and a taste layer). Three modes: (1) BUILD SITE, scaffold a new site grounded by the Palate MCP for real design taste. (2) CONTINUE SITE, extend an existing site (add a page or section, restyle, add a feature) with the same MCP grounding and gates, minus the scaffold and identity machinery. (3) BUILD BRAND, convert raw brand assets into a four-format design token package. Trigger when asked to build, scaffold or start a website; to add to, edit, restyle, extend, continue or improve an existing site; or to build/convert a brand package. (4) RUN SITE, the ongoing content runtime: write or edit a blog post, news item, case study or changelog entry; change a business fact such as opening hours, a price, a phone number, an address or a service; add or replace an image; preview, publish, unpublish, schedule or roll back a change; check or grade a site; report on what changed; answer questions about a site's own content; or bring an existing site under management. Trigger on any of those too, including plain requests like "write a post about X", "update our opening hours", "put this live", "what changed this month" or "which pages mention the old price".
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Skill, WebSearch, WebFetch, mcp__palate]
 ---
 
 # Palate Website Builder
 
 One skill, three capabilities. It builds production-grade Astro websites grounded by the Palate MCP's library of deeply-analysed real websites, keeps building them after launch (add pages, sections and features with the same rigour), and builds the brand packages that feed those builds. The Palate MCP provides the taste; this skill provides the craft.
+
+## RUN SITE: route content work to a command, do not improvise it
+
+**Read this before the mode table.** If the request is ongoing content work on a site that already
+exists, the procedure is already written and you must follow it rather than invent one. Read the
+named file under `commands/` and do what it says. These are the same procedures the slash commands
+run, so a person typing `/palate-beta:post` and a person saying "write a post" get identical work.
+
+| If the person says... | Read and follow |
+|---|---|
+| write / draft a post, news item, case study, changelog entry | `commands/post.md` |
+| add a page or a new section to an existing site | `commands/page.md` |
+| change the wording on a page, fix a typo, reword something | `commands/edit.md` |
+| change opening hours, a price, a phone number, an address, a service | `commands/fact.md` |
+| add, replace or swap an image | `commands/image.md` |
+| build a campaign or landing page with its own hero copy | `commands/campaign.md` |
+| show me / let me see it / preview | `commands/preview.md` |
+| put it live, ship it, publish | `commands/publish.md` |
+| take that page down | `commands/unpublish.md` |
+| schedule this for a date | `commands/schedule.md` |
+| undo that, roll it back | `commands/rollback.md` |
+| check this / is this ok to ship | `commands/check.md` |
+| has anything drifted | `commands/drift.md` |
+| the monthly sweep, crawlability, orphans, stale content | `commands/sweep.md` |
+| grade the site, give me the certified number | `commands/grade.md` |
+| remember this decision, note that we said X | `commands/remember.md` |
+| what changed this month, the monthly report | `commands/report.md` |
+| anything ABOUT the site (which pages say X, when did we last post, why is this like this) | `commands/ask.md` |
+| what is the state of this site | `commands/status.md` |
+| why did that fail / why was that blocked | `commands/why.md` |
+| bring this existing site under management | `commands/adopt.md` |
+| hand this site over to the client | `commands/handover.md` |
+| set this machine up | `commands/setup.md` |
+
+**Why this table exists.** Commands are user-invoked: Claude Code never fires one on its own. So
+without this, "write a blog post" would load this skill and then improvise, and the person would
+get a post that skipped the schema, the voice pack, the gate and the re-baseline, while a person
+who happened to type the slash command got all four. Same request, two different products, and no
+way to tell from the outside which one you received.
+
+If the request is content work but no row fits, say so and ask, rather than picking the nearest
+row. A wrong procedure applied confidently is worse than a question.
 
 ## Mode dispatch (read this first)
 
