@@ -337,6 +337,51 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 1) add('High', route, vpName, 'horizontal scroll: content is ' + overflow + 'px wider than the viewport');
 
+    /**
+     * THE FIRST SCREEN. Does this page show anything it is FOR, before you scroll?
+     *
+     * A collection page shipped with a 653px masthead that pushed the first product image to
+     * 917px, so at a 900px viewport it opened with zero products visible. On a collection page.
+     * Every text gate passed it, because the markup was fine: the bug was entirely geometric.
+     *
+     * WHAT COUNTS AS CONTENT IS THE WHOLE DIFFICULTY. That masthead contained a heading, a
+     * paragraph AND a nav list of sibling collections, so anything that counts headings, text or
+     * list items would have called it content-rich and passed. What it did not contain was a
+     * single thing the page exists to show. So: media and real controls, never anything inside a
+     * header or a nav, and headings never count, because a masthead IS headings.
+     *
+     * Positions are document-relative, so this is unaffected by the scroll above.
+     */
+    const firstScreen = await page.evaluate(() => {
+      const vh = window.innerHeight;
+      const root = document.querySelector('main') || document.body;
+      if (!root) return null;
+      const sel = 'img, picture, video, canvas, [style*="background-image"], ' +
+                  'a[href]:not([href^="#"]), button, input, select, textarea';
+      const inChrome = (el) => !!el.closest('nav, header, [role="navigation"], [role="banner"]');
+      let firstY = null, total = 0;
+      for (const el of root.querySelectorAll(sel)) {
+        if (inChrome(el)) continue;
+        const r = el.getBoundingClientRect();
+        // Ignore what is not actually painted: zero-size nodes, and tracking pixels.
+        if (r.width < 24 || r.height < 24) continue;
+        const style = getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
+        const y = Math.round(r.top + window.scrollY);
+        total++;
+        if (firstY === null || y < firstY) firstY = y;
+      }
+      return { firstY, total, vh };
+    });
+    if (firstScreen && firstScreen.total > 0 && firstScreen.firstY !== null && firstScreen.firstY >= firstScreen.vh) {
+      // Only a finding when the page HAS content and buried it. A page with nothing to show is a
+      // different fault and is already caught by the thin-content check below.
+      add('High', route, vpName,
+        'nothing this page is for is visible before scrolling: the first image or control sits at ' +
+        firstScreen.firstY + 'px, below the ' + firstScreen.vh + 'px fold (' + firstScreen.total +
+        ' further down). Whatever is above it is taller than the screen.');
+    }
+
     const textLen = await page.evaluate(() => (document.body && document.body.innerText ? document.body.innerText.trim().length : 0));
     if (textLen < 1) add('High', route, vpName, 'page renders blank (no text content)');
 
