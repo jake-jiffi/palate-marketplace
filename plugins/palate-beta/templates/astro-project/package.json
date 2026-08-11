@@ -8,7 +8,11 @@
     "build": "astro build",
     "preview": "vercel dev",
     "deploy": "vercel deploy --prod",
-    "typecheck": "astro check"
+    "typecheck": "astro check",
+    "palate": "node scripts/palate.mjs",
+    "lint:ux": "node scripts/palate.mjs ux-lint .",
+    "verify": "node scripts/palate.mjs verify",
+    "check": "npm run typecheck && npm run lint:ux"
   },
   "dependencies": {
     "@palate-projects/{{SLUG}}-brand": "{{BRAND_VERSION}}",
