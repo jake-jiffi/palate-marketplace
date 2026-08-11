@@ -39,7 +39,7 @@ Research-led, not interview-led. **Five stages:** (1) research the real business
 - **brand-creation:** diverge the FULL identity space (colourway, type/faces, mood, layout, composition, motion, density); colour and type are REQUIRED varied axes; validity needs >= 3 distinct colourways AND >= 3 distinct type directions.
 - **brand-provided:** LOCK colour, type and identity; diverge only within the brand (layout, composition, section logic, motion, density, art direction); validity needs >= 6 distinct layout/motion skins.
 
-**Sample (Verbalized Sampling):** generate N = 8-10 concepts in ONE pass with constraints removed, each self-tagging `conventionality` (0..1; carry at least one <= 0.3), its `lens` (>= 2 varied lenses), and a cross-domain `analogical_seed`. Carry the low-typicality tail forward. **CONVERGE on two SEPARATE axes (0-5), never one creativity number:** **Originality** (distance from the category default AND the last N builds; anything matching the reflex set (Bricolage + Hanken, the status-pill eyebrow, the two-tone heading) scores near-zero and cannot advance) and **Craft-feasibility**. Combine harmonic-mean-style (`2*O*F/(O+F)`); advance the best 1-2 into EXPLORE, which elaborates them across the spectrum (safe-warm, bold, one-of-a-kind) as 8-10 variants, each cleared by the visual loop before it is shown.
+**Sample (Verbalized Sampling):** count+3 concepts in ONE pass, constraints off, each tagging `conventionality` (0..1; at least one <= 0.3), its `lens` (>= 2 varied), and a cross-domain `analogical_seed`. **CONVERGE scores two SEPARATE axes (0-5), never one number:** **Originality** (distance from the category default AND recent builds; the reflex set scores ~0) and **Craft-feasibility**, blended `2*O*F/(O+F)` to ORDER. **CONVERGE CURATES, IT DOES NOT FUNNEL:** feasibility is a FLOOR (drop only the unbuildable, or the blend kills every wild concept), survivors go on an ambition ladder, one concept per rung, EXPLORE one variant per rung. Endpoints anchored restrained..bold, so count sets RESOLUTION not range. **Rung 1 is restrained and excellent, never weak** (`story-engine.md`).
 
 ## The build commission (the ambition bar)
 
@@ -132,7 +132,7 @@ Research-grounded minimums (WCAG, Material 3, NNGroup, APCA, Apple HIG). Stronge
 
 On Claude Code the hooks fire the gates for you; here YOU run them, in order, every build:
 1. **Probe + survey.** `refs_list_verticals` once, then `refs_for_business` / `refs_match_brief` -> `refs_search` -> `refs_get` the layers of the backbone + donors. No survey, no ground.
-2. **Story + DIVERGE -> CONVERGE.** Run the Story Engine, sample 8-10 concepts, score Originality x Craft-feasibility, carry the best 1-2. Record it (write a `PALATE_COMMISSION.md`) BEFORE a single source file.
+2. **Story + DIVERGE -> CONVERGE.** Run the Story Engine, sample count+3, score Originality x Craft-feasibility, cull the unbuildable, curate the rest onto the ambition ladder. Record it (write a `PALATE_COMMISSION.md`) BEFORE a single source file.
 3. **Scaffold.** Run `create-palate` (above) before any page. Never freestyle root `.html`.
 4. **Build by the section recipe.** Per conversion section: 2-3 donors -> screenshot -> `component_prompts` + `do_dont` + `pages` -> reproduce the strongest re-skinned -> check `do_dont` before emit.
 5. **Gate, then stop.** Run `palate-verify` (below) and fix what it flags. You are NOT done until it exits 0.
