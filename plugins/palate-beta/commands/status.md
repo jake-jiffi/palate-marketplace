@@ -1,19 +1,72 @@
 ---
-description: One site, read cold: what is failing, what drifted, what is stale, what changed, what is live.
-argument-hint: "[optional path to the site, defaults to the current directory]"
+description: One site, read cold: whether the live site answers, what is failing, what drifted, what is stale, what changed.
+argument-hint: "[path to the site] [--live to probe whether the deployed origin answers]"
 ---
 
 # /palate-beta:status
 
 Site: **$ARGUMENTS** (default: the current directory).
 
-A portfolio read for one site, from what is recorded. **Nothing here launches a browser and
-nothing here calls the network**, so it stays fast and works offline. Numbers come off disk; if a
-number is not on disk, say it is not recorded and name the command that produces it. Never
-estimate one.
+A portfolio read for one site, from what is recorded. **Nothing here launches a browser, and the
+only thing that touches the network is the reachability probe in section 0, which runs only when
+asked for.** Otherwise it stays fast and works offline. Numbers come off disk; if a number is not
+on disk, say it is not recorded and name the command that produces it. Never estimate one.
 
 Target length: about 25 lines. Red first. Someone should be able to scan it and know whether to
 open the laptop.
+
+## 0. Is it actually up
+
+Run this **only** when they asked whether the live site is reachable, or when `--live` is in the
+arguments. Everything below reads off disk; this one call does not, and a person who wanted an
+offline read should not silently get a network request.
+
+It exists because "is the site down" is the most urgent thing anyone says about a website, and
+until now nothing answered it: this command never touched the network, `check.md` starts from the
+diff and stops when nothing has changed, and the only probe of the deployed origin lived inside
+the monthly sweep.
+
+```bash
+ORIGIN="${DEPLOYED_ORIGIN:?set DEPLOYED_ORIGIN, or pass the URL, before probing}"
+curl -sS -L --max-time 10 -o /dev/null \
+     -w 'http=%{http_code} redirects=%{num_redirects} final=%{url_effective} tls=%{ssl_verify_result} total=%{time_total}s\n' \
+     "$ORIGIN"; echo "curl_exit=$?"
+```
+
+`-L` is not optional. Sites redirect one way or the other between the apex and www, and without
+`-L` that correct 308 reads as a fault. Reporting an outage that is not happening is worse than
+saying nothing. `redirects=1` on a healthy site is normal, not a finding.
+
+**Read `curl_exit` before `http=`.** On every kind of failure below, curl never completes a
+transfer and `http=` is reported as **`000`**, so a reader who checks the HTTP code first learns
+nothing. The exit code is what separates faults whose fixes have nothing to do with each other,
+and each of these is verified behaviour:
+
+| exit | means | where the fix is |
+|---|---|---|
+| `0` | the transfer completed, and only now does `http=` mean anything | read the status code |
+| `6` | the name does not resolve | DNS: the registrar, the nameservers, a deleted record |
+| `7` | connection refused: it resolved, nothing is serving | the host or the deploy |
+| `28` | timed out inside `--max-time`, which for a visitor is down | the host, or a hung origin |
+| `35`, `60` | TLS failed, very often an expired certificate | the certificate; a browser refuses before anything else matters |
+
+`tls=` is non-zero only on a certificate fault (`10` for expired), so it corroborates 60 rather
+than adding anything on its own.
+
+Report one line, first, above everything else:
+
+```
+REACHABLE  https://example.com.au  200 in 0.42s
+REACHABLE  https://example.com.au  DOWN: 503 in 0.31s
+REACHABLE  https://example.com.au  DOWN: DNS does not resolve (curl 6)
+```
+
+Then say what it does not prove, in one clause, and do not overstate it. **One request from this
+machine, just now, is not the same as the site working for their customer**: it says nothing about
+other regions, a stale DNS record on the customer's own resolver, a CDN edge that is failing
+elsewhere, or a page that returns 200 and renders blank. If they are relaying a complaint from a
+specific person and the probe is green, say the origin answered and the fault is somewhere between
+it and that person, rather than telling them it is fine.
 
 ## 1. Gather
 

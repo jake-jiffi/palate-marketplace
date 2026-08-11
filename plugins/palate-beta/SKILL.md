@@ -11,45 +11,102 @@ One skill, three capabilities. It builds production-grade Astro websites grounde
 
 ## RUN SITE: route content work to a command, do not improvise it
 
-**Read this before the mode table.** If the request is ongoing content work on a site that already
-exists, the procedure is already written and you must follow it rather than invent one. Read the
-named file under `commands/` and do what it says. These are the same procedures the slash commands
-run, so a person typing `/palate-beta:post` and a person saying "write a post" get identical work.
+**Read this before the mode table.** If the request is ongoing work on a site that already exists,
+the procedure is already written and you must follow it rather than invent one. Read the named file
+under `commands/` and do what it says.
+
+**Route on the verb they used, not the noun they mentioned.** "Get the new hours out now" is a
+publish, not a fact change. "Take out the bit about free consults" is an edit, not a service change.
 
 | If the person says... | Read and follow |
 |---|---|
-| write / draft a post, news item, case study, changelog entry | `commands/post.md` |
-| add a page or a new section to an existing site | `commands/page.md` |
-| change the wording on a page, fix a typo, reword something | `commands/edit.md` |
-| change opening hours, a price, a phone number, an address, a service | `commands/fact.md` |
-| add, replace or swap an image | `commands/image.md` |
-| build a campaign or landing page with its own hero copy | `commands/campaign.md` |
-| show me / let me see it / preview | `commands/preview.md` |
-| put it live, ship it, publish | `commands/publish.md` |
-| take that page down | `commands/unpublish.md` |
-| schedule this for a date | `commands/schedule.md` |
-| undo that, roll it back | `commands/rollback.md` |
-| check this / is this ok to ship | `commands/check.md` |
-| has anything drifted | `commands/drift.md` |
-| the monthly sweep, crawlability, orphans, stale content | `commands/sweep.md` |
-| grade the site, give me the certified number | `commands/grade.md` |
-| remember this decision, note that we said X | `commands/remember.md` |
-| what changed this month, the monthly report | `commands/report.md` |
-| anything ABOUT the site (which pages say X, when did we last post, why is this like this) | `commands/ask.md` |
-| what is the state of this site | `commands/status.md` |
-| why did that fail / why was that blocked | `commands/why.md` |
-| bring this existing site under management | `commands/adopt.md` |
-| hand this site over to the client | `commands/handover.md` |
-| set this machine up | `commands/setup.md` |
+| reword this, rewrite it, fix the typo, "take out the bit about...", "it still says X" (the words on a page they can name) | `commands/edit.md` |
+| a business value, changed once and everywhere it appears: phone, email, address, opening hours, prices, service areas, the services list, the trading name | `commands/fact.md` |
+| add a page, add a proper section, another location or service page, put something in the top menu | `commands/page.md` |
+| a dated item: news, a blog post, a case study, a changelog entry, "there's been nothing new on there since March" | `commands/post.md` |
+| add, replace or swap a photo, wrong picture, "the images are wrong", a page crawling because the imagery is heavy | `commands/image.md` |
+| an offer with a deadline and somewhere to send people: "20% off til end of month, front and centre", a seasonal push, the page an ad points at | `commands/campaign.md` |
+| every page, everywhere, "the lot", "not just the one", "top to bottom", or the monthly pass (crawlability, orphans, dead links, stale content) | `commands/sweep.md` |
+| show me, let me see it, "can the client look at it first", "how do they sign off before it goes live" | `commands/preview.md` |
+| put it live, ship it, "get it out now", and also "they can't find it" / "it's still not showing up" (it was never published) | `commands/publish.md` |
+| go live at a named time: Thursday, the 1st, next Monday morning | `commands/schedule.md` |
+| take it down, get rid of it, "it shouldn't be findable", we don't do that any more so lose the page | `commands/unpublish.md` |
+| undo what we just did, put the previous version back, "back to how it was" | `commands/rollback.md` |
+| is anything broken, did that break something, a customer hit a fault, "make sure nothing's gone sideways", give it a once-over before it goes out | `commands/check.md` |
+| has this page moved from where we left it, is it off-brand, "has anything drifted" | `commands/drift.md` |
+| the number, the score, the certified grade, "how do we compare to them" (ours or a competitor's URL) | `commands/grade.md` |
+| why, how come, who decided, "what happened to...", "where did X go", "I don't remember asking for X", and why something failed or was blocked | `commands/why.md` |
+| what, where, when, does it: "which pages mention X", "when did we last post", "have we got a page for Y" | `commands/ask.md` |
+| where is this site up to right now, what is in flight, what is waiting on me, and "is that live yet" / "did yesterday's changes actually go up" (a state question, not a fault) | `commands/status.md` |
+| is the published site answering at all, can anyone reach it, has it stopped serving | `commands/status.md --live` |
+| what changed this month, catch me up, "remind me what we've done", the monthly report | `commands/report.md` |
+| record a decision or a standing preference, with no change to make right now | `commands/remember.md` |
+| bring an existing site we did not build under management | `commands/adopt.md` |
+| hand the site on to whoever takes it next, client or colleague: the accounts, the ownership, the written record of where things stand, our access revoked | `commands/handover.md` |
+| set this machine or the tooling up | `commands/setup.md` |
 
-**Why this table exists.** Commands are user-invoked: Claude Code never fires one on its own. So
-without this, "write a blog post" would load this skill and then improvise, and the person would
-get a post that skipped the schema, the voice pack, the gate and the re-baseline, while a person
-who happened to type the slash command got all four. Same request, two different products, and no
-way to tell from the outside which one you received.
+### Follow-ons carry the last route
 
-If the request is content work but no row fits, say so and ask, rather than picking the nearest
-row. A wrong procedure applied confidently is worse than a question.
+"Same again", "do that one too", "the other one as well", "just the highlights, not the whole essay":
+these carry no route of their own. **Reuse the command from the previous turn with the new target.**
+Only ask if there is no previous turn to carry.
+
+When the new target is the whole site, what to do depends on what is being carried, and getting
+this wrong is silent. **Widen to `sweep.md` only when the carried command was itself a check.**
+When it was a change to one page, widening means making that change on each page: name the list
+and confirm it. Running the site audit instead would answer a question nobody asked and leave the
+change unmade.
+
+### Scope beats topic
+
+One page they can name goes to `edit.md`, `fact.md` or `image.md`. Every page, or a cold look over
+the lot, goes to `sweep.md`. **`fact.md` is the exception**: it is already site-wide, so "the new
+number is on heaps of pages" is still `fact.md`, never a sweep.
+
+### People report symptoms, not commands. Route to the fix
+
+Something is missing that should be public: `publish.md`. Nothing has been added for months:
+`post.md`. Slow to load: `image.md`.
+
+**A reported fault splits three ways, and the wrong one wastes their time at the worst moment.**
+
+- **They are asking why, or whether they caused it** ("how come", "was that us", "is it meant to
+  look like that"): `why.md`. It reads the recorded decision and then the commit, and says plainly
+  when nothing was recorded rather than inventing a reason.
+- **Something in the working tree might be at fault**: `check.md`. It is scoped to the diff, so it
+  is the right answer only while the suspect change is still uncommitted. **If the work already
+  shipped there is no diff and check returns nothing**, which reads as "all clear" and is not.
+- **No recent change, or the complaint is about the site as a whole** (nobody is getting through,
+  something has been wrong for weeks): `sweep.md`. Whole-site faults, an unreachable page, a
+  blocked crawler, a link to nowhere, are invisible to anything scoped to a diff.
+
+Nothing in the set submits a form or places a call, so a broken enquiry path can be reasoned about
+but not reproduced. Say that rather than implying it was tested.
+
+### When two rows both fit
+
+- **edit vs fact.** They quote the words: `edit.md`. They hand you a new value: `fact.md`.
+- **page vs post.** It belongs in the menu forever: `page.md`. It is dated and the next one pushes it down: `post.md`.
+- **fact vs page vs unpublish, for services.** A line in the services list: `fact.md`. A service with its own page, added: `page.md`, removed: `unpublish.md`.
+- **check vs drift vs grade.** Is it broken: `check.md`. Has it moved off its baseline: `drift.md`. Give me the number: `grade.md`.
+- **ask vs why.** What, where, when: `ask.md`. Why, who, how come: `why.md`, and that includes changes and removals, not only failures.
+- **status vs report.** Right now: `status.md`. Over a period, or "what have we done": `report.md`.
+- **unpublish vs rollback.** Should the thing be gone: `unpublish.md`. Should it exist, as it was: `rollback.md`.
+- **remember vs doing it.** If there is a change to make now, make it and record it after. `remember.md` alone is for a decision with no work attached.
+
+### Ask instead of guessing
+
+Name the two candidates in the question. Never ask an open one.
+
+- Two actions in one: "take it down and put the old one back".
+- A deadline that might be a publish date: "can you get it ready for Monday".
+- Something new that could be a list entry or its own page: "we've started doing pet dental".
+- A handover with no mention of accounts or ownership, which may be a written brief rather than a
+  transfer. If they name the logins, the domain or the accounts, it is `handover.md`, and it does
+  not matter whether the recipient is a client or a colleague.
+- A follow-on with no previous turn to carry.
+
+If nothing above fits, say so and ask. A wrong command is more expensive than a question.
 
 ## Mode dispatch (read this first)
 
