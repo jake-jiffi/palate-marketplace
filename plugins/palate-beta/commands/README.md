@@ -71,7 +71,7 @@ The checks, and the numbers.
 | `/palate-beta:check` | Run the contribution contract over what changed, heal what is fixable, return one verdict. |
 | `/palate-beta:drift` | How far each route has moved from its own baseline. Free, local, and not a judgement. |
 | `/palate-beta:sweep` | The site-level checks no single contribution can trigger: crawlability, schema, orphans, dead links, stale content. |
-| `/palate-beta:grade` | The certified number, the only one that can be shared, and the only one that costs. |
+| `/palate-beta:grade` | Grades locally and free by default, on a localhost preview, deployed or not. Certification is opt-in and is the only number that can be shared. |
 | `/palate-beta:remember` | Record a decision, a voice note or a constraint in the brain, dated and reasoned, so a later session does not undo it. |
 | `/palate-beta:report` | The monthly artefact: what shipped, what was caught before it shipped, what the numbers did, what to do next. |
 

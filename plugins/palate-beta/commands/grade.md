@@ -1,7 +1,21 @@
 ---
-description: Get the certified grade, the only number that can be shared. Costs about US$1.06. The local grade is free and must never be passed off as this one.
-argument-hint: "[url] [--local] [--vertical health]"
+description: Grade the site. Defaults to the free local grade, which works on a localhost preview and needs no public URL. Certification is opt-in, costs about US$1.06, and is the only number that can be shared.
+argument-hint: "[url or path] [--certified to buy the shareable number] [--vertical health]"
 ---
+
+## A site can always be graded
+
+**Never tell anyone their site cannot be graded.** There is no such state. If it is not
+deployed, if the URL is behind SSO, if there is no domain yet, if the MCP is not connected: none
+of that blocks a grade, because the local grade serves the build on this machine and measures
+that. What those conditions block is **certification**, which is a different sentence and must
+be said as one:
+
+> Graded locally: 74. It is not deployed anywhere public yet, so I cannot certify it. That is the
+> shareable number and it needs a reachable URL.
+
+Grading an undeployed build is the normal case, not a fallback. It is the entire point of a loop
+that measures before it ships.
 
 Three numbers exist and they are not interchangeable. Get this wrong and the product is
 disproving itself on a customer's site.
@@ -18,7 +32,11 @@ else: a client, a proposal, a comparison against anyone at all.
 **Paths.** `$PALATE` is `${CLAUDE_PLUGIN_ROOT}` (or the skill checkout root). `$SITE` is the
 project directory.
 
-## 1. Always run the local grade first
+## 1. The local grade, which is the default
+
+**This is what runs unless they asked to certify.** Certification is a purchase, and a purchase
+is opt-in: it happens when they pass `--certified`, or say in words that they want the shareable
+number, and never merely because they said "grade it".
 
 It is free, so there is no reason to spend a dollar on a number you could have predicted. It
 uses the grader's own `rubric.mjs`, the same SigLIP appearance head, and the same pairwise
@@ -52,13 +70,18 @@ Read what comes back in this order and act on it in this order:
 
 Fix, rebuild, re-run. It costs nothing, so it belongs in the loop.
 
-If the person passed `--local`, stop here. Say plainly what they have:
+Then stop here, which is the default ending for this command. `--local` is accepted and means
+the same thing. Say plainly what they have:
 
 > Local grade 82. This is a self-check. It ran on this machine on inputs you control, so it can
 > be faked, and it must not be quoted to a client or put in a proposal. The shareable number is
 > the certified one.
 
-## 2. The certified grade
+## 2. The certified grade, only when asked for
+
+Reached only via `--certified`, or because they asked for a number to show someone. Never as the
+automatic next step after section 1: a command that quietly spends a dollar every time someone
+says "grade it" is a command people stop running.
 
 Only when every local gate is green. Confirm the cost before spending it:
 

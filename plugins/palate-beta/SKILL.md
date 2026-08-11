@@ -34,7 +34,7 @@ publish, not a fact change. "Take out the bit about free consults" is an edit, n
 | undo what we just did, put the previous version back, "back to how it was" | `commands/rollback.md` |
 | is anything broken, did that break something, a customer hit a fault, "make sure nothing's gone sideways", give it a once-over before it goes out | `commands/check.md` |
 | has this page moved from where we left it, is it off-brand, "has anything drifted" | `commands/drift.md` |
-| the number, the score, the certified grade, "how do we compare to them" (ours or a competitor's URL) | `commands/grade.md` |
+| the number, the score, is this any good, "how do we compare to them" (ours or a competitor's URL). Grades locally and free by default, deployed or not; certification is opt-in | `commands/grade.md` |
 | why, how come, who decided, "what happened to...", "where did X go", "I don't remember asking for X", and why something failed or was blocked | `commands/why.md` |
 | what, where, when, does it: "which pages mention X", "when did we last post", "have we got a page for Y" | `commands/ask.md` |
 | where is this site up to right now, what is in flight, what is waiting on me, and "is that live yet" / "did yesterday's changes actually go up" (a state question, not a fault) | `commands/status.md` |
