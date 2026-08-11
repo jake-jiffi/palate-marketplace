@@ -374,6 +374,45 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       return { firstY, total, vh };
     });
     /**
+     * IMAGES: SHOWN LARGER THAN THEY EXIST, OR NOT SHOWN AT ALL.
+     *
+     * A photo stretched past its own pixels reads as "cheap" long before anyone can say why,
+     * and it is invisible in source: the markup is correct, the CSS is correct, and only the
+     * relationship between the file and the box it landed in is wrong. Nothing in the plugin
+     * measured it (`naturalWidth` appeared nowhere), so a 800px photo in a 1440px full-bleed
+     * shipped looking soft with every gate green.
+     *
+     * A broken image is caught here too, because `complete && naturalWidth === 0` is the only
+     * reliable signal and it needs a real browser: a 404ed <img> still parses fine.
+     */
+    const imgs = await page.evaluate(() => {
+      const out = { upscaled: [], broken: [] };
+      for (const im of document.querySelectorAll("img")) {
+        const r = im.getBoundingClientRect();
+        if (r.width < 24 || r.height < 24) continue;
+        const style = getComputedStyle(im);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        const src = (im.currentSrc || im.src || "").split("/").pop().slice(0, 48);
+        if (im.complete && im.naturalWidth === 0) { out.broken.push(src); continue; }
+        if (!im.naturalWidth) continue;                       // still loading: not a finding
+        // Only genuine upscaling. Falling short of a 2x retina ideal is common and is a
+        // different, softer conversation; being shown bigger than you exist is a defect.
+        if (im.naturalWidth < Math.round(r.width)) {
+          out.upscaled.push({ src, natural: im.naturalWidth, shown: Math.round(r.width) });
+        }
+      }
+      return out;
+    });
+    for (const b of imgs.broken.slice(0, 3)) {
+      add("High", route, vpName, `broken image: "${b}" is in the page and loaded nothing (naturalWidth 0)`);
+    }
+    for (const u of imgs.upscaled.slice(0, 3)) {
+      add("High", route, vpName,
+        `image upscaled: "${u.src}" is ${u.natural}px wide and is being shown at ${u.shown}px ` +
+        `(${(u.shown / u.natural).toFixed(1)}x). It will look soft. Use a smaller slot, or source a larger file.`);
+    }
+
+    /**
      * THE EYEBROW / KICKER, CAUGHT AS A PATTERN RATHER THAN A STYLING.
      *
      * `anti-patterns.md` is absolute: "Do not place a small label above a section heading at
