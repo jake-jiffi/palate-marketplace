@@ -65,6 +65,27 @@ export function visibleFraction(sourceRatio, slotRatio) {
   return Math.min(sourceRatio, slotRatio) / Math.max(sourceRatio, slotRatio);
 }
 
+/**
+ * PHOTOGRAPH OR FURNITURE. Crop loss is a question about photography and nothing else: a 16x16
+ * favicon "shows 33% of the frame in a full-bleed hero" is arithmetically true and completely
+ * useless, and a report that opens with five favicons is a report nobody finishes reading.
+ *
+ * Found by running this tool on a real build, where the top five warnings were icons.
+ *
+ * Path is the strong signal because these files are conventionally named; the size rule is the
+ * backstop for an icon that landed somewhere unusual. Anything not recognised stays `photo`, so
+ * the failure mode is a warning about furniture rather than silence about a photograph.
+ */
+export function kindOf(relPath, meta) {
+  const p = relPath.toLowerCase();
+  if (/(^|\/)(brand|icons?|favicons?)\//.test(p)) return "icon";
+  if (/favicon|apple-touch|android-chrome|mstile|maskable|logo|wordmark|monogram|sprite|badge/.test(p)) return "icon";
+  // A small square PNG is furniture in practice: no photograph is delivered at 256px square.
+  if (meta.format === "png" && meta.width <= 512 && Math.abs(meta.width - meta.height) <= 2) return "icon";
+  if (meta.width <= 128 || meta.height <= 128) return "icon";
+  return "photo";
+}
+
 export function orientationOf(ratio) {
   if (ratio < 0.9) return "portrait";
   if (ratio <= 1.1) return "square";
@@ -82,8 +103,17 @@ export function maxCssWidth(pixelWidth) {
 }
 
 /** Verdicts a measurement can support on its own, with the reason attached. */
-export function assess(meta, slots = DEFAULT_SLOTS) {
+export function assess(meta, slots = DEFAULT_SLOTS, kind = "photo") {
   const ratio = meta.width / meta.height;
+  // Furniture is measured and recorded, never judged on crop or hero fitness: those questions
+  // only mean something about a photograph.
+  if (kind === "icon") {
+    return {
+      kind, ratio: +ratio.toFixed(3), orientation: orientationOf(ratio),
+      maxCssWidth: maxCssWidth(meta.width), heroCapable: false, fits: [],
+      notes: [], subject: null, treatment: null, reviewed: true,
+    };
+  }
   const orientation = orientationOf(ratio);
   const css = maxCssWidth(meta.width);
   const fits = slots.map((s) => {
@@ -116,6 +146,7 @@ export function assess(meta, slots = DEFAULT_SLOTS) {
   }
 
   return {
+    kind,
     ratio: +ratio.toFixed(3),
     orientation,
     maxCssWidth: css,
@@ -205,7 +236,8 @@ async function main() {
       assets[key] = { error: String((e && e.message) || e), reviewed: false };
       continue;
     }
-    const a = { ...meta, ...assess(meta, slots) };
+    const kind = kindOf(key, meta);
+    const a = { ...meta, ...assess(meta, slots, kind) };
     // A human/agent review already recorded is PRESERVED across re-runs: re-measuring must
     // never silently discard the half that took someone looking at the picture.
     const was = priorAssets[key];
@@ -217,7 +249,9 @@ async function main() {
     assets[key] = a;
   }
 
-  const list = Object.entries(assets).filter(([, a]) => !a.error);
+  const all = Object.entries(assets).filter(([, a]) => !a.error);
+  const list = all.filter(([, a]) => a.kind === "photo");
+  const icons = all.length - list.length;
   const byOrientation = {};
   for (const [, a] of list) byOrientation[a.orientation] = (byOrientation[a.orientation] || 0) + 1;
 
@@ -226,7 +260,9 @@ async function main() {
     dir,
     counts: {
       total: files.length,
-      measured: list.length,
+      measured: all.length,
+      photos: list.length,
+      icons,
       unreadable,
       reviewed: list.filter(([, a]) => a.reviewed).length,
       heroCapable: list.filter(([, a]) => a.heroCapable).length,
@@ -246,7 +282,8 @@ async function main() {
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${k} ${v}`)
     .join(", ");
-  console.log(`palate-assets: ${list.length} image(s) measured -> ${outPath}`);
+  console.log(`palate-assets: ${all.length} image(s) measured -> ${outPath}`);
+  console.log(`  ${list.length} photograph(s)` + (icons ? `, ${icons} icon/logo (measured, not judged on crop)` : ""));
   console.log(`  orientation: ${orient}`);
   console.log(`  hero-capable (>=1600px wide AND landscape): ${doc.counts.heroCapable} of ${list.length}`);
   if (unreadable) console.log(`  unreadable: ${unreadable} (recorded, not skipped)`);

@@ -217,7 +217,29 @@ elif [ ! -f "$NOVELTY_GATE" ]; then
   novelty_note="novelty=skipped(gate-novelty.mjs not present)"
 fi
 
+# SHIP-READY: the seam between "built" and "deliverable". A build can be visually
+# perfect and still carry eight rejected concept homepages into the client's sitemap, a
+# literal {{HUMBLYTICS_SITE_ID}} in a third-party script tag, and photographs nobody ever
+# measured. All three shipped on a real build that passed every other gate here, because
+# nothing owned that seam.
+SHIPREADY_GATE="$HERE/gate-shipready.mjs"
+shipready_note="shipready=skipped(gate-shipready.mjs not present)"
+if [ -f "$SHIPREADY_GATE" ]; then
+  # The `if` form, never a bare assignment: a non-zero command substitution in an assignment
+  # is fatal wherever errexit is in force, which killed this block before the case below was
+  # ever reached and turned every "cannot check" into a silent exit with no message at all.
+  if shipready_err="$(node "$SHIPREADY_GATE" "$PROJ" 2>&1)"; then shipready_rc=0; else shipready_rc=$?; fi
+  case "$shipready_rc" in
+    0) shipready_note="shipready=pass" ;;
+    # 2 is CANNOT CHECK (no src/pages, so not an Astro project shape), not a clean bill. It
+    # skips like every other sub-gate here, but it SAYS so, because a skip that reads as a
+    # pass is the failure mode this whole file exists to prevent.
+    2) shipready_note="shipready=skipped(not an Astro project shape)" ;;
+    *) fail "Not ready to hand over. ${shipready_err}" ;;
+  esac
+fi
+
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, intensity=${intensity:-calm}, $bold_note."
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

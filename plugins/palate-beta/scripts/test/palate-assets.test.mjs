@@ -7,7 +7,7 @@
  * this code existed. If that case ever stops returning ~0.22, the tool has stopped describing
  * the world.
  */
-import { visibleFraction, orientationOf, maxCssWidth, assess } from "../palate-assets.mjs";
+import { visibleFraction, orientationOf, maxCssWidth, assess, kindOf } from "../palate-assets.mjs";
 
 let pass = 0, fail = 0;
 const ok = (desc, got, want) => {
@@ -47,6 +47,20 @@ ok("a 2400px landscape IS hero-capable", assess({ width: 2400, height: 1350 }).h
 ok("a small landscape is NOT, however well shaped", assess({ width: 900, height: 506 }).heroCapable, false);
 ok("and the reason names its honest 2x limit",
   assess({ width: 900, height: 506 }).notes.some((n) => n.includes("450px")), true);
+
+// FURNITURE vs PHOTOGRAPHY. Found by running the tool on a real build, where the five loudest
+// warnings were favicons: "a 16x16 favicon shows 33% of a hero" is true and useless, and a
+// report that opens with five of those is one nobody finishes.
+ok("a favicon is furniture", kindOf("brand/favicon-32x32.png", { format: "png", width: 32, height: 32 }), "icon");
+ok("so is anything under brand/", kindOf("brand/mark.png", { format: "png", width: 900, height: 300 }), "icon");
+ok("so is an apple-touch icon", kindOf("img/apple-touch-icon-180.png", { format: "png", width: 180, height: 180 }), "icon");
+ok("a real photograph is not", kindOf("photos/counter.jpg", { format: "jpeg", width: 2000, height: 3000 }), "photo");
+ok("a large square product shot is still a photograph",
+  kindOf("products/tub.jpg", { format: "jpeg", width: 1400, height: 1400 }), "photo");
+ok("furniture is never judged on crop or hero fitness",
+  (() => { const a = assess({ width: 32, height: 32 }, undefined, "icon"); return [a.fits.length, a.notes.length, a.heroCapable]; })(),
+  [0, 0, false]);
+ok("and furniture needs no human review", assess({ width: 32, height: 32 }, undefined, "icon").reviewed, true);
 
 // The half pixels cannot decide must start empty, or the tool would be inventing subjects.
 ok("subject and treatment start unrecorded", [portrait.subject, portrait.treatment, portrait.reviewed],

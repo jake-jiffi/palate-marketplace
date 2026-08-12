@@ -7,7 +7,9 @@ import { loadPage } from "../../lib/load";
 import { home } from "../../lib/content";
 
 type Hero = typeof home.hero;
-type Variant = { eyebrow?: string; heading: string; sub: string; ctaLabel?: string; ctaHref?: string };
+// NO eyebrow. references/anti-patterns.md bans a small label above a heading outright, and
+// this template used to ship the field AND render it uppercase+tracked, teaching the tell it bans.
+type Variant = { heading: string; sub: string; ctaLabel?: string; ctaHref?: string };
 
 const url = new URL(Astro.request.url);
 const variant = url.searchParams.get("variant") ?? url.searchParams.get("utm_campaign");
@@ -21,7 +23,6 @@ if (variant) {
   );
   if (v) {
     hero = {
-      eyebrow: v.eyebrow ?? "",
       heading: v.heading,
       sub: v.sub,
       cta: { label: v.ctaLabel ?? home.hero.cta.label, href: v.ctaHref ?? home.hero.cta.href },
@@ -30,9 +31,6 @@ if (variant) {
 }
 ---
 <section class="bg-brand-bg px-6 py-24 text-center">
-  {hero.eyebrow && (
-    <p class="text-brand-muted text-sm font-medium uppercase tracking-wide">{hero.eyebrow}</p>
-  )}
   <h1 class="font-display text-brand-text mx-auto mt-3 max-w-3xl text-4xl md:text-6xl">
     {hero.heading}
   </h1>

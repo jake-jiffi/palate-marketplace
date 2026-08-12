@@ -18,7 +18,6 @@
 
 export interface HomeContent {
   hero: {
-    eyebrow: string;
     heading: string;
     sub: string;
     cta: { label: string; href: string };
@@ -28,7 +27,6 @@ export interface HomeContent {
 
 export const home: HomeContent = {
   hero: {
-    eyebrow: "{{EYEBROW}}",
     heading: "{{HEADING}}",
     sub: "{{SUB}}",
     cta: { label: "{{CTA_LABEL}}", href: "{{CTA_HREF}}" },
