@@ -1,5 +1,5 @@
 ---
-description: Run the site-level checks no single contribution can trigger: crawlability, schema, orphans, dead links, stale content, expiring facts.
+description: Run the site-level checks no single contribution can trigger: sitemap coverage, crawlability, redirects and canonicals, schema, orphans, dead links, stale content, expiring facts.
 argument-hint: "[project-dir]"
 ---
 
@@ -30,7 +30,36 @@ firewall rule is invisible on localhost, and that is the fault this exists to fi
 **Name which origin was used in the report header.** A robots or crawler-parity result means
 nothing without it: the whole point of the check is that the two can disagree.
 
-## 2. Crawlability
+## 2. The deterministic crawl surface
+
+Run this before anything by hand. It answers sitemap coverage, redirects, canonicals and robots
+in one pass, and it is the only part of the sweep that cannot be talked out of a finding.
+
+```bash
+node "$PALATE/scripts/gate-seo.mjs" "$SITE" --base "$BASE"; echo "exit=$?"
+```
+
+`--base` is not optional on a real sweep. The disk pass cannot answer "does this URL redirect"
+for a server-rendered route, which is most of them, and a redirect inside the sitemap or inside
+llms.txt is a citation an answer engine simply drops.
+
+Read the exit code, not the wording:
+
+- **0** clean. The line it prints names how many URLs it measured; quote that number, because a
+  clean result over three URLs and a clean result over three hundred are different claims.
+- **1** findings. Each one is real and each one names its cause. Put them in BLOCKING.
+- **2** it could not check something. **This is not a pass**, and it is the outcome the older
+  faults hid behind. The commonest causes are an unbuilt project (the sitemap is a build
+  artefact), a server-rendered build with no HTML on disk, and a dynamic route whose collection
+  it cannot resolve. Fix what it names or say plainly in the report that the crawl surface is
+  UNKNOWN.
+
+The one it exists for: **collection entries missing from the sitemap**. `@astrojs/sitemap` only
+lists what the build knows about, and an SSR dynamic route with no `getStaticPaths` is nothing
+at build time. On a real client build that meant not one of its part-number pages was in the
+sitemap, on a site whose whole SEO argument was part-number discoverability.
+
+## 3. Crawlability by hand
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/robots.txt"
@@ -43,8 +72,12 @@ Check, against `src/pages/robots.txt.ts`:
 - `GPTBot`, `ClaudeBot` and `PerplexityBot` are each still `Allow: /`. A generic
   `User-agent: *` block does not cover them once one is named.
 - The `Sitemap:` line resolves. Fetch it and confirm 200.
+- **On production only.** The endpoint closes deliberately when the deployment is a preview or
+  the host is not the canonical one, because a preview is a public origin and indexing it puts
+  the client's content at a URL they do not own. A `Disallow: /` here is the fault ONLY if
+  `$BASE` is the canonical production origin. Say which origin you fetched before calling it.
 
-## 3. AI-crawler fetch parity
+## 4. AI-crawler fetch parity
 
 The check nobody runs, and the one that fails silently. Fetch the same route as a browser and
 as each AI crawler, then compare.
@@ -61,7 +94,7 @@ Any status divergence is a finding. So is a body more than about 10% smaller for
 that is a challenge page or a JS-only shell being served to the agents that cannot run JS.
 Report the exact status and byte count for each, not a summary.
 
-## 4. Organisation schema
+## 5. Organisation schema
 
 ```bash
 curl -sS "$BASE/" | grep -o '<script type="application/ld+json">.*</script>'
@@ -98,7 +131,7 @@ grep -rn --exclude-dir=node_modules -F "<each value>" "$SITE/src" | grep -v "src
 Any hit outside the record is a finding: that surface will go stale the next time the fact changes,
 and it will be the surface a customer acts on.
 
-## 5. Orphans and dead internal links
+## 6. Orphans and dead internal links
 
 Both come straight out of the index, no extra work:
 
@@ -112,7 +145,7 @@ node -e 'const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
   each one and ask whether it is deliberate. A published page nothing links to is usually a page
   someone forgot, and a page nothing links to is a page nothing ranks.
 
-## 6. Stale content
+## 7. Stale content
 
 Read `entries` out of the index:
 
@@ -123,7 +156,7 @@ Read `entries` out of the index:
 - **Future-dated entries.** The content config guards against these, so one that exists is a
   YAML rollover, not an intention.
 
-## 7. Expiring facts
+## 8. Expiring facts
 
 Everything in `src/lib/business.ts` that decays on its own:
 
@@ -139,7 +172,7 @@ node -e 'const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
 - `telephone` and `email`: check the format is still E.164 and the address' domain still resolves.
 - `serviceAreas` and `services`: list them and ask whether the business still does all of it.
 
-## 8. Report
+## 9. Report
 
 Rank by what it costs, not by how easy it is to fix. Crawler parity and dead links first,
 because those cost traffic; opening hours next, because those cost a customer.
@@ -151,6 +184,8 @@ BLOCKING
   crawler parity   ClaudeBot gets 403, browsers get 200
                    Every answer engine has been unable to read this site since the
                    firewall rule changed. Allow the named crawler user agents.
+  sitemap gap      gate-seo exit 1: 34 of 37 routes advertised; 3 part pages behind
+                   /parts/[sku] are in no sitemap, so nothing crawls them
   dead link        /services/plumbing linked from /, no route serves it
 
 REVIEW

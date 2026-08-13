@@ -82,9 +82,23 @@ Recorded in .palate/brain/decisions.md, "No testimonials section" (2026-08-10)
 Then commit it if the person is committing. This file has to be in the repo to do its job; a
 decision recorded only in a chat log protects nothing.
 
-## 5. How it gets used
+## 5. What actually reads this back
 
-Every build, edit and review reads `.palate/brain/` before it changes anything. When a
-contribution contradicts an entry, that is a `review`, named against the entry's date, not a
-silent override. The person's only decision is whether to overrule the earlier one, and if they
-do, that is a new dated entry saying so.
+Named, because "the next agent will find it" is a promise and a promise needs an address. These
+are the commands that open `.palate/brain/`, and if a file is not on this list it is not being
+consulted:
+
+| | reads | when |
+|---|---|---|
+| `:check` | `decisions.md`, `constraints.md` | every contribution, as a `review` lane |
+| `:page` | `decisions.md`, `constraints.md` | before composing anything new |
+| `:edit`, `:post`, `:campaign` | `voice.md`, `constraints.md` | before writing copy |
+| `:ask`, `:why` | all of it | when answering why the site is the way it is |
+| `:report` | `decisions.md` | the monthly decisions section |
+
+When a contribution contradicts an entry, `:check` returns a `review` named against the entry's
+date, not a silent override. The person's only decision is whether to overrule the earlier one,
+and if they do, that is a new dated entry saying so.
+
+The list is short on purpose and it is the honest one. `:publish` does not read the brain; it
+consumes `:check`'s verdict, which already carries the finding.

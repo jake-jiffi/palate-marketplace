@@ -31,7 +31,11 @@ MIN_TOOLS="${PALATE_MIN_TOOLS:-3}"
 MIN_RICH="${PALATE_MIN_RICH_LAYER:-1}"
 
 fail() { echo "MCP-depth gate FAILED: $1" >&2; exit 2; }
-skip() { echo "MCP-depth gate skipped: $1"; exit 0; }
+# STDERR, like fail() and ungrounded(). Every caller spawns this with
+# stdio: ["ignore","ignore","pipe"], so a skip written to STDOUT is DISCARDED: no jq, no
+# manifest, or no renderable preview then turns the whole gate suite off and the transcript
+# is indistinguishable from a clean pass. A gate that was blocked is not a gate that passed.
+skip() { echo "MCP-depth gate skipped: $1" >&2; exit 0; }
 # UNGROUNDED goes to STDERR, unlike skip(): both hooks run this gate with stdout ignored
 # and stderr piped, so a label written the way skip() writes it would reach nobody.
 ungrounded() { echo "MCP-depth gate UNGROUNDED: $1" >&2; exit 3; }

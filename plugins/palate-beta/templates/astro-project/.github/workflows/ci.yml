@@ -20,7 +20,7 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: https://npm.pkg.github.com
-          scope: '@jiffi-projects'
+          scope: '@palate-projects'
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -48,9 +48,57 @@ jobs:
       # Fails on High-severity findings only (the shipped scaffold is clean at
       # that bar). PALATE_GATE_STRICT=1 tightens it to Medium, which is a choice
       # to make once the site is settled, not on day one.
+      #
+      # THIS USED TO LINT src/ AND ONLY src/, so the Critical no-em-dash rule
+      # could not see the place the em dashes actually were: on a real build all
+      # 35 of them sat in docs/ and this step went green over every one. It now
+      # walks a list of prose directories and lints each one that exists.
+      #
+      # It is still not the repository root, and that part was right. The
+      # scaffold commits `_claude/anti-patterns.md` (the doctrine copy for
+      # non-Claude tools) and ux-lint's exclusion list covers `.claude` but not
+      # `_claude`, so pointing the lint at the root scores the rulebook's own
+      # worked examples and returns ~25 false High findings on a clean site.
+      # Root markdown is covered through a staging copy instead, which reaches
+      # README/CLAUDE.md without reaching `_claude/`.
       - name: Anti-slop lint (AI tells, banned default faces, eyebrow kickers)
         shell: bash
-        run: bash "$RUNNER_TEMP/palate/palate-check.sh" src
+        run: |
+          set -uo pipefail
+          rc=0
+          scanned=""
+          for d in src docs content; do
+            [ -d "$d" ] || continue
+            echo "--- anti-slop lint: $d/"
+            bash "$RUNNER_TEMP/palate/palate-check.sh" "$d" || rc=1
+            scanned="$scanned $d/"
+          done
+
+          # mktemp rather than a fixed path we would have to clear first: a step that
+          # begins by deleting a directory it computed is one unset variable away from
+          # deleting something else.
+          stage="$(mktemp -d "$RUNNER_TEMP/palate-root-prose.XXXXXX")"
+          found=0
+          for f in ./*.md ./*.mdx; do
+            [ -f "$f" ] || continue
+            cp "$f" "$stage/" && found=1
+          done
+          if [ "$found" = "1" ]; then
+            echo "--- anti-slop lint: root markdown"
+            bash "$RUNNER_TEMP/palate/palate-check.sh" "$stage" \
+              > "$RUNNER_TEMP/root-prose.txt" 2>&1 || rc=1
+            # Rewrite the staging path back, or a finding names a temp directory
+            # nobody can open.
+            sed "s|$stage/|./|g" "$RUNNER_TEMP/root-prose.txt"
+            scanned="$scanned ./*.md"
+          fi
+
+          if [ -z "$scanned" ]; then
+            echo "::error title=The anti-slop lint had nothing to read::None of src/, docs/, content/ or any root markdown exists in this checkout, so no copy was linted. That is a broken checkout, not a clean result."
+            exit 1
+          fi
+          echo "anti-slop lint scanned:$scanned"
+          exit "$rc"
 
       # Uses the build's own compiled CSS as the oracle: a utility class written
       # in source that produced no CSS rule anywhere is a hallucinated class, and
@@ -92,3 +140,13 @@ jobs:
         env:
           LHCI_URL: ${{ vars.LHCI_URL }}
         run: npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.yml --collect.url="$LHCI_URL"
+
+      # The exact inverse condition, so an unconfigured Lighthouse says so in the
+      # log instead of leaving a green run that looks like it was audited. The
+      # step above is a real gate when LHCI_URL is set (it is not wrapped in
+      # `|| true` and lhci exits non-zero on a threshold breach); this line is
+      # what stops "not configured" reading as "passed".
+      - name: Lighthouse CI is not configured
+        if: vars.LHCI_URL == ''
+        shell: bash
+        run: echo "::notice title=Lighthouse did NOT run::No LHCI_URL repository variable is set, so performance, accessibility and SEO were not audited in this run. Set it (Settings > Secrets and variables > Actions > Variables) to a publicly reachable URL to turn this into a gate."

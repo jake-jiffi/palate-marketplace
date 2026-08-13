@@ -16,6 +16,16 @@ import { cmsIntegrations } from "./astro.cms.mjs";
 // Vercel dashboard or via `vercel env add`. See references/hosting-vercel.md.
 const env = loadEnv(process.env.NODE_ENV ?? "production", process.cwd(), "");
 
+// Which deployment this build is. Vercel sets VERCEL_ENV ("production" | "preview" |
+// "development") in the build step, but it is a plain process env var, so it does not survive
+// into a prerendered response: robots.txt is emitted at build time on a static route and would
+// read the BUILDER's environment, not the deployment's. Promoting it to a PUBLIC_ var bakes the
+// value into the output, which is what makes src/pages/robots.txt.ts able to close a preview.
+//
+// Empty is left empty on purpose rather than defaulted to "production". robots.txt fails safe
+// on the host instead, and a value invented here would look like a measurement.
+const siteEnv = env.PUBLIC_SITE_ENV || env.VERCEL_ENV || process.env.VERCEL_ENV || "";
+
 export default defineConfig({
   site: `https://${env.SITE_DOMAIN || "{{DOMAIN}}"}`,
   output: "server",
@@ -35,5 +45,10 @@ export default defineConfig({
     pagefind(),
   ],
   devToolbar: { enabled: false },
-  vite: { plugins: [tailwind()] },
+  vite: {
+    plugins: [tailwind()],
+    // Inlined rather than passed through `env`, because Astro only exposes PUBLIC_ vars it can
+    // see in a .env file, and on Vercel this one arrives as a process env var with no .env at all.
+    define: { "import.meta.env.PUBLIC_SITE_ENV": JSON.stringify(siteEnv) },
+  },
 });

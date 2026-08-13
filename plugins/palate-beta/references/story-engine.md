@@ -132,7 +132,11 @@ ORDERING, not for elimination**. Two SEPARATE axes, each 0-5:
   - read the cross-build memory (`~/.config/palate/builds.log.json`, the same log
   the surveyor consults) and dock a concept that repeats what you shipped last
   time. A face, a mechanic or a feeling reached for out of habit is not original
-  however novel it felt in isolation.
+  however novel it felt in isolation. **Read the last entries that CARRY a
+  signature move or an explore block, not the last entries full stop**: most rows
+  in a real log are attribute-less shells, so a plain tail read finds nothing and
+  docks nobody (see `references/build-memory.md`). If no comparable entry exists,
+  say the recency penalty could not be applied rather than scoring as if it was.
 - **Craft-feasibility** = can the chosen donor's craft plus the Palate stack
   actually BUILD this? Decompose the mechanic into named parts and check each has a
   real precedent with a buildable `astro_recipe` (the buildability oracle in
@@ -170,9 +174,19 @@ build one variant per rung:
 
 Write `manifest.converge` (`{ ran: true, scored: [{ id, originality, craft_feasibility, combined }], advanced: [ids] }`).
 The deterministic pre-check `scripts/gate-novelty.mjs --manifest build-manifest.json`
-catches a safe-only converge: it fails when the advanced set's mean
-`conventionality` is above the threshold (you narrowed back to the mode and threw
-the tail away). It fails-open (skips) when DIVERGE did not run, so it never traps a
+catches a converge that threw the tail away: it fails when **not one** advanced
+concept sits at or below `PALATE_LOW_TAIL_MAX` (0.3), the same bar DIVERGE's own
+tail requirement uses.
+
+It scores the MINIMUM, not the mean, and the reason matters now that the advanced
+set is the whole ladder rather than one or two picks. A mean punishes exactly the
+shape this section asks for: rung 1 is deliberately restrained, so enough restrained
+rungs drag a genuinely bold ladder over the line. And a mean is passed by a set with
+nothing in it: eight concepts all self-tagged 0.55 average 0.55 and clear a 0.6 bar
+while not one of them came from the tail. The question is about the TOP rung, so it
+is answered by the minimum. If DIVERGE itself never sampled below the bar, the gate
+says so and names DIVERGE rather than sending you to re-run CONVERGE for a fault one
+step upstream. It fails-open (skips) when DIVERGE did not run, so it never traps a
 build that could not sample.
 
 ## From truth to concepts (elaborating the advanced concepts)
@@ -180,8 +194,9 @@ build that could not sample.
 Each Explore variant carries a demonstrative concept: a **mechanic** where the
 visitor does or witnesses something that enacts the transformation, a **3-beat
 arc** (tension, turn, payoff), and **one named feeling** that governs every craft
-choice. The variants **elaborate the 1-2 concepts CONVERGE advanced** (not a fresh
-spine each), spread across the ambition spectrum:
+choice. Each variant **elaborates the concept CONVERGE assigned to its rung** (not a
+fresh spine each, and no longer one or two concepts stretched across the whole set),
+so the set spans the ambition spectrum:
 
 - **safe-warm** - clear, human, low-risk, but still a real idea (not a brochure).
 - **bold** - one strong demonstrative move.

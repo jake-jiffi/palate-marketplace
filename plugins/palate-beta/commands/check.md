@@ -73,6 +73,69 @@ node "$PALATE/scripts/gate-scoped-style-escape.mjs" "$SITE"
 node "$PALATE/scripts/phantom-utility-check.mjs" "$SITE"
 ```
 
+**Then hold the diff against the token lock, which is the half no script can do.**
+
+```bash
+cat "$SITE/.palate/tokens.lock.md"
+git -C "$SITE" diff -U0 HEAD -- '*.astro' '*.css' '*.ts' '*.tsx' | grep '^+'
+```
+
+`.palate/tokens.lock.md` is the site's design system written in words: the faces that carry
+real weight, the type sizes that recur, the accent and its role, the radius, the border weight,
+the spacing unit. `/palate-beta:adopt` measures it and writes it, and **this is the
+command that reads it back**. For a long time nothing did, which made it a file that looked like
+state and behaved like a note.
+
+Read the ADDED lines only, and pull out every literal design value in them: a hex or `rgb()`, a
+`font-family`, a `border-radius`, a `border-width`, a padding or margin value. Each one is a
+finding at `review` unless the lock names it, or it is a token reference (`var(--...)`, a Tailwind
+class backed by the preset) rather than a literal. Name the value, the file, the line, and the
+locked value it should have been:
+
+```
+review  tokens  src/components/Card.astro:14  #2E7D5B is not in the lock; the accent is #E2553D
+review  tokens  src/components/Card.astro:19  border-radius: 12px; the lock says 4px
+```
+
+The reason this is a lane and not a style opinion: a new value that nobody sanctioned does not
+look wrong on the page it was added to. It looks wrong three pages later, and by then it is in
+four components and the site has two design systems.
+
+`.palate/tokens.json` is the raw measurement behind the lock, not an input to this check. Read
+it only when you need the evidence for a lock entry someone is disputing.
+
+If `.palate/tokens.lock.md` does not exist, this half did NOT run. Say so in the report as a
+lane that was not measured, never as a pass, and name the fix:
+
+```
+not run  tokens  no .palate/tokens.lock.md; run /palate-beta:adopt to measure and lock it
+```
+
+**And hold the diff against the brain, for the same reason.**
+
+```bash
+cat "$SITE/.palate/brain/decisions.md" "$SITE/.palate/brain/constraints.md" 2>/dev/null
+```
+
+`/palate-beta:remember` promises that a contribution contradicting a recorded entry
+comes back as a `review` named against that entry's date. **This command is where that promise is
+kept**, and until it was written here it was kept nowhere: a decision saying "no testimonials
+section" did not stop the next contribution adding one, because nothing in the gate had ever read
+the file.
+
+Read the entries, then read the diff. A change that puts back something an entry removed, or
+breaks a rule a constraint states, is a `review`, never a silent pass and never a block. Name the
+entry by its date so the person can weigh the two:
+
+```
+review  brain  src/pages/index.astro  adds a testimonials block; decisions.md 2026-08-10 removed it
+                                      overrule it with a new dated entry, or drop the block
+```
+
+Overruling is a `/palate-beta:remember` entry that says so, not an argument in the
+chat. If `.palate/brain/` is empty or absent, say nothing: a site with no recorded decisions is
+the normal starting state, not a finding.
+
 **functional, a11y, perf and geometry (tens of seconds, one render pass).**
 
 ```bash

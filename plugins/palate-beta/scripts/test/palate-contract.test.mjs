@@ -20,7 +20,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
   classify, lanesFor, plan, fold, VERDICT,
@@ -190,5 +190,35 @@ test('a nested route cannot escape the baselines directory', () => {
     assert.equal(readBaseline(dir, '/blog/some-post').lcp, 2);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------- baseline merge
+// Three writers own disjoint halves of a baseline (palate-baseline: vitals/axe/design/
+// embedding; /drift --rebaseline: embedding only; /publish: vitals/axe/hygiene and
+// explicitly no embedding). A wholesale write meant each destroyed the others, so /drift
+// reported "first baseline written, nothing to compare yet" on routes baselined three
+// times, failing like a cautious first run rather than like a bug.
+test('writeBaseline merges by field so three writers cannot clobber each other', () => {
+  const d = mkdtempSync(join(tmpdir(), 'palate-bl-'));
+  try {
+    const p = writeBaseline(d, '/contact', {
+      takenAt: 't1', source: 'adopt', vitals: { lcp: 1200 }, axe: { v: 0 },
+      design: { a: 1 }, embedding: [0.1, 0.2],
+    });
+
+    writeBaseline(d, '/contact', { vitals: { lcp: 900 }, axe: { v: 1 } });   // a publish
+    const afterPublish = JSON.parse(readFileSync(p, 'utf8'));
+    assert.equal(Array.isArray(afterPublish.embedding), true, 'publish destroyed the embedding');
+    assert.deepEqual(afterPublish.design, { a: 1 }, 'publish destroyed the design facts');
+    assert.deepEqual(afterPublish.vitals, { lcp: 900 }, 'publish did not update what it measured');
+
+    writeBaseline(d, '/contact', { at: 't2', model: 'siglip', embedding: [0.9] }); // a rebaseline
+    const afterRebase = JSON.parse(readFileSync(p, 'utf8'));
+    assert.deepEqual(afterRebase.vitals, { lcp: 900 }, 'rebaseline destroyed the vitals');
+    assert.deepEqual(afterRebase.embedding, [0.9], 'rebaseline did not replace the embedding');
+    assert.equal(afterRebase.route, '/contact');
+  } finally {
+    rmSync(d, { recursive: true, force: true });
   }
 });

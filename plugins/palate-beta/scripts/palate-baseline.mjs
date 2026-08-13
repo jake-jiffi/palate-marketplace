@@ -63,6 +63,10 @@ function parseArgs(argv) {
 export function routesToCapture(index, { routes, all }) {
   if (routes.length) return routes;
   if (!all) return [];
+  // No index means no derivable routes. Returning [] makes the caller print "pass --routes"
+  // rather than throwing on `null.routes`, which read like a broken script rather than a
+  // non-Astro site.
+  if (!index) return [];
   return index.routes.filter((r) => r.kind === 'static').map((r) => r.path);
 }
 
@@ -72,8 +76,22 @@ async function main() {
     console.error('palate-baseline: --base <url> is required (the running preview, e.g. from serve-preview.sh)');
     process.exit(2);
   }
-  const index = buildIndex(args.projectDir);
-  if (!index) { console.error(`palate-baseline: no site at ${args.projectDir}`); process.exit(2); }
+  // The index is needed ONLY to derive a route list, i.e. only for --all. It was built
+  // unconditionally, and `buildIndex` returns null for anything without `src/pages`, so
+  // `--routes /,/about` exited 2 on every non-Astro site: exactly the tier-2 adoption case an
+  // explicit route list exists to serve. A WordPress site could not be baselined at all.
+  let index = null;
+  if (!args.routes.length) {
+    index = buildIndex(args.projectDir);
+    if (!index) {
+      console.error(
+        `palate-baseline: no Astro src/pages under ${args.projectDir}, so a route list cannot be derived.\n` +
+        '  Pass --routes /,/about explicitly. Get a real list for a site Palate did not build with:\n' +
+        '  node scripts/palate-crawl.mjs <live-url>   (writes .palate/site-map.json)',
+      );
+      process.exit(2);
+    }
+  }
 
   const routes = routesToCapture(index, args);
   if (!routes.length) {

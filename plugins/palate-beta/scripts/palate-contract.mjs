@@ -198,10 +198,37 @@ export function readBaseline(projectDir, route) {
  * without a rewrite. Stills are regenerated for the before/after review; they
  * are an output, not a record.
  */
+/**
+ * MERGE, NEVER REPLACE. Three callers write DISJOINT halves of a baseline and a wholesale
+ * write meant each one destroyed the others:
+ *
+ *   palate-baseline.mjs  {takenAt, source, vitals, axe, design, embedding}
+ *   /drift --rebaseline  {at, model, image, embedding}          <- and nothing else
+ *   /publish             vitals/axe/hygiene, explicitly NO embedding
+ *
+ * So the real sequence on a managed site was: adopt writes the embedding, a copy edit is
+ * published and destroys it, and /drift then reports "first baseline written, nothing to
+ * compare yet" on a route that has been baselined three times. Drift could never report a
+ * distance on any route anyone had actually touched, and it failed looking like a cautious
+ * first run rather than like a bug. The reverse held too: a rebaseline threw away the vitals,
+ * axe and design facts that /status and /report read back.
+ *
+ * Merging by field means each writer owns the keys it actually measured and leaves the rest
+ * alone, which is the only arrangement that survives three writers and no owner.
+ */
 export function writeBaseline(projectDir, route, data) {
   const p = baselinePath(projectDir, route);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify({ route, ...data }, null, 2) + '\n');
+  let prior = {};
+  try {
+    const raw = readFileSync(p, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) prior = parsed;
+  } catch {
+    // No prior, or an unreadable one. An unreadable baseline is not worth preserving, and
+    // refusing to write here would leave the route with no baseline at all.
+  }
+  writeFileSync(p, JSON.stringify({ ...prior, route, ...data }, null, 2) + '\n');
   return p;
 }
 

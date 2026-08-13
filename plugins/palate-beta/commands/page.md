@@ -17,10 +17,28 @@ exactly how a site drifts to the average, and the references are what stop that.
 2. Read the conventions before writing anything. The layout and its head/SEO wiring, the token
    source (`tailwind.config.ts`, the brand package, or the CSS custom properties, whichever this
    site uses), the existing components in `src/components/`, the routing shape, the nav.
-3. **Identity is locked.** Never pick a colour, a face, a radius or a spacing value by hand.
-   Every value comes from the site's own token vocabulary. A new page must read as though it was
-   always part of this site, and a parallel design language bolted on is the failure mode here.
-4. Build the index so you know what you are joining:
+3. **Identity is locked, and the lock is a file.** Read `.palate/tokens.lock.md` before you write
+   a line of markup. It is the site's design system in words (the faces that carry real weight,
+   the type sizes that recur, the accent and its role, the radius, the border weight, the spacing
+   unit), measured off the live site by `/palate-beta:adopt`. Every colour, face,
+   radius and spacing value in the new page comes from there or from the token source it maps to.
+   Never pick one by hand. A new page must read as though it was always part of this site, and a
+   parallel design language bolted on is the failure mode here.
+
+   `.palate/tokens.json` beside it is the raw measurement the lock was written from. It is
+   evidence, not an input: reach for it only to settle what a lock entry means.
+
+   If the lock is absent, say so, and derive the vocabulary from three sections this site already
+   ships (step 2's ungrounded path does the same thing for composition). Do not invent values and
+   do not pretend a lock was consulted.
+4. **Read the brain before you compose.** `cat .palate/brain/decisions.md
+   .palate/brain/constraints.md` (and `voice.md` for the copy register). This is the one command
+   most likely to rebuild something that was deliberately removed: a deleted testimonials section
+   looks exactly like a missing one, and "add a services page" is precisely the request that
+   quietly puts it back. If an entry rules out what you are about to build, stop and say which
+   entry and its date. Overruling it is a `/palate-beta:remember` entry, not a
+   judgement call made here.
+5. Build the index so you know what you are joining:
    `node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-index.mjs" <dir>`.
 
 ## 2. Ground it in the library

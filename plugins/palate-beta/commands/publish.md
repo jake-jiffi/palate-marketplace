@@ -134,8 +134,17 @@ Baselines are committed on purpose. The index is not: rebuild it, never commit i
 Two commits, one push, one deploy. The order is forced by the log line carrying the commit sha,
 which cannot be known before the commit exists.
 
-1. **The publish commit.** The changed files plus `<dir>/.palate/baselines/*`. Name the files.
-   Never `git add -A`, and never commit `.palate/index.json`, which is derived and gitignored.
+1. **The publish commit.** The changed files, plus `<dir>/.palate/baselines/*`, plus
+   `<dir>/.palate/ledger.jsonl`. Name the files. Never `git add -A`, and never commit
+   `.palate/index.json`, which is derived and gitignored.
+
+   **The ledger is not optional here.** `check` appended a line to it in section 2, and that line
+   is the only artefact proving the gate did anything: what it caught, what it healed, what it
+   held. Leave it out of this commit and it sits dirty in the working tree until the next person
+   discards it, and then `/palate-beta:report` opens a month with nothing to lead on
+   and reports "no contributions were gated this period" about a month of gated contributions.
+   Baselines and the ledger are the same class of thing: measured state that cannot be recomputed
+   from source, so they ship in the commit they describe.
 2. **The log commit.** Append one line to `<dir>/.palate/changelog.md` (create it with a one-line
    header if absent) carrying the sha from step 1, then commit that file alone as
    `log: <subject>`. Space separated, quoted last field, one line per publish so it stays

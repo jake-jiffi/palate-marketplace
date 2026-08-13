@@ -25,6 +25,13 @@ name: Palate contract
 # runners). `taste` is the paid layer and is what /palate-website-builder:grade answers.
 # None of them are silently skipped: they were never in scope for a PR runner.
 #
+# THAT LIST IS NO LONGER MAINTAINED BY HAND, and it must not go back to being so. The
+# final summary walks the lanes the contract PLANNED and prints a row for each, so a lane
+# this workflow has no step for says "not measured" in the summary instead of vanishing
+# from it. `tokens` is why: it is a BLOCKING lane on every structural change, it had no
+# step here, and the summary's hand-written not-measured line did not name it, so the run
+# read as having checked it.
+#
 # ------------------------------------------------------------------ WHAT THIS COSTS
 #
 # GitHub Actions: free on public repos. On a Free private repo you get 2,000 minutes a
@@ -257,6 +264,7 @@ jobs:
           out.push(`route_count=${rendered.length}`);
           out.push(`run_schema=${lanes.has('schema')}`);
           out.push(`run_voice=${lanes.has('voice')}`);
+          out.push(`run_tokens=${lanes.has('tokens')}`);
           // One render pass covers functional, a11y, perf and geometry. It is worth
           // running if the plan asked for any of them AND there is a real page to load.
           const wantsRender = ['functional', 'a11y', 'perf', 'geometry'].some((l) => lanes.has(l));
@@ -303,14 +311,23 @@ jobs:
       # Seconds, blocking. 73 deterministic rules: AI tells, banned default faces,
       # eyebrow kickers, em dashes.
       #
-      # THE TARGET IS src/, NOT THE PROJECT ROOT, AND THAT COSTS SOMETHING. The scaffold
+      # THIS USED TO LINT src/ AND ONLY src/, WHICH MADE THE CRITICAL no-em-dash RULE
+      # UNABLE TO SEE THE PLACE THE EM DASHES ACTUALLY WERE. On a real build all 35 of
+      # them sat in docs/, and the gate went green over every one. So the scan is now a
+      # LIST of prose directories, and each one that exists is linted in its own pass.
+      #
+      # It is still not the repository root, and that part was right. The scaffold
       # commits `_claude/anti-patterns.md` (the doctrine copy for non-Claude tools), and
-      # ux-lint's exclusion list covers `.claude` but not `_claude`, so linting the root
-      # scores the rulebook's own examples and returns ~25 false High findings on a
-      # clean site. Narrowing to src/ removes them, and the price is that the handful of
-      # rules whose glob is path-scoped (src/components/**, src/pages/index.astro) match
-      # nothing when src/ is the root of the search. Every bare-glob rule (*.astro,
-      # *.css, *.tsx, *.md) still runs over the whole tree.
+      # ux-lint's exclusion list covers `.claude` but not `_claude`, so pointing the lint
+      # at the root scores the rulebook's own worked examples and returns ~25 false High
+      # findings on a clean site. Root markdown (README, CLAUDE.md, a changelog) is
+      # covered instead through a staging copy, which reaches those files without
+      # reaching `_claude/`. Findings print with the real path.
+      #
+      # The remaining cost is unchanged: the handful of rules whose glob is path-scoped
+      # (src/components/**, src/pages/index.astro) match nothing when src/ is the root of
+      # the search. Every bare-glob rule (*.astro, *.css, *.tsx, *.md) runs over each
+      # scanned tree.
       #
       # --severity is passed to MATCH --fail-on deliberately. --fail-on High alone still
       # PRINTS at the Medium floor, so the log shows findings the exit code ignores, and
@@ -319,7 +336,82 @@ jobs:
       - name: voice - anti-slop lint
         id: voice
         if: steps.plan.outputs.run_voice == 'true'
-        run: bash .palate-skill/scripts/ux-lint.sh src --fail-on High --severity High
+        run: |
+          set -uo pipefail
+          rc=0
+          scanned=""
+          for d in src docs content; do
+            [ -d "$d" ] || continue
+            echo "--- anti-slop lint: $d/"
+            bash .palate-skill/scripts/ux-lint.sh "$d" --fail-on High --severity High || rc=1
+            scanned="$scanned $d/"
+          done
+
+          # mktemp rather than a fixed path we would have to clear first: a step that
+          # begins by deleting a directory it computed is one unset variable away from
+          # deleting something else.
+          stage="$(mktemp -d "$RUNNER_TEMP/palate-root-prose.XXXXXX")"
+          found=0
+          for f in ./*.md ./*.mdx; do
+            [ -f "$f" ] || continue
+            cp "$f" "$stage/" && found=1
+          done
+          if [ "$found" = "1" ]; then
+            echo "--- anti-slop lint: root markdown"
+            bash .palate-skill/scripts/ux-lint.sh "$stage" --fail-on High --severity High \
+              > "$RUNNER_TEMP/root-prose.txt" 2>&1 || rc=1
+            # Rewrite the staging path back to the real one, or a finding names a
+            # temporary directory nobody can open.
+            sed "s|$stage/|./|g" "$RUNNER_TEMP/root-prose.txt"
+            scanned="$scanned ./*.md"
+          fi
+
+          if [ -z "$scanned" ]; then
+            echo "::error title=The voice lane had nothing to read::None of src/, docs/, content/ or any root markdown exists in this checkout, so no copy was linted. That is a broken checkout, not a clean result."
+            exit 1
+          fi
+          echo "anti-slop lint scanned:$scanned"
+          exit "$rc"
+
+      # ------------------------------------------------------------------ tokens
+      # Instant, blocking, structural changes only. This lane is in LANES in
+      # palate-contract.mjs and had no step here at all, so every structural pull request
+      # was planned against a blocking lane that never ran.
+      #
+      # Two checks, and neither one is reachable by ux-lint, which is per-line PCRE with
+      # no DOM model and no knowledge of the compiled CSS:
+      #   - scoped-style escapes: a class applied to a JS-CREATED node carries no
+      #     data-astro-cid, so a scoped <style> rule never matches it and the node ships
+      #     unstyled.
+      #   - phantom utilities: a utility class in source that produced no rule anywhere in
+      #     the build did not resolve, and it also ships unstyled.
+      # Both fail visibly on the page and invisibly in a diff, which is what makes them
+      # worth a gate rather than a review comment.
+      - name: tokens - scoped-style escapes and phantom utility classes
+        id: tokens
+        if: steps.plan.outputs.run_tokens == 'true'
+        run: |
+          set -uo pipefail
+          rc=0
+          node .palate-skill/scripts/gate-scoped-style-escape.mjs . --ci || rc=1
+
+          # The oracle is the build's own compiled CSS, produced by the schema step above.
+          # Without it this check cannot judge, and it says so rather than passing quietly:
+          # a class added since the last build reads as phantom against a stale dist, so a
+          # false flag here would be worse than the gap.
+          dist=""
+          for d in dist .vercel/output/static dist/client; do
+            if [ -d "$d" ] && [ -n "$(find "$d" -name '*.css' -type f -print -quit)" ]; then
+              dist="$d"; break
+            fi
+          done
+          if [ -z "$dist" ]; then
+            echo "::warning title=Phantom-utility check did NOT run::No compiled CSS under dist/, .vercel/output/static or dist/client. The class oracle is the build's own CSS, so this half of the tokens lane measured nothing."
+          else
+            echo "Gating source classes against the compiled CSS in $dist"
+            node .palate-skill/scripts/phantom-utility-check.mjs . --dist "$dist" --no-build --ci || rc=1
+          fi
+          exit "$rc"
 
       # ----------------------------------------------- functional / a11y / perf / geometry
       - name: Cache the browser runtime
@@ -450,6 +542,7 @@ jobs:
           P_ROUTES: ${{ steps.plan.outputs.routes }}
           R_SCHEMA: ${{ steps.schema.outcome }}
           R_VOICE: ${{ steps.voice.outcome }}
+          R_TOKENS: ${{ steps.tokens.outcome }}
           R_RENDER: ${{ steps.rendered.outcome }}
         run: |
           set -uo pipefail
@@ -466,14 +559,34 @@ jobs:
           note ""
           note "| lane | result |"
           note "|---|---|"
+          # ONE ROW PER LANE THE CONTRACT PLANNED, and the rows are generated from that
+          # plan rather than typed out here. The hand-written version listed three steps
+          # and then a hand-written "not measured" line that had gone stale: `tokens` is
+          # blocking on every structural change, it had no step, and it appeared in
+          # neither list, so the summary implied it had been measured. Deriving the rows
+          # from P_LANES means a lane added to palate-contract.mjs shows up as "not
+          # measured (no step in this workflow)" instead of disappearing.
+          #
           # `outcome` is the step's real result: success, failure or skipped. Printing it
-          # verbatim is the whole discipline here. A summary that prints "ran" for a step
-          # that was skipped is how a gate ends up reporting a pass it never made.
-          note "| schema | ${R_SCHEMA:-not run} |"
-          note "| voice | ${R_VOICE:-not run} |"
-          note "| rendered | ${R_RENDER:-not run} |"
-          note ""
-          note "Not measured here: caps (needs the base index), drift (local model), taste (paid)."
+          # verbatim is the other half of the discipline. A summary that prints "ran" for
+          # a step that was skipped is how a gate reports a pass it never made.
+          if [ -z "${P_LANES:-}" ]; then
+            note "| (none) | the contract never produced a plan, so no lane ran |"
+          else
+            for lane in $P_LANES; do
+              case "$lane" in
+                schema) r="${R_SCHEMA:-not run}" ;;
+                voice)  r="${R_VOICE:-not run}" ;;
+                tokens) r="${R_TOKENS:-not run}" ;;
+                functional|a11y|perf|geometry) r="${R_RENDER:-not run} (the rendered gate)" ;;
+                caps)   r="**not measured** - needs the index built at the base commit; \`palate-sweep.yml\` reports dead links site-wide instead" ;;
+                drift)  r="**not measured** - needs the local appearance model (~356MB per run, and no baseline history survives between runners)" ;;
+                taste)  r="**not measured** - the paid layer, answered by \`/palate-website-builder:grade\`" ;;
+                *)      r="**not measured** - no step in this workflow covers this lane" ;;
+              esac
+              note "| $lane | $r |"
+            done
+          fi
           # This step reports; it does not decide. The job is already red if a lane
           # failed, and exiting 0 here cannot turn that green.
           cat "$GITHUB_STEP_SUMMARY"

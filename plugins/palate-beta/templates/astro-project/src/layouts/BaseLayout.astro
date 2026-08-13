@@ -2,6 +2,10 @@
 // Base layout: SEO meta, OG tags, brand tokens + fonts, analytics, view
 // transitions, and Sanity visual-editing wiring.
 import "@palate-projects/{{SLUG}}-brand/tokens.css";
+// PARTIAL BRAND: delete the next line when verify-brand-exports.sh reported
+// OK:PARTIAL:type-free (the client gave colours and no type, so the package has no
+// fonts.css and Vite fails hard on the missing export). The faces then come from the
+// site's own @font-face, and brand-record.json records "locked": { "type": false }.
 import "@palate-projects/{{SLUG}}-brand/fonts.css";
 import "../styles/globals.css";
 import { ClientRouter } from "astro:transitions";

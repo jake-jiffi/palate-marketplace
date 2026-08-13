@@ -109,18 +109,24 @@ need certification to fix your own site. You need it to prove something to someo
 
 Everything a command reads or writes sits in the customer's own repo, under `.palate/`.
 
-| Path | What it is | Committed |
-|---|---|---|
-| `.palate/index.json` | the content graph: routes, entries, what reads what | no, derived and rebuildable |
-| `.palate/baselines/*.json` | per-route numbers: vitals, appearance embedding, axe counts | yes, they cannot be recomputed |
-| `.palate/brain/*.md` | facts, voice, constraints, dated decisions | yes |
-| `.palate/tokens.json`, `tokens.lock.md` | the measured design system, and the rule in words | yes |
-| `.palate/changelog.md` | what changed, when, by which commit | yes |
-| `.palate/ledger.jsonl` | what each check caught, including what never shipped | yes |
-| `.palate/schedule.md` | the register of held posts and their release dates | **yes** |
-| `.palate/reports/<YYYY-MM>.md` | the monthly artefact, as sent | yes |
-| `.palate/adoption/` | the first-run capture from `:adopt`, kept as the arrival record | yes |
-| `.palate/tmp/` | scratch for a single run | no |
+**The third column is the important one.** A file that is written and never read is not state, it
+is a note, and calling it state is how a command ends up trusting something nothing maintains. So
+every row names what reads it back, and the rows that read "nothing" say so plainly rather than
+looking load-bearing.
+
+| Path | What it is | Read back by | Committed |
+|---|---|---|---|
+| `.palate/index.json` | the content graph: routes, entries, what reads what | `:check`, `:page`, `:ask`, `:why`, `:status`, `:sweep`, `:publish` | no, derived and rebuildable |
+| `.palate/baselines/*.json` | per-route numbers: vitals, appearance embedding, axe counts | `:drift`, `:check`, `:publish` | yes, they cannot be recomputed |
+| `.palate/brain/*.md` | facts, voice, constraints, dated decisions | `:check`, `:page`, `:edit`, `:post`, `:campaign`, `:ask`, `:why`, `:report` | yes |
+| `.palate/tokens.lock.md` | the design system in words: faces, sizes, accent, radius, spacing | `:check` (the tokens lane), `:page` | yes |
+| `.palate/tokens.json` | the raw measurement the lock was written from | **nothing.** Evidence for a disputed lock entry, not an input | yes |
+| `.palate/changelog.md` | what changed, when, by which commit | `:report`, `:rollback`, `:ask` | yes |
+| `.palate/ledger.jsonl` | what each check caught, including what never shipped | `:report`, the session-start hook, `palate-handover.sh` | yes, and `:publish` commits it |
+| `.palate/schedule.md` | the register of held posts and their release dates | `:schedule --due`, and nothing else, so a due post goes out when a person runs it | **yes** |
+| `.palate/reports/<YYYY-MM>.md` | the monthly artefact, as sent | **nothing.** Written for people, kept so the claim can be checked later | yes |
+| `.palate/adoption/` | the first-run capture from `:adopt`, kept as the arrival record | **nothing.** The record of what the site was on the day it arrived | yes |
+| `.palate/tmp/` | scratch for a single run | nothing | no |
 
 `schedule.md` is the one people leave out, and it is the one that matters most: it is the only
 record of whether a held post ever goes out. Uncommitted, a scheduled announcement exists on one

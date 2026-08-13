@@ -48,6 +48,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { resolveBuildContext } from "./project-dir.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
@@ -258,6 +259,16 @@ if (CONFIG.test(fp)) allow();
 
 const cwd = p.cwd || process.cwd();
 
+// The manifest follows the PROJECT, not the session cwd (hooks/project-dir.mjs). It has to be
+// read from the same place hooks/palate-manifest.mjs writes it, or the wall would look in the
+// cwd, find nothing once the manifest moved into the scaffolded project, and block the first
+// source write of a build that had already diverged. The hint is the file being written, which
+// is the strongest available signal for which project this write belongs to.
+//
+// The MARKER lookup below deliberately stays on the cwd. It decides WHETHER the wall applies at
+// all, and widening where it is looked for would widen the set of sessions that get walled.
+const buildCtx = resolveBuildContext(cwd, { hint: fp });
+
 // BUILD-SITE SCOPE: the DIVERGE wall only applies inside an active build-site flow.
 // state-init.sh writes .palate-skill-state.json before scaffold and before any source
 // write, and ONLY the BUILD SITE mode writes it (BUILD BRAND writes
@@ -286,7 +297,7 @@ try {
 
     let manifest = null;
     try {
-      manifest = JSON.parse(fs.readFileSync(path.join(cwd, "build-manifest.json"), "utf8"));
+      manifest = JSON.parse(fs.readFileSync(buildCtx.manifest, "utf8"));
     } catch {
       /* absent/unreadable => diverge not yet valid */
     }
@@ -309,7 +320,7 @@ try {
 if (process.env.PALATE_GATE_STRICT !== "1") allow();
 
 try {
-  execFileSync("bash", [GATE, path.join(cwd, "build-manifest.json")], {
+  execFileSync("bash", [GATE, buildCtx.manifest], {
     stdio: ["ignore", "ignore", "pipe"],
   });
   allow();

@@ -28,15 +28,16 @@ Three tiers. Say which one out loud before doing any work, and say what it costs
 contribution contract, baselines, drift.
 
 **Tier 2, another framework, or static HTML, with a repo.** Anything that renders works:
-baselines, drift, accessibility, vitals, the token lock, the local grade. The content graph does
-not, because `palate-index.mjs` reads `src/pages` and exits 2 without it. That means no blast
-radius and no `palate-contract.mjs`, so contributions cannot be scoped by diff class. Say exactly
-that. Do not half-build an index that will be wrong.
+baselines, drift, accessibility, vitals, the token lock, the local grade, plus the crawled route
+map and the image measurements from section 3a. The content graph does not, because
+`palate-index.mjs` reads `src/pages` and exits 2 without it. That means no blast radius
+and no `palate-contract.mjs`, so contributions cannot be scoped by diff class. Say exactly that.
+Do not half-build an index that will be wrong.
 
 **Tier 3, a hosted builder with no repo** (Squarespace, Wix, Webflow, Shopify, WordPress you
 cannot clone). It cannot be adopted in place, because there are no files to manage. Offer the
-honest alternative: baselines and a grade against the live URL, so there is a record of where it
-started, and rebuilding is a separate decision. Do not pretend a URL is under management.
+honest alternative: the crawl, baselines and a grade against the live URL, so there is a record of
+where it started, and rebuilding is a separate decision. Do not pretend a URL is under management.
 
 ## 2. Get it running, or fall back to the live URL
 
@@ -51,6 +52,47 @@ everything below. If it prints `SERVE_FAIL`, do not debug the project's build he
 the live URL, note in the report that the baselines are of the deployed site rather than the
 working tree, and carry on. The two are different measurements and conflating them is how a
 baseline lies later.
+
+## 3a. Map the site before you measure anything
+
+**This is the step that decides every route list below, and it is required on every tier.** Before
+this existed, tier 2 had no route source at all and the measurements below ran against `/`,
+`/about` and `/contact`, three routes guessed from nothing. On a site with `/services/roofing` and
+no `/about`, that measured two 404s and reported them as the site.
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-crawl.mjs" "$SERVE_URL" \
+  --out .palate/site-map.json --assets-out .palate/assets.json --max-pages 100
+```
+
+It reads `/sitemap.xml` first, follows a sitemap index to its children, and falls back to
+following in-origin links from the homepage when there is no sitemap. It stays on-origin, obeys
+`robots.txt`, and follows an apex-to-www redirect to the canonical origin.
+
+Use the live URL rather than `$SERVE_URL` when section 2 fell back, and say which one the map is
+of. A local preview and the deployed site are different measurements.
+
+**Read the exit code, it is the finding.**
+
+- **0** clean. `.palate/site-map.json` holds every route with its title, status and images.
+- **1** crawled but incomplete. Read the `WARNING` lines: a sitemap larger than `--max-pages`
+  (the map is a sample, say so), routes that failed, or a homepage that served no links at all,
+  which usually means a client-rendered nav and means the architecture is **not established**.
+  Do not proceed as though the route list is complete.
+- **3** BLOCKED. An auth wall, a Shopify password page, an SSO redirect, a WAF 403, or a
+  `robots.txt` that disallows everything. Read `blocked.reason` and **say it out loud**: a wall
+  returns one page, which is indistinguishable from a one-page site by count alone. Nothing behind
+  it has been seen. Use `--ignore-robots` only when the customer owns the site and asks.
+
+The crawl also measures **every image from its own file header**, over a range request, so a
+2000x3000 portrait is known to be a portrait before anything decides to put it in a 3:1 slot. CDN
+query params (`?w=1200`) are ignored on purpose: they say what the CDN was asked for, not what the
+file is. `.palate/assets.json` comes out in `palate-assets.mjs`'s own record shape, so the two
+sources of image truth (local files, remote photos) read identically.
+
+Report the counts as findings: how many images could not be measured, and every photo the map
+flags as destroyed by a common slot. `subject` and `treatment` stay null, because pixels cannot
+say where the subject is. That is `/palate-beta:image`'s job, not adoption's.
 
 ## 3. Derive the brain from the site's own words
 
@@ -122,8 +164,11 @@ writeFileSync('.palate/tokens.json', JSON.stringify(out, null, 2) + '\n');
 console.log('tokens: ' + Object.keys(out).length + ' route(s) measured');
 ```
 
+Routes come from the map, never from a guess. Take the first few real ones:
+
 ```
-node .palate/tmp/tokens.mjs "${CLAUDE_PLUGIN_ROOT}" "$SERVE_URL" / /about /contact
+ROUTES=$(node -e 'const d=require("./.palate/site-map.json");console.log(d.pages.filter(p=>p.status>=200&&p.status<300).slice(0,5).map(p=>p.path).join(" "))')
+node .palate/tmp/tokens.mjs "${CLAUDE_PLUGIN_ROOT}" "$SERVE_URL" $ROUTES
 ```
 
 Each route returns weighted lists: `fonts`, `sizes`, `colours`, `radii`, `shadows`, `borders`,
@@ -169,14 +214,25 @@ and tap-target counts, the design facts. About 20KB of diffable JSON per route, 
 regenerated on demand for a before-and-after; they are an output, never a record. A repo that
 commits stills can never be un-fattened without a history rewrite.
 
-Route list: from `.palate/index.json` on tier 1; from the sitemap, then the nav, on tier 2.
+Route list: from `.palate/index.json` on tier 1; from `.palate/site-map.json`, written by the
+crawl in section 3a, on tier 2 and tier 3.
+
+Tier 1:
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-baseline.mjs" "$PWD" --base "$SERVE_URL" --all
 ```
 
-`--all` baselines every static route in the index. Pass `--routes /,/about,/contact` to scope it,
-and `--dry-run` to see what would be written without writing it.
+Tier 2 and 3, where there is no `src/pages` for `--all` to read:
+
+```
+ROUTES=$(node -e 'const d=require("./.palate/site-map.json");console.log(d.pages.filter(p=>p.status>=200&&p.status<300).map(p=>p.path).join(","))')
+node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-baseline.mjs" "$PWD" --base "$SERVE_URL" --routes "$ROUTES"
+```
+
+`--all` baselines every static route in the index, and needs an Astro `src/pages`; it exits 2 with
+a named reason on anything else rather than baselining nothing. `--routes` needs no index at all,
+which is what makes tier 2 work. `--dry-run` shows what would be written without writing it.
 
 This used to be seventy lines of JavaScript pasted into this file. It is a real script now, at
 `scripts/palate-baseline.mjs`, covered by `scripts/test/palate-baseline.test.mjs`, because an
@@ -202,8 +258,12 @@ start. If it is missing entirely, run
 Also run the accessibility and rendered checks across the same routes and keep the output as part
 of the adoption record:
 
+Use the same `$ROUTES` the baselines used. A hardcoded `/,/about,/contact` was here and it was a
+guess: on a site with none of those three it audited three 404 pages and reported the result as
+the site's accessibility.
+
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/verify-rendered.sh" "$SERVE_URL" --routes /,/about,/contact --out .palate/adoption
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/verify-rendered.sh" "$SERVE_URL" --routes "$ROUTES" --out .palate/adoption
 ```
 
 ## 7. Install the loop
@@ -236,6 +296,8 @@ They agree, or they correct. That is the whole interaction. Do not ask them to c
 
 ```
 Adopted        acme-plumbing (tier 1, Astro, 9 routes)
+Crawled        9 routes from the sitemap, 0 failed, 1 skipped by robots
+Images         41 measured from their headers, 6 unmeasurable, 9 portraits
 Baselined      9 of 9 routes, 1 appearance refused (/thanks: flat capture)
 Facts found    phone, email, address, hours, 3 prices
 Conflict       phone differs: footer 02 9550 1234, /contact 02 9550 4321
@@ -261,6 +323,13 @@ Never leave these implicit. Include only the ones that actually apply.
 - **Deployed rather than local baselines**, if section 2 fell back.
 - **No single record of business facts**, if `facts.source` came back empty.
 - **Routes behind a login, a paywall, or a form**: not baselined, and say which.
+- **A sampled route map**, if the crawl warned that the sitemap is larger than `--max-pages`. Say
+  how many of how many.
+- **An unestablished architecture**, if the crawl exited 1 because the homepage served no links.
+  The route list is what one page happened to reference, not the site.
+- **A blocked crawl** (exit 3): say the reason. Behind that wall, nothing has been measured, and
+  a page count of one is not evidence of a one-page site.
+- **Images that could not be measured**: name the count. An unknown dimension is not a safe one.
 
 ## 10. What comes next
 

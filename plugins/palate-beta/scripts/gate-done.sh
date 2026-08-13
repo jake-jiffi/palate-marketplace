@@ -36,7 +36,11 @@ SHOTS_MANIFEST="$SHOTS_DIR/manifest.json"
 SHOTS_ERRORS="$SHOTS_DIR/errors.json"
 
 fail() { echo "Done gate FAILED: $1" >&2; exit 2; }
-skip() { echo "Done gate skipped: $1"; exit 0; }
+# STDERR, like fail() and ungrounded(). Every caller spawns this with
+# stdio: ["ignore","ignore","pipe"], so a skip written to STDOUT is DISCARDED: no jq, no
+# manifest, or no renderable preview then turns the whole gate suite off and the transcript
+# is indistinguishable from a clean pass. A gate that was blocked is not a gate that passed.
+skip() { echo "Done gate skipped: $1" >&2; exit 0; }
 
 # --- FAIL-OPEN LADDER (mirrors gate-mcp-depth.sh:32-35, plus one render rung) ---
 # Never block closed when there is nothing to gate.
