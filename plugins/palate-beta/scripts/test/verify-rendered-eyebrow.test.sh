@@ -47,6 +47,11 @@ cat > "$TMP/index.html" <<'HTML'
  .letterbox{width:900px;height:auto;aspect-ratio:3/1;object-fit:cover;display:block}
  .matched{width:600px;height:auto;aspect-ratio:3/2;object-fit:cover;display:block}
  .contained{width:900px;height:auto;aspect-ratio:3/1;object-fit:contain;display:block}
+ /* object-fit reimplemented with offsets, taken verbatim from a real client build */
+ .shot{position:relative;width:470px;aspect-ratio:470/460;overflow:hidden}
+ .shot img{position:absolute;top:-30.44%;left:-187.23%;width:408.51%;max-width:none;height:auto}
+ .card{width:400px;height:300px;overflow:hidden;border-radius:12px}
+ .card img{width:100%;height:100%;object-fit:cover}
  h2{font-size:40px;margin:0 0 24px} .lede{font-size:18px;margin:0 0 24px}
  img{width:120px;height:60px;background:#ccc;display:block}
 </style></head><body><main>
@@ -68,6 +73,11 @@ cat > "$TMP/index.html" <<'HTML'
  <img class="letterbox" src="/portrait.jpg" alt="portrait in a letterbox">
  <img class="matched"   src="/landscape.jpg" alt="landscape in a matching slot">
  <img class="contained" src="/portrait.jpg" alt="contain, letterboxed not cut">
+
+ <!-- A crop with NO object-fit at all. The cover maths is structurally blind to it, and a real
+      build shipped exactly this shape. The rounded card beneath must stay silent. -->
+ <div class="shot"><img src="/wide.jpg" alt="hand cropped"></div>
+ <div class="card"><img src="/landscape.jpg" alt="an ordinary rounded card"></div>
 </main></body></html>
 HTML
 
@@ -76,6 +86,7 @@ const s=require('$DIR/../reference-capture/node_modules/sharp');
 Promise.all([
   s({create:{width:400,height:600,channels:3,background:{r:120,g:90,b:70}}}).jpeg().toFile('$TMP/portrait.jpg'),
   s({create:{width:1200,height:800,channels:3,background:{r:70,g:110,b:120}}}).jpeg().toFile('$TMP/landscape.jpg'),
+  s({create:{width:1920,height:600,channels:3,background:{r:100,g:80,b:60}}}).jpeg().toFile('$TMP/wide.jpg'),
 ]).then(()=>{});" 2>/dev/null
 
 # `exec` so $! is the server itself: without it the trap kills a wrapper shell and the
@@ -117,6 +128,13 @@ check "no false positive: a photo in a slot that matches it" \
   "$(printf '%s' "$OUT" | grep -c 'crop: "landscape.jpg"' || true)" "0"
 check "no false positive: object-fit contain letterboxes, it does not cut" \
   "$(printf '%s' "$OUT" | grep 'crop:' | grep -c 'contain' || true)" "0"
+
+check "a crop done with offsets and no object-fit still fires" \
+  "$(printf '%s' "$OUT" | grep -c 'crop by hand: "wide.jpg"' || true)" "3"
+check "and it names the technique as the signal" \
+  "$(printf '%s' "$OUT" | grep -c 'positioned rather than fitted' || true)" "3"
+check "no false positive: an ordinary rounded card that trims a few pixels" \
+  "$(printf '%s' "$OUT" | grep 'crop' | grep -c 'ordinary' || true)" "0"
 
 echo "---"
 echo "passed=$pass failed=$fail"

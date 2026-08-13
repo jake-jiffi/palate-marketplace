@@ -396,8 +396,44 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
         if (im.complete && im.naturalWidth === 0) { out.broken.push(src); continue; }
         if (!im.naturalWidth) continue;                       // still loading: not a finding
 
-        // Crop loss, but ONLY under object-fit: cover. `contain` letterboxes rather than
-        // cutting, and `fill` distorts, which is a different fault with a different fix.
+        // CROPPED BY HAND, WITHOUT object-fit. A real build cropped a photo with
+        // `position:absolute; width:408.51%; left:-187.23%; top:-30.44%` inside an
+        // overflow:hidden box and used NO object-fit at all, so the cover-crop maths below is
+        // structurally blind to it. Those magic percentages are the tell: they are an agent
+        // working around a photograph that does not fit the slot it already committed to.
+        //
+        // Measuring the geometry instead of the technique catches both. Compare the image's own
+        // box against the nearest ancestor that actually clips, so whatever is outside it is
+        // simply not on screen, however that was achieved.
+        let clipper = im.parentElement;
+        while (clipper && clipper !== document.body) {
+          const cs = getComputedStyle(clipper);
+          if (cs.overflow === "hidden" || cs.overflow === "clip" ||
+              cs.overflowX === "hidden" || cs.overflowY === "hidden") break;
+          clipper = clipper.parentElement;
+        }
+        if (clipper && clipper !== document.body) {
+          const cr = clipper.getBoundingClientRect();
+          const w = Math.max(0, Math.min(r.right, cr.right) - Math.max(r.left, cr.left));
+          const h = Math.max(0, Math.min(r.bottom, cr.bottom) - Math.max(r.top, cr.top));
+          const area = r.width * r.height;
+          const shown = area > 0 ? (w * h) / area : 1;
+          // 0.7 matches the cover threshold. Only when the image is meaningfully bigger than
+          // its clip, so an ordinary rounded card trimming a few pixels is not a finding.
+          if (shown < 0.7 && area > cr.width * cr.height * 1.1) {
+            out.cropped.push({
+              src, visible: shown, byHand: true,
+              natural: `${im.naturalWidth}x${im.naturalHeight}`,
+              box: `${Math.round(r.width)}x${Math.round(r.height)} inside ${Math.round(cr.width)}x${Math.round(cr.height)}`,
+              pos: style.objectFit === "cover" ? (style.objectPosition || "50% 50%").trim() : `${style.position}, no object-fit`,
+              centred: false,
+            });
+            continue;                       // one crop finding per image, the specific one
+          }
+        }
+
+        // Crop loss under object-fit: cover. `contain` letterboxes rather than cutting, and
+        // `fill` distorts, which are different faults with different fixes.
         if (style.objectFit === "cover" && im.naturalHeight > 0 && r.height > 0) {
           const srcRatio = im.naturalWidth / im.naturalHeight;
           const boxRatio = r.width / r.height;
@@ -440,10 +476,17 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     for (const c of imgs.cropped.slice(0, 4)) {
       const pct = Math.round(c.visible * 100);
       const sev = c.visible < 0.5 ? "High" : "Medium";
-      add(sev, route, vpName,
-        `crop: "${c.src}" is ${c.natural} and its slot is ${c.box}, so only ${pct}% of the frame is shown` +
-        (c.centred ? ` with object-position left at the default 50% 50%` : ` (object-position ${c.pos})`) +
-        `. ${c.visible < 0.5 ? "That is destructive: pick a slot the photograph supports." : "Check what is being cut before shipping it."}`);
+      if (c.byHand) {
+        add(sev, route, vpName,
+          `crop by hand: "${c.src}" (${c.natural}) renders at ${c.box}, so only ${pct}% of it is on screen, ` +
+          `and it is positioned rather than fitted (${c.pos}). object-fit reimplemented with offsets is a sign the ` +
+          `photograph does not fit the slot it was given: change the slot, or use a photograph that suits it.`);
+      } else {
+        add(sev, route, vpName,
+          `crop: "${c.src}" is ${c.natural} and its slot is ${c.box}, so only ${pct}% of the frame is shown` +
+          (c.centred ? ` with object-position left at the default 50% 50%` : ` (object-position ${c.pos})`) +
+          `. ${c.visible < 0.5 ? "That is destructive: pick a slot the photograph supports." : "Check what is being cut before shipping it."}`);
+      }
     }
 
     for (const u of imgs.upscaled.slice(0, 3)) {
