@@ -706,7 +706,15 @@ async function main() {
   };
 
   const sitemapCandidates = [...new Set([...robots.sitemaps, new URL('/sitemap.xml', origin).href, new URL('/sitemap_index.xml', origin).href])];
-  const sitemapUrls = [];
+  /**
+   * PER-CHILD GROUPS, NOT A FLAT LIST. On a real store this was the difference between mapping
+   * the site and missing the business: the sitemap index listed post-sitemap FIRST (hundreds of
+   * blog posts), then page-sitemap (where /shop lives), then three wishlist sitemaps. A flat
+   * concatenation capped at --max-pages drew 35 blog posts and ZERO commerce pages, and the map
+   * honestly labelled itself a sample while being a sample of the wrong thing. Keeping each
+   * child's URLs separate lets the cap be spread ACROSS the site's sections below.
+   */
+  const sitemapGroups = new Map();
   const visitedSitemaps = new Set();
   const readSitemap = async (url, depth = 0) => {
     if (depth > 2 || visitedSitemaps.has(url) || visitedSitemaps.size > 50) return;
@@ -714,17 +722,42 @@ async function main() {
     const r = await fetchText(url, net);
     if (r.status !== 200 || !/<(urlset|sitemapindex)[\s>]/i.test(r.body)) return;
     const { urls, sitemaps } = parseSitemap(r.body);
-    for (const u of urls) sitemapUrls.push(u);
+    if (urls.length) sitemapGroups.set(url, urls);
     for (const s of sitemaps) await readSitemap(s, depth + 1);
   };
   for (const c of sitemapCandidates) {
     await readSitemap(c);
-    if (sitemapUrls.length) break;
+    if (sitemapGroups.size) break;
   }
+  const sitemapUrls = [...sitemapGroups.values()].flat();
 
   push(normaliseUrl(home.finalUrl, origin) || entry.href);
+
+  // THE NAV GETS IN FIRST. What the owner puts in the header is the site's own statement of
+  // what matters, and it is exactly what a biased sitemap sample misses. The homepage is
+  // already fetched, so this costs nothing.
+  for (const l of extractLinks(home.body || '', home.finalUrl || entry.href, origin).slice(0, 30)) push(l);
+
   let fromSitemap = 0;
-  for (const u of sitemapUrls) if (push(u)) fromSitemap++;
+  if (sitemapUrls.length > args.maxPages && sitemapGroups.size > 1) {
+    // ROUND-ROBIN ACROSS CHILDREN. Take one URL from each child sitemap in turn until the cap
+    // is met, so every section of the site is represented in the sample. First-N from a flat
+    // list samples whichever section the index happens to list first, which on WordPress is
+    // the blog, and on a store that means the map contains everything except the shop.
+    const iters = [...sitemapGroups.values()].map((a) => a[Symbol.iterator]());
+    let advanced = true;
+    while (advanced && frontier.length < args.maxPages * 2) {
+      advanced = false;
+      for (const it of iters) {
+        const n = it.next();
+        if (n.done) continue;
+        advanced = true;
+        if (push(n.value)) fromSitemap++;
+      }
+    }
+  } else {
+    for (const u of sitemapUrls) if (push(u)) fromSitemap++;
+  }
 
   // Label from the sitemap's own size, not from how many URLs it ADDED. A two-page site whose
   // sitemap lists both would otherwise be labelled "links" because the homepage was already in

@@ -448,3 +448,54 @@ test('end to end: a homepage with no links is a warning and exit 1, not a one-pa
   assert.equal(doc.pages.length, 1);
   assert.ok(doc.warnings.some((w) => /NOT been established/.test(w)));
 });
+
+// ------------------------------------------------- sampling bias under the cap
+
+/**
+ * The sample must contain the BUSINESS, not just whatever the index lists first. On a real
+ * WooCommerce store the index led with post-sitemap (hundreds of blog posts), so first-N
+ * sampling at --max-pages 60 mapped 35 blog posts and ZERO commerce pages: /shop lived in
+ * page-sitemap, which the cap never reached. Two behaviours fix it, both pinned here: the
+ * homepage nav's links are pushed before any sitemap URL (the owner's own statement of what
+ * matters), and an over-cap index is sampled round-robin ACROSS its children.
+ */
+test('a capped crawl of a blog-first sitemap index still maps the shop', async (t) => {
+  const P2 = PORT + 1;
+  const page = (title, extra = '') => ['text/html', Buffer.from(
+    `<html><head><title>${title}</title></head><body><nav><a href="/shop">Shop</a><a href="/contact">Contact</a></nav>${extra}</body></html>`)];
+  const posts = Array.from({ length: 20 }, (_, i) => `/post-${i + 1}`);
+  const routes = {
+    '/robots.txt': ['text/plain', Buffer.from(`User-agent: *\nSitemap: http://127.0.0.1:${P2}/sitemap.xml\n`)],
+    '/sitemap.xml': ['application/xml', Buffer.from(
+      `<?xml version="1.0"?><sitemapindex>` +
+      `<sitemap><loc>http://127.0.0.1:${P2}/sitemap-posts.xml</loc></sitemap>` +
+      `<sitemap><loc>http://127.0.0.1:${P2}/sitemap-pages.xml</loc></sitemap></sitemapindex>`)],
+    '/sitemap-posts.xml': ['application/xml', Buffer.from(
+      `<?xml version="1.0"?><urlset>` + posts.map((p) => `<url><loc>http://127.0.0.1:${P2}${p}</loc></url>`).join('') + `</urlset>`)],
+    '/sitemap-pages.xml': ['application/xml', Buffer.from(
+      `<?xml version="1.0"?><urlset>` + ['/', '/shop', '/contact'].map((p) => `<url><loc>http://127.0.0.1:${P2}${p}</loc></url>`).join('') + `</urlset>`)],
+    '/': page('Home'),
+    '/shop': page('Shop'),
+    '/contact': page('Contact'),
+  };
+  for (const p of posts) routes[p] = page(`Post ${p}`);
+  const server = createServer((req, res) => {
+    const hit = routes[req.url.split('?')[0]];
+    if (!hit) { res.writeHead(404, { 'content-type': 'text/html' }); return res.end('<html><title>404</title></html>'); }
+    res.writeHead(200, { 'content-type': hit[0], 'content-length': hit[1].length });
+    res.end(hit[1]);
+  });
+  await new Promise((r) => server.listen(P2, '127.0.0.1', r));
+  const dir = mkdtempSync(join(tmpdir(), 'palate-crawl-bias-'));
+  t.after(() => { server.close(); rmSync(dir, { recursive: true, force: true }); });
+
+  const out = join(dir, 'site-map.json');
+  const { status, stdout, stderr } = await run([`http://127.0.0.1:${P2}/`, '--out', out, '--max-pages', '8']);
+  assert.equal(status, 0, `crawl exited ${status}:\n${stdout}${stderr}`);
+  const doc = JSON.parse(readFileSync(out, 'utf8'));
+  const paths = doc.pages.map((p) => new URL(p.url).pathname);
+
+  assert.ok(paths.includes('/shop'), `the shop must be in the sample; got: ${paths.join(', ')}`);
+  assert.ok(paths.some((p) => /^\/post-/.test(p)), 'the blog is still represented, sampled rather than excluded');
+  assert.ok(doc.warnings.some((w) => /SAMPLE/.test(w)), 'the over-cap warning still fires');
+});
