@@ -51,6 +51,7 @@ Read, in this order, and say in one line which sources you used:
 
 Then the body. Real `##` headings in order, no skipped levels. Specifics over adjectives: a
 number, a date, a name, an outcome. If a sentence would survive being pasted onto a
+<!-- ux-lint-disable ai-tell-leverage this line names the banned words in order to ban them ux-lint-disable ai-tell-game-changer same, the closed list has to be quotable in the rule that bans it ux-lint-disable ai-tell-seamless same, and a doc that cannot name a tell cannot teach it -->
 competitor's site unchanged, cut it. No "leverage", "seamless", "elevate", "game-changer". No
 em dashes.
 

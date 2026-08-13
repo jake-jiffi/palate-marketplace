@@ -243,7 +243,25 @@ if [ -f "$SHIPREADY_GATE" ]; then
   esac
 fi
 
+# SEO: the crawl surface. A build can be visually perfect, ship-ready and still be
+# undiscoverable: rejected Explore variants indexed, dynamic routes absent from the sitemap,
+# a preview inviting indexing of the client's content at a non-canonical domain. It lived only
+# in /sweep, which is a monthly pass somebody has to run, so nothing checked it at done-time.
+SEO_GATE="$HERE/gate-seo.mjs"
+seo_note="seo=skipped(gate-seo.mjs not present)"
+if [ -f "$SEO_GATE" ]; then
+  if seo_err="$(node "$SEO_GATE" "$PROJ" 2>&1)"; then seo_rc=0; else seo_rc=$?; fi
+  case "$seo_rc" in
+    0) seo_note="seo=pass" ;;
+    # 2 is CANNOT CHECK (nothing built yet, so there is no crawl surface to read). It skips like
+    # the other sub-gates, and it SAYS so, because a skip that reads as a pass is the failure
+    # this file exists to prevent.
+    2) seo_note="seo=skipped(nothing built to crawl)" ;;
+    *) fail "SEO gate did not pass. ${seo_err}" ;;
+  esac
+fi
+
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, intensity=${intensity:-calm}, $bold_note."
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, intensity=${intensity:-calm}, $bold_note."
 exit 0
