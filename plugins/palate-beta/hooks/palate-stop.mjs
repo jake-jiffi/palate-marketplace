@@ -254,9 +254,52 @@ function recordGrounding(manifest, depth) {
   }
 }
 
+/**
+ * THE TASTE LINEAGE. Which library references this site's craft actually came from, written
+ * into the site's own .palate/ so it SURVIVES THE BUILD.
+ *
+ * Without it, every later session starts blind: /post cannot pull the spine donor's copy_voice
+ * because nothing remembers who the spine donor was, and the ongoing commands re-search the
+ * library from scratch as if this were a stranger's site. The manifest already knows
+ * (references_surveyed, explore.shown[].donor_slug); it just never left the build. Best-effort
+ * like recordBuild: lineage must never be the thing that traps a session.
+ */
+function recordDonors(manifest, m) {
+  try {
+    const proj = path.dirname(manifest);
+    const refs = Array.isArray(m.references_surveyed) ? m.references_surveyed.filter(Boolean) : [];
+    if (!refs.length) return;
+    const shown = m.explore && Array.isArray(m.explore.shown) ? m.explore.shown : [];
+    const picks = m.explore && Array.isArray(m.explore.picks) ? m.explore.picks : [];
+    const pickedIds = new Set(picks.map((p) => p && p.variant_id).filter(Boolean));
+    // The spine is the donor of the variant that supplied the dominant tone (the hero pick),
+    // falling back to the first surveyed reference, which the surveyor lists backbone-first.
+    const heroPick = picks.find((p) => p && p.surface === "hero");
+    const spineFromPick = heroPick
+      ? (shown.find((s) => s && s.id === heroPick.variant_id) || {}).donor_slug
+      : null;
+    const out = {
+      version: 1,
+      spine: spineFromPick || refs[0],
+      donors: refs,
+      picked_variant_donors: shown
+        .filter((s) => s && pickedIds.has(s.id) && s.donor_slug)
+        .map((s) => ({ variant: s.id, donor: s.donor_slug })),
+      writtenAt: new Date().toISOString(),
+      note: "The library references this site's craft came from. RUN SITE commands re-ground on these rather than searching cold.",
+    };
+    const dir = path.join(proj, ".palate");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "donors.json"), JSON.stringify(out, null, 2) + "\n");
+  } catch {
+    /* never trap the session over lineage */
+  }
+}
+
 function recordBuild(manifest) {
   try {
     const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
+    recordDonors(manifest, m);
     const dir = path.join(os.homedir(), ".config", "palate");
     fs.mkdirSync(dir, { recursive: true });
     const log = path.join(dir, "builds.log.json");

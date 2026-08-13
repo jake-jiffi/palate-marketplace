@@ -18,7 +18,15 @@ question and stop until answered.
 2. Probe the MCP once: `mcp__palate__refs_list_verticals`. If the tools are absent or it errors,
    state ONCE that the taste layer is unreachable, give the recovery line
    `claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp`,
-   and carry on. A post does not need the library. Do not mention it again this session.
+   and carry on. A post can be written without the library. Do not mention it again this session.
+3. **When the MCP is up, pull the voice of the site's own lineage.** Read `.palate/donors.json`
+   (written when the build passed its gates: the library references this site's craft actually
+   came from). If it exists, `mcp__palate__refs_get { slug: <spine>, layer: "copy_voice" }`, and
+   hold what comes back the way the whole skill holds a donor: it is the REGISTER the site
+   already speaks (sentence length, headline anchoring, what the donor refuses to say), never
+   copy to lift. A post written cold drifts toward blog-generic in a way nobody can name from one
+   post; ten posts later the site sounds like everyone. No `donors.json` means an older or
+   adopted build: skip silently, the brain's `voice.md` still leads either way.
 
 ## 2. Ground the writing
 

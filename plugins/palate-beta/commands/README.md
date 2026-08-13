@@ -11,8 +11,9 @@ Every command that changes the site runs the same loop, and it is worth reading 
 explains why nothing here asks you to review a diff.
 
 **Ask** what is actually wanted, once, and never guess a business fact. **Ground** the work in
-the site's own artefacts, its index, its brain, its baselines, and in the reference library when
-it is connected. **Write** the change. **Render** the affected routes in a real browser at both
+the site's own artefacts, its index, its brain, its baselines, its taste lineage
+(`.palate/donors.json`, the library references the craft came from), and in the reference
+library when it is connected. **Write** the change. **Render** the affected routes in a real browser at both
 viewports, because a change that was never rendered was never checked. **Judge** it against the
 contribution contract: the lanes that apply to this class of change, each with its own threshold.
 **Heal** what is mechanically fixable, then re-run, before anybody is shown anything, bounded so
@@ -119,6 +120,7 @@ looking load-bearing.
 | `.palate/index.json` | the content graph: routes, entries, what reads what | `:check`, `:page`, `:ask`, `:why`, `:status`, `:sweep`, `:publish` | no, derived and rebuildable |
 | `.palate/baselines/*.json` | per-route numbers: vitals, appearance embedding, axe counts | `:drift`, `:check`, `:publish` | yes, they cannot be recomputed |
 | `.palate/brain/*.md` | facts, voice, constraints, dated decisions | `:check`, `:page`, `:edit`, `:post`, `:campaign`, `:ask`, `:why`, `:report` | yes |
+| `.palate/donors.json` | the taste lineage: which library references this site's craft came from, spine first | `:post` (the spine's `copy_voice`), `:page` (prefer a recorded donor over a stranger), `:campaign` | yes, it cannot be recomputed once the manifest is gone |
 | `.palate/tokens.lock.md` | the design system in words: faces, sizes, accent, radius, spacing | `:check` (the tokens lane), `:page` | yes |
 | `.palate/tokens.json` | the raw measurement the lock was written from | **nothing.** Evidence for a disputed lock entry, not an input | yes |
 | `.palate/changelog.md` | what changed, when, by which commit | `:report`, `:rollback`, `:ask` | yes |

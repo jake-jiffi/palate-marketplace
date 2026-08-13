@@ -45,6 +45,14 @@ exactly how a site drifts to the average, and the references are what stop that.
 
 Probe once: `mcp__palate__refs_list_verticals`.
 
+**Start from the site's own lineage.** Read `.palate/donors.json` first: those are the library
+references this site's craft actually came from, recorded when the build passed its gates. A new
+page on an existing site has a harder job than a new site's page: it must be excellent AND belong.
+When a recorded donor builds this surface well, prefer it over a stranger with a marginally
+better search rank, because the stranger's craft arrives with a second design language attached.
+Search wins only when the lineage genuinely does not cover the surface, and say so in one line
+when it happens.
+
 **Grounded path.** Do all four, in order. Naming the exact surface in `query` is what separates
 a useful donor from a generic one:
 
@@ -52,9 +60,13 @@ a useful donor from a generic one:
    references that build THIS surface well. Not references that look nice.
 2. `mcp__palate__refs_get_screenshot { slug, page: "<the inner page>" }` on the two or three best.
    View the real inner page, not the home hero. Design from the pixels.
-3. `mcp__palate__refs_get { slug, layer: ["signature_moves", "do_dont", "component_prompts"] }`
-   for the move, the discipline and the component anatomy. Use a rich layer: a thin read tells
-   you nothing you could not have guessed, and the depth gate counts it.
+3. `mcp__palate__refs_get { slug, layer: ["pages", "signature_moves", "do_dont", "component_prompts"] }`
+   for the inner-page structure, the move, the discipline and the component anatomy. `pages` is
+   the layer almost nothing reads and it is the depth half of the moat: the written analysis of
+   how the donor STRUCTURES its inner pages (~920 of them across the library), which is exactly
+   the question a new inner page is asking. The screenshot shows the result; `pages` says how it
+   is organised. Use a rich layer: a thin read tells you nothing you could not have guessed, and
+   the depth gate counts it.
 4. Re-skin every donor move into the locked brand. Take the composition, the rhythm, the
    restraint. Never take the donor's colours, faces or copy.
 

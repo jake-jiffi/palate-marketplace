@@ -63,8 +63,16 @@ Read `.palate/brain/voice.md` and `.palate/brain/constraints.md` if they exist. 
 
 Ground the page's composition in the library if the MCP is reachable:
 `mcp__palate__refs_search { pageType: "landing", conversionPrimitive, query }` then
-`mcp__palate__refs_get_screenshot` on the best two, and take the composition, not the copy. If
-the tools are absent, say so once with the recovery line
+`mcp__palate__refs_get_screenshot` on the best two, **and pull their taste layer, which is where
+the library earns its keep on a landing page**: `mcp__palate__refs_get { slug, layer: ["do_dont",
+"component_prompts"] }` on both. The screenshot shows what the donor did; `do_dont` says what it
+REFUSED to do, and a landing page is mostly made of refusals (one action, no nav competition, no
+vanity strip above the offer). `component_prompts` carries the donor's own recipe for the
+conversion blocks you are about to build. Take the composition and the rules, not the copy.
+
+A campaign page also stays THIS site's page: read `.palate/donors.json` and, when the spine donor
+is a plausible fit for a landing composition, weigh it against the search results before
+reaching for a stranger. If the tools are absent, say so once with the recovery line
 `claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp` and
 compose from the site's own highest-converting page instead.
 

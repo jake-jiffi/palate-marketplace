@@ -192,7 +192,17 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-index.mjs" . --out .palate/index.json
 ```
 
 It prints routes, entries, drafts, orphans and dead links. Report the orphans and dead links as
-findings, not as failures. Then prove the graph works on this site, because a graph nobody has
+findings, not as failures.
+
+**Recover the taste lineage while you are here.** If a `build-manifest.json` exists with a
+non-empty `references_surveyed`, this site was built by Palate and its donors are recoverable:
+write `.palate/donors.json` (`{ version: 1, spine, donors, writtenAt }`, spine = the hero pick's
+donor from `explore.shown`/`explore.picks` when present, else the first surveyed reference). The
+RUN SITE commands read it to keep drawing on the SAME references the site's craft came from: a
+post pulls the spine's `copy_voice`, a new page prefers a recorded donor over a stranger. Without
+it every later session re-searches the library cold, as if this site's taste came from nowhere.
+No manifest, or an empty survey, means the lineage is genuinely unknown: write nothing, never
+invent a donor. Then prove the graph works on this site, because a graph nobody has
 tested is a liability:
 
 ```
