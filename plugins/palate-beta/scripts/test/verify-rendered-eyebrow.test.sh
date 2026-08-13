@@ -41,6 +41,12 @@ cat > "$TMP/index.html" <<'HTML'
 <style>
  body{margin:0;font:16px system-ui} main{padding:2rem}
  .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.18em;margin:0 0 8px}
+ /* height:auto so the generic `img` rule below cannot override aspect-ratio: with an
+    explicit height the matched slot became 600x60 and really was cropped, so the fixture
+    would have been testing the wrong thing. */
+ .letterbox{width:900px;height:auto;aspect-ratio:3/1;object-fit:cover;display:block}
+ .matched{width:600px;height:auto;aspect-ratio:3/2;object-fit:cover;display:block}
+ .contained{width:900px;height:auto;aspect-ratio:3/1;object-fit:contain;display:block}
  h2{font-size:40px;margin:0 0 24px} .lede{font-size:18px;margin:0 0 24px}
  img{width:120px;height:60px;background:#ccc;display:block}
 </style></head><body><main>
@@ -55,8 +61,22 @@ cat > "$TMP/index.html" <<'HTML'
 
  <p>This is a genuine paragraph of running copy that happens to precede a heading, and it ends properly.</p>
  <h2>Fourth section</h2>
+
+ <!-- CROP LOSS. The 2:3 portrait in a 3:1 band is the failure references/assets.md is built
+      around: 22% of the frame, two decapitated torsos. The matched slot and the contain case
+      must stay silent, or the check is noise and gets switched off. -->
+ <img class="letterbox" src="/portrait.jpg" alt="portrait in a letterbox">
+ <img class="matched"   src="/landscape.jpg" alt="landscape in a matching slot">
+ <img class="contained" src="/portrait.jpg" alt="contain, letterboxed not cut">
 </main></body></html>
 HTML
+
+node -e "
+const s=require('$DIR/../reference-capture/node_modules/sharp');
+Promise.all([
+  s({create:{width:400,height:600,channels:3,background:{r:120,g:90,b:70}}}).jpeg().toFile('$TMP/portrait.jpg'),
+  s({create:{width:1200,height:800,channels:3,background:{r:70,g:110,b:120}}}).jpeg().toFile('$TMP/landscape.jpg'),
+]).then(()=>{});" 2>/dev/null
 
 # `exec` so $! is the server itself: without it the trap kills a wrapper shell and the
 # server keeps the port for the next run. That exact leak cost a debugging session.
@@ -83,6 +103,20 @@ for phrase in "A longer sentence" "Third section" "genuine paragraph"; do
   check "no false positive: $phrase" \
     "$(printf '%s' "$OUT" | grep 'eyebrow/kicker' | grep -c "$phrase" || true)" "0"
 done
+
+# --- crop loss ---------------------------------------------------------------------------
+check "the 2:3 portrait in a 3:1 band fires at all 3 viewports" \
+  "$(printf '%s' "$OUT" | grep -c 'crop: "portrait.jpg"' || true)" "3"
+check "it reports the measured 22%, the figure the doctrine is built on" \
+  "$(printf '%s' "$OUT" | grep -c 'only 22% of the frame' || true)" "3"
+check "it is High, so it blocks" \
+  "$(printf '%s' "$OUT" | grep 'crop:' | grep -c '\[High\]' || true)" "3"
+check "it names the default object-position as part of the problem" \
+  "$(printf '%s' "$OUT" | grep -c 'default 50% 50%' || true)" "3"
+check "no false positive: a photo in a slot that matches it" \
+  "$(printf '%s' "$OUT" | grep -c 'crop: "landscape.jpg"' || true)" "0"
+check "no false positive: object-fit contain letterboxes, it does not cut" \
+  "$(printf '%s' "$OUT" | grep 'crop:' | grep -c 'contain' || true)" "0"
 
 echo "---"
 echo "passed=$pass failed=$fail"

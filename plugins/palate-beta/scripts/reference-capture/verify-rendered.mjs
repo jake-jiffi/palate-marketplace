@@ -386,7 +386,7 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
      * reliable signal and it needs a real browser: a 404ed <img> still parses fine.
      */
     const imgs = await page.evaluate(() => {
-      const out = { upscaled: [], broken: [] };
+      const out = { upscaled: [], broken: [], cropped: [] };
       for (const im of document.querySelectorAll("img")) {
         const r = im.getBoundingClientRect();
         if (r.width < 24 || r.height < 24) continue;
@@ -395,6 +395,24 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
         const src = (im.currentSrc || im.src || "").split("/").pop().slice(0, 48);
         if (im.complete && im.naturalWidth === 0) { out.broken.push(src); continue; }
         if (!im.naturalWidth) continue;                       // still loading: not a finding
+
+        // Crop loss, but ONLY under object-fit: cover. `contain` letterboxes rather than
+        // cutting, and `fill` distorts, which is a different fault with a different fix.
+        if (style.objectFit === "cover" && im.naturalHeight > 0 && r.height > 0) {
+          const srcRatio = im.naturalWidth / im.naturalHeight;
+          const boxRatio = r.width / r.height;
+          const visible = Math.min(srcRatio, boxRatio) / Math.max(srcRatio, boxRatio);
+          if (visible < 0.7) {
+            const pos = (style.objectPosition || "50% 50%").trim();
+            out.cropped.push({
+              src, visible,
+              natural: `${im.naturalWidth}x${im.naturalHeight}`,
+              box: `${Math.round(r.width)}x${Math.round(r.height)}`,
+              pos,
+              centred: pos === "50% 50%" || pos === "center" || pos === "center center",
+            });
+          }
+        }
         // Only genuine upscaling. Falling short of a 2x retina ideal is common and is a
         // different, softer conversation; being shown bigger than you exist is a defect.
         if (im.naturalWidth < Math.round(r.width)) {
@@ -406,6 +424,28 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     for (const b of imgs.broken.slice(0, 3)) {
       add("High", route, vpName, `broken image: "${b}" is in the page and loaded nothing (naturalWidth 0)`);
     }
+    /**
+     * CROP LOSS: the one image property no gate measured, and the one the doctrine calls
+     * destructive. `references/assets.md` is built around a 2:3 portrait forced through a 3:1
+     * letterbox showing 22% of the frame, and a real build then repeated it at 25% on the very
+     * next site. palate-assets.mjs computes this for LOCAL files before a slot is chosen; nothing
+     * checked the slot a photo ACTUALLY landed in, so the rule was advisory the moment a build
+     * ignored it. Two independent builds also implemented the sharpness guard and not this one,
+     * which is the same asymmetry.
+     *
+     * A cover-crop shows min(source, box) / max(source, box) of the frame. Under 50% is
+     * destructive, under 70% risky. Reported per viewport, because a photo that survives the
+     * desktop crop is routinely destroyed by the mobile one.
+     */
+    for (const c of imgs.cropped.slice(0, 4)) {
+      const pct = Math.round(c.visible * 100);
+      const sev = c.visible < 0.5 ? "High" : "Medium";
+      add(sev, route, vpName,
+        `crop: "${c.src}" is ${c.natural} and its slot is ${c.box}, so only ${pct}% of the frame is shown` +
+        (c.centred ? ` with object-position left at the default 50% 50%` : ` (object-position ${c.pos})`) +
+        `. ${c.visible < 0.5 ? "That is destructive: pick a slot the photograph supports." : "Check what is being cut before shipping it."}`);
+    }
+
     for (const u of imgs.upscaled.slice(0, 3)) {
       add("High", route, vpName,
         `image upscaled: "${u.src}" is ${u.natural}px wide and is being shown at ${u.shown}px ` +
