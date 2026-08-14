@@ -17,7 +17,7 @@
     },
     {
       "name": "palate-beta",
-      "version": "1.13.0-beta.18",
+      "version": "1.13.0-beta.19",
       "source": "./plugins/palate-beta",
       "description": "BETA, EXPECTED TO HAVE BUGS. The unstable track of the Palate website-builder, published so testers can opt in without disturbing a working install. Adds a repo-native content runtime (markdown collections, a single source for business facts), a content graph with blast radius, a contribution contract that gates every change on the same 41 checks the certified grader uses, and 24 slash commands. NOT for client work. Install ONE of palate-beta or palate-website-builder, never both: both register hooks on plain Write, so two manifest recorders would write the same build-manifest.json and double-count MCP calls."
     }
