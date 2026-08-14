@@ -17,7 +17,8 @@ Production. Phases 0 + A, then B-F. Real infrastructure is provisioned.
 - [ ] The job board uses the shipped `collectionItem` schema + the
       `src/pages/blog/` page pattern, renamed to suit (e.g. `/jobs`) - not a
       bespoke one-off content type.
-- [ ] Sanity is wired via `@sanity/astro`; the Studio is embedded at `/studio`
+- [ ] Sanity is wired via `scripts/add-sanity.sh` (this brief genuinely needs a
+      CMS); the Studio is embedded at `/studio`
       (no separate Studio deploy).
 - [ ] The dataset is seeded from `content.ts` (`npm run seed`).
 - [ ] Provisioning is idempotent - re-running an interrupted phase does not

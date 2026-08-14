@@ -1,21 +1,22 @@
 /// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
-/// <reference types="@sanity/astro/module" />
 
-// The @sanity/astro module reference enables the virtual modules:
-//   sanity:client  -> the configured SanityClient
-//   sanity:studio  -> the embedded Studio config
+// No CMS is wired in this build. scripts/add-sanity.sh replaces this file with
+// the Sanity version, which adds the @sanity/astro module reference (enabling
+// the sanity:client and sanity:studio virtual modules) and the SANITY_* env
+// types.
 
 interface ImportMetaEnv {
-  /** Empty during the preview stage (no Sanity project yet). Build-time var. */
-  readonly SANITY_PROJECT_ID: string;
-  readonly SANITY_DATASET: string;
-  /** Read token (Viewer). Build-time var - serves draft content + visual editing. */
-  readonly SANITY_API_READ_TOKEN: string;
-  /** Write token (Editor). Worker secret - used by /api/contact and the seed scripts. */
-  readonly SANITY_API_WRITE_TOKEN: string;
-  /** "true" turns on visual-editing overlays. Set on the preview deployment only. */
+  /** "true" turns on CMS draft-preview behaviour (no-store, noindex, no analytics). */
   readonly PUBLIC_SANITY_VISUAL_EDITING_ENABLED: string;
+  /**
+   * "preview" | "development" | "production" | "". Inlined at build time by astro.config.mjs,
+   * which resolves it from PUBLIC_SITE_ENV, then VERCEL_ENV, then process.env.VERCEL_ENV.
+   * robots.txt.ts reads it to serve Disallow: / on a preview deploy. Declared here because
+   * `astro check` is the template's own `typecheck` script, and an undeclared env key fails it
+   * on a freshly scaffolded site before anyone has written a line.
+   */
+  readonly PUBLIC_SITE_ENV: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

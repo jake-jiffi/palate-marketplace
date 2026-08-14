@@ -20,6 +20,11 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   "inner_pages_viewed": [{ "slug": "...", "page": "pricing" }],
   "layers_read": ["signature_moves", "do_dont", "..."], // R2: rich refs_get layers pulled
   "files_written": ["src/pages/index.astro", "..."],
+  "files_written_outside": [],                    // hook-set: writes that landed OUTSIDE the project. Recorded, never counted as part of the build
+  "project": "/abs/path/to/{slug}-site",          // hook-set: the project this manifest is FOR (hooks/project-dir.mjs). A different project starts a fresh manifest
+  "project_resolved_by": "hint",                  // hook-set: env | hint | cwd | child | fallback. "fallback" means nothing was detected
+  "mcp_failures": [],                             // hook-set: Palate calls that were REFUSED or came back empty. NOT grounding, but never erased
+  "stop_gate": null,                              // Stop-hook release latch: { fingerprint, unchanged, total, reasons, at }. Cleared once the evidence clears
   "sections": [],                                 // optional, agent-set: section -> donor provenance
 
   // --- schema 3 evidence blocks (the divergent spine + visual loop) ---
@@ -42,7 +47,14 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
 - **`mcp_calls`**, **`references_surveyed`**, **`inner_pages_viewed`**, **`layers_read`**,
   **`files_written`** are written automatically by the hook (telemetry). The hook reads
   the tool result (`tool_response`) and harvests every `slug` it returned, including
-  slugs inside stringified-JSON MCP text blocks.
+  slugs inside stringified-JSON MCP text blocks. **Grounding is counted from the RESULT,
+  not the request:** a call only reaches `mcp_calls` when its result actually carried
+  content, and a refused, errored or empty call goes to `mcp_failures` instead, feeding
+  nothing into `references_surveyed`, `inner_pages_viewed` or `layers_read`. **The manifest
+  belongs to ONE project:** it lives in the project directory (package.json + src/pages,
+  resolved by `hooks/project-dir.mjs`, overridable with `PALATE_PROJECT_DIR`), is moved there
+  once when the scaffold first appears, and is started fresh rather than merged if the project
+  underneath it changes.
 - **`business`**, **`signature_move`**, **`sections`** are optional and may be set by
   the agent/surveyor to record intent; the depth gate cross-checks them against the
   telemetry (e.g. a declared signature move's `source_slug` must appear in

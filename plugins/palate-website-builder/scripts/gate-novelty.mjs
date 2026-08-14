@@ -13,16 +13,25 @@
  * Two roles, both fail-OPEN (exit 0 = pass OR not-applicable; exit 2 = a real failure):
  *
  *   CONCEPT pre-check (--manifest <f>): read manifest.diverge/converge. Fail if the
- *     CONVERGE step advanced only safe concepts - i.e. the advanced set's mean
- *     `conventionality` is above PALATE_MAX_CONVENTIONALITY (default 0.6). Skip when
- *     diverge/converge is absent (the spine did not run, e.g. MCP not connected).
+ *     CONVERGE step threw the low-typicality tail away - i.e. NO advanced concept sits at
+ *     or below PALATE_LOW_TAIL_MAX (default 0.3). Skip when diverge/converge is absent
+ *     (the spine did not run, e.g. MCP not connected).
  *
  *   BUILD-level (--variants a.html b.html ... , or the manifest.variants block): compare
- *     this build to the last N logged builds (~/.config/palate/builds.log.json). Fail if
- *     this build is a near-repeat of a recent one on BOTH the structural/style skin AND
- *     the carried donors. Also flag TYPE-FACE RECURRENCE: a display FACE that recurs
+ *     this build to the last N COMPARABLE logged builds (~/.config/palate/builds.log.json).
+ *     Fail if this build is a near-repeat of a recent one on BOTH the structural/style skin
+ *     AND the carried donors. Also flag TYPE-FACE RECURRENCE: a display FACE that recurs
  *     build-to-build across unrelated briefs is the smell, not the family. Skip with <2
  *     variants or no build history (nothing to compare).
+ *
+ * ON "COMPARABLE", and why the recency window is not the last N ROWS. Measured on the real
+ * machine log on 2026-08-13: 1,735 entries, of which 1,278 (73.7%) are `{business:null,
+ * signature_move:null, donors:[], faces:[]}` shells written by a build that recorded no
+ * attributes, and ZERO carry `struct`/`style`. A plain `slice(-5)` therefore lands entirely
+ * inside the empty tail, every comparison finds nothing, and the gate prints "build-level
+ * clean" - a pass that means "the check never ran". So the window is now the last N entries
+ * that actually CARRY the evidence each sub-check needs, and a sub-check with nothing to
+ * compare says so on stderr instead of reading as a pass.
  *
  * Exit 0 = pass/skip, 2 = block (with the reason on stderr). Like the other gates this
  * script only DECIDES; the caller (gate-done.sh / the Stop hook / eval-runner) chooses
@@ -31,8 +40,9 @@
  * comparison is not a failure - it is the public-plugin fail-open invariant.
  *
  * Thresholds via env (documented, never magic numbers buried in code):
- *   PALATE_MAX_CONVENTIONALITY  default 0.6   - converge advanced too-safe a set above this
- *   PALATE_RECENT_N             default 5     - how many recent builds to compare against
+ *   PALATE_LOW_TAIL_MAX         default 0.3   - an advanced concept at/below this IS the tail
+ *   PALATE_MAX_CONVENTIONALITY  RETIRED as a gate (see conceptPreCheck); still reported
+ *   PALATE_RECENT_N             default 5     - how many COMPARABLE recent builds to use
  *   PALATE_NOVELTY_STRUCT       default 0.82  - struct skin too close to a recent build
  *   PALATE_NOVELTY_STYLE        default 0.72  - style skin too close to a recent build
  *   PALATE_NOVELTY_DONOR        default 0.6   - donor overlap too high vs a recent build
@@ -45,7 +55,10 @@ import { readFileSync, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+// RETIRED as a gate. Kept only so an operator who set it is TOLD it no longer decides
+// anything, rather than having their configuration silently ignored (see conceptPreCheck).
 const MAX_CONV = Number(process.env.PALATE_MAX_CONVENTIONALITY ?? 0.6);
+const MAX_CONV_SET = process.env.PALATE_MAX_CONVENTIONALITY != null;
 const RECENT_N = Number(process.env.PALATE_RECENT_N ?? 5);
 const STRUCT_MAX = Number(process.env.PALATE_NOVELTY_STRUCT ?? 0.82);
 const STYLE_MAX = Number(process.env.PALATE_NOVELTY_STYLE ?? 0.72);
@@ -78,7 +91,14 @@ const requireDiverge = has("--require-diverge");
 
 function fail(msg) { console.error(`novelty gate FAILED: ${msg}`); process.exit(2); }
 function skip(msg) { console.log(`novelty gate skipped: ${msg}`); process.exit(0); }
-function pass(msg) { console.log(`novelty gate passed: ${msg}`); process.exit(0); }
+// A sub-check that could not run goes to STDERR even though the gate still exits 0. The
+// fail-open invariant says a missing comparison must not trap a build; it does not say the
+// operator should be told the build was "clean" when nothing was compared.
+function pass(msg, notes = []) {
+  for (const n of notes) console.error(`novelty gate COULD NOT CHECK: ${n}`);
+  console.log(`novelty gate passed: ${msg}`);
+  process.exit(0);
+}
 
 // --- signatures (copied from gate-uniqueness.mjs, kept standalone) ----------
 function structSig(html) {
@@ -234,6 +254,20 @@ function modeFromMarker(manifestPath) {
 // for an active build site. conceptPreCheck below stays the fail-open backstop that keeps
 // the conventionality-MEAN check (did CONVERGE advance only safe concepts) without
 // re-enforcing count/spread/distinctness.
+//
+// THE PREDICATE IS THE MINIMUM, NOT THE MEAN. It used to fail when the advanced set's MEAN
+// conventionality exceeded 0.6, which is wrong in both directions and was made much wronger
+// when CONVERGE stopped advancing 1-2 concepts and started curating one concept per rung of
+// an ambition ladder, so the advanced set is now the whole variant count:
+//   - a genuinely bold ladder FAILS because rung 1 is deliberately restrained and excellent,
+//     and enough safe rungs drag the average over the line. The doctrine explicitly wants a
+//     restrained bottom rung, so the old gate punished the shape it asks for.
+//   - a set with nothing bold in it PASSES: eight concepts all self-tagged 0.55 average 0.55
+//     and clear a 0.6 bar, while not one of them came from the tail DIVERGE paid to sample.
+// The question the gate exists to answer is "did CONVERGE keep the low-typicality tail",
+// which is a question about the BOLDEST rung, so it is answered by the minimum. Its own
+// failure text already told the reader to "advance at least one concept from the surprising
+// tail"; the code now matches what the message always promised.
 function conceptPreCheck(m) {
   const diverge = m.diverge;
   const converge = m.converge;
@@ -243,6 +277,12 @@ function conceptPreCheck(m) {
   }
   if (!converge || !converge.ran || !Array.isArray(converge.advanced) || converge.advanced.length === 0) {
     skip("no converge.advanced (CONVERGE did not record which concepts it advanced).");
+  }
+  if (MAX_CONV_SET) {
+    console.error(
+      `novelty gate note: PALATE_MAX_CONVENTIONALITY=${MAX_CONV} is set but no longer gates anything. ` +
+      `The advanced set is scored on its MINIMUM conventionality against PALATE_LOW_TAIL_MAX (${LOW_TAIL_MAX}), not on its mean.`,
+    );
   }
   const byId = new Map(diverge.concepts.map((c) => [String(c.id), c]));
   const convs = [];
@@ -254,15 +294,40 @@ function conceptPreCheck(m) {
     skip("advanced concepts carry no conventionality self-tags; cannot score (fail-open).");
   }
   const mean = convs.reduce((a, b) => a + b, 0) / convs.length;
-  if (mean > MAX_CONV) {
+  const min = Math.min(...convs);
+  const spread = Math.max(...convs) - min;
+  const evidence = {
+    ran: true,
+    min_conventionality: Number(min.toFixed(3)),
+    mean_conventionality: Number(mean.toFixed(3)),
+    spread: Number(spread.toFixed(3)),
+    advanced: converge.advanced.length,
+    scored: convs.length,
+  };
+  if (min <= LOW_TAIL_MAX) return evidence;
+
+  // Nothing bold survived. Attribute the fault correctly: if DIVERGE never sampled a tail
+  // concept in the first place then CONVERGE could not have advanced one, and telling the
+  // agent to re-run CONVERGE would send it to fix the wrong step.
+  const divergeConvs = diverge.concepts
+    .map((c) => (c && typeof c.conventionality === "number" ? c.conventionality : null))
+    .filter((v) => v !== null);
+  const divergeMin = divergeConvs.length ? Math.min(...divergeConvs) : null;
+  if (divergeMin !== null && divergeMin > LOW_TAIL_MAX) {
     fail(
-      `CONVERGE advanced only safe concepts: the advanced set's mean conventionality is ${mean.toFixed(2)} > ${MAX_CONV}. ` +
-      `That means the build narrowed to the category default and threw away the low-typicality tail DIVERGE produced. ` +
-      `Re-run CONVERGE and advance at least one concept from the surprising tail (conventionality below the set median); ` +
+      `DIVERGE never sampled the low-typicality tail: its boldest concept self-tags ${divergeMin.toFixed(2)}, ` +
+      `above ${LOW_TAIL_MAX}, so CONVERGE had nothing bold to advance (advanced min ${min.toFixed(2)}, mean ${mean.toFixed(2)}). ` +
+      `Re-run DIVERGE and sample genuinely further from the category default (aim for at least two concepts at <= ${LOW_TAIL_MAX}); ` +
       `originality comes from the concept layer, not from the donor.`,
     );
   }
-  return { ran: true, mean_conventionality: Number(mean.toFixed(3)), advanced: converge.advanced.length };
+  fail(
+    `CONVERGE threw the tail away: not one advanced concept sits at or below ${LOW_TAIL_MAX} ` +
+    `(advanced min ${min.toFixed(2)}, mean ${mean.toFixed(2)}, spread ${spread.toFixed(2)}, over ${convs.length} scored). ` +
+    `The advanced set is one concept per rung of the ambition ladder, so the TOP rung must come from the surprising tail ` +
+    `DIVERGE paid to sample; a set that averages acceptably with nothing bold in it is the category default wearing a range. ` +
+    `Re-run CONVERGE and advance the boldest buildable concept, and keep rung 1 restrained-and-excellent rather than raising it.`,
+  );
 }
 
 // ============================================================================
@@ -288,16 +353,33 @@ function buildLevelCheck(variants) {
   }
 
   const history = loadHistory();
-  const recent = history.slice(-RECENT_N);
+  const notes = [];
+  // The recency window per sub-check is the last RECENT_N entries that CARRY the evidence
+  // that sub-check reads, not the last RECENT_N rows. On the real log 73.7% of rows are
+  // attribute-less shells, so slicing rows lands in the empty tail and the check silently
+  // matches nothing. See the header note.
+  const recentWithFaces = history.filter((b) => Array.isArray(b.faces) && b.faces.length > 0).slice(-RECENT_N);
+  const recentWithSkin = history
+    .filter((b) => Array.isArray(b.struct) && b.struct.length > 0 && Array.isArray(b.style) && b.style.length > 0)
+    .slice(-RECENT_N);
 
   // --- TYPE-FACE RECURRENCE: a display face used here that ALSO appears in
   // FACE_RECUR_N of the recent builds is the tell. The face recurring
   // build-to-build is the smell, not the family. Counts the recent builds whose
   // recorded `faces` include each of this build's faces.
+  if (recentWithFaces.length < FACE_RECUR_N) {
+    notes.push(
+      history.length === 0
+        ? `face-recurrence check NOT RUN: the build log is empty (first build on this machine), and the tell needs ` +
+          `${FACE_RECUR_N} recent builds. This is a PASS BY ABSENCE OF DATA, not a clean result.`
+        : `face-recurrence check NOT RUN: only ${recentWithFaces.length} of ${history.length} logged builds record any \`faces\`, ` +
+          `and the tell needs ${FACE_RECUR_N}. This is a PASS BY ABSENCE OF DATA, not a clean result.`,
+    );
+  }
   const faceTell = [];
   for (const face of faces) {
     let count = 0;
-    for (const b of recent) {
+    for (const b of recentWithFaces) {
       const bf = Array.isArray(b.faces) ? b.faces.map((x) => String(x).toLowerCase()) : [];
       if (bf.includes(face)) count++;
     }
@@ -314,20 +396,33 @@ function buildLevelCheck(variants) {
   }
 
   // --- BUILD REPEAT: this build's skin AND its donors too close to a recent build.
-  // Needs the recent builds to have recorded a skin (struct/style) to compare; the
-  // current log records donors but not skin yet, so this sub-check only fires when a
-  // logged build carries skin signatures (forward-compatible). Donor overlap alone is
-  // not a block (re-using a great donor is fine); it is a block only WITH skin overlap.
-  if (recent.length === 0) {
-    return { face_recurrence: false, build_repeat: false, note: "no build history; repeat check skipped" };
+  // Needs the recent builds to have recorded a skin (struct/style) to compare. Donor
+  // overlap alone is not a block (re-using a great donor is fine); it is a block only
+  // WITH skin overlap.
+  //
+  // THIS SUB-CHECK IS CURRENTLY UNREACHABLE ON A REAL MACHINE and must say so. The writer
+  // (hooks/build-log-entry.mjs) records only ts/business/signature_move/donors/faces, so
+  // no logged entry has ever carried `struct` or `style` (0 of 1,735 on 2026-08-13) and the
+  // loop below skipped every row. It stayed invisible because the gate then printed
+  // "build-level clean", which reads as "compared and found different" rather than "never
+  // compared". Until the writer records the skin, this reports NOT RUN on stderr.
+  if (recentWithSkin.length === 0) {
+    notes.push(
+      history.length === 0
+        ? "build-repeat check NOT RUN: the build log is empty (first build on this machine), so there is " +
+          "nothing to compare this build against. This is a PASS BY ABSENCE OF DATA, not a clean result."
+        : `build-repeat check NOT RUN: 0 of ${history.length} logged builds carry a skin signature ` +
+          `(\`struct\` + \`style\`), which hooks/build-log-entry.mjs does not currently record, so there is ` +
+          `nothing to compare this build against. This is a PASS BY ABSENCE OF DATA, not a clean result.`,
+    );
+    return { face_recurrence: false, build_repeat: false, notes };
   }
   const thisDonors = new Set(_manifestVariantDonors ?? []);
   let worst = null;
-  for (const b of recent) {
-    const bStruct = Array.isArray(b.struct) ? new Set(b.struct) : null;
-    const bStyle = Array.isArray(b.style) ? new Set(b.style) : null;
+  for (const b of recentWithSkin) {
+    const bStruct = new Set(b.struct);
+    const bStyle = new Set(b.style);
     const bDonors = Array.isArray(b.donors) ? new Set(b.donors) : new Set();
-    if (!bStruct || !bStyle) continue; // legacy entry without a skin; cannot compare skin
     const st = jaccard(struct, bStruct);
     const sy = jaccard(style, bStyle);
     const dn = jaccard(thisDonors, bDonors);
@@ -337,12 +432,28 @@ function buildLevelCheck(variants) {
   }
   if (worst) {
     fail(
-      `this build is a near-repeat of a recent build (${worst.b.business ?? worst.b.ts ?? "unnamed"}): ` +
+      `this build is a near-repeat of a recent build (${labelOf(worst.b)}): ` +
       `structure ${worst.st.toFixed(2)} > ${STRUCT_MAX}, style ${worst.sy.toFixed(2)} > ${STYLE_MAX}, donors ${worst.dn.toFixed(2)} > ${DONOR_MAX}. ` +
       `Lead this build from DIFFERENT references and a genuinely different advanced concept (vary the backbone, the signature move and the skin).`,
     );
   }
-  return { face_recurrence: false, build_repeat: false };
+  if (thisDonors.size === 0) {
+    notes.push(
+      "build-repeat check ran on skin only: no donor slugs were passed for THIS build " +
+      "(--variants mode carries no donors), so the donor half of the predicate could never trip.",
+    );
+  }
+  return { face_recurrence: false, build_repeat: false, notes, compared: recentWithSkin.length };
+}
+
+// A log entry's `business` is sometimes a string and sometimes an object
+// ({name,url,vertical}) - both shapes are in the real log - so a bare interpolation
+// prints "[object Object]" in the one message a human reads when the gate blocks.
+function labelOf(b) {
+  const v = b && b.business;
+  if (typeof v === "string" && v.trim()) return v.trim().slice(0, 60);
+  if (v && typeof v === "object" && typeof v.name === "string") return v.name;
+  return (b && b.ts) || "unnamed";
 }
 
 // Donor slugs for THIS build are not in the variant HTML; the caller sets this from a
@@ -402,19 +513,22 @@ function main() {
     const resolved = htmlPaths
       .map((p) => (path.isAbsolute(p) ? p : path.join(path.dirname(manifestPath), p)))
       .filter((p) => existsSync(p));
+    const conceptLine =
+      `advanced set keeps the tail: min conventionality ${concept.min_conventionality} <= ${LOW_TAIL_MAX} ` +
+      `(mean ${concept.mean_conventionality}, spread ${concept.spread}, ${concept.scored} of ${concept.advanced} advanced scored)`;
     if (resolved.length >= 2) {
       _manifestVariantDonors = [...new Set(mv.flatMap((v) => (Array.isArray(v.donor_slugs) ? v.donor_slugs : [])))];
       const build = buildLevelCheck(resolved);
-      pass(`concept conventionality ${concept.mean_conventionality} <= ${MAX_CONV}; build-level clean (${resolved.length} variants).` + (build.note ? ` (${build.note})` : ""));
+      pass(`${conceptLine}; build-level compared over ${resolved.length} variants.`, build.notes);
     }
-    pass(`concept conventionality ${concept.mean_conventionality} <= ${MAX_CONV} (advanced ${concept.advanced}); build-level not applicable (no rendered variants in manifest).`);
+    pass(`${conceptLine}; build-level not applicable (no rendered variants in manifest).`);
   }
 
   // Mode B: --variants drives the build-level check directly over rendered HTML.
   if (variantFiles.length) {
     const existing = variantFiles.filter((f) => existsSync(f));
     const build = buildLevelCheck(existing);
-    pass(`build-level clean over ${existing.length} variant(s).` + (build.note ? ` (${build.note})` : ""));
+    pass(`build-level compared over ${existing.length} variant(s).`, build.notes);
   }
 
   skip("nothing to check (pass --manifest <f> or --variants a.html b.html ...).");

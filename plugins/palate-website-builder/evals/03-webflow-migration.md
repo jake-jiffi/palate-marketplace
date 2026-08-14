@@ -23,7 +23,8 @@ signal. See `references/webflow-migration.md`.
 - [ ] 301 redirects map every old URL to its new path; tested against the
       baseline crawl.
 - [ ] Canonical URLs and meta match the baseline where they should be preserved.
-- [ ] Sanity wired via `@sanity/astro`; SSR; connective tissue all present.
+- [ ] Sanity wired via `scripts/add-sanity.sh` (30 pages plus a blog, client-
+      edited: a CMS is warranted here); SSR; connective tissue all present.
 - [ ] Every `verify-*.sh` gate passes before launch.
 - [ ] The handover flags the DNS cutover as the careful, last step - not done
       silently.

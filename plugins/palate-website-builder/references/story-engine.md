@@ -115,10 +115,16 @@ The split that governs everything downstream: **reference = craft + buildability
 WHAT-that-is-new).** Originality comes from sampling wide here, never from a
 donor's safe default.
 
-## CONVERGE - score on two axes, advance the best 1-2
+## CONVERGE - cull the unbuildable, then curate the rest onto a ladder
 
-Now narrow, but on EVIDENCE, never on a single "creativity" feeling. Score each
-diverged candidate on **two SEPARATE axes**, each 0-5:
+**CONVERGE IS A CURATOR, NOT A FUNNEL.** It used to advance the best 1-2 and have
+every variant elaborate those, which meant the preview could never be bolder than
+one concept, and the low-typicality tail DIVERGE had just paid to sample went
+straight in the bin. Its job is to REMOVE what cannot be built and SHAPE what
+survives into a range.
+
+Score on EVIDENCE, never on a single "creativity" feeling, but score **for
+ORDERING, not for elimination**. Two SEPARATE axes, each 0-5:
 
 - **Originality** = distance from the category default AND from the last N builds.
   Start from the candidate's own self-tag (`originality ~= 5 * (1 - conventionality)`),
@@ -126,7 +132,11 @@ diverged candidate on **two SEPARATE axes**, each 0-5:
   - read the cross-build memory (`~/.config/palate/builds.log.json`, the same log
   the surveyor consults) and dock a concept that repeats what you shipped last
   time. A face, a mechanic or a feeling reached for out of habit is not original
-  however novel it felt in isolation.
+  however novel it felt in isolation. **Read the last entries that CARRY a
+  signature move or an explore block, not the last entries full stop**: most rows
+  in a real log are attribute-less shells, so a plain tail read finds nothing and
+  docks nobody (see `references/build-memory.md`). If no comparable entry exists,
+  say the recency penalty could not be applied rather than scoring as if it was.
 - **Craft-feasibility** = can the chosen donor's craft plus the Palate stack
   actually BUILD this? Decompose the mechanic into named parts and check each has a
   real precedent with a buildable `astro_recipe` (the buildability oracle in
@@ -134,20 +144,49 @@ diverged candidate on **two SEPARATE axes**, each 0-5:
   here even if maximally original; an original concept must never exceed what the
   stack can build.
 
-**Combine the two, never one number.** Use a harmonic-mean-style blend so a
-candidate cannot win on one axis while failing the other (a dazzling-but-
-unbuildable concept and a flawlessly-buildable-but-generic one both score low):
-`combined = 2 * O * F / (O + F)` (with a documented, env-tunable weighting in the
-eval, not a magic constant in prose). Advance the **best 1-2** concepts into
-EXPLORE as the carried concepts each variant elaborates. Variants still number
-8-10, but they elaborate the 1-2 advanced concepts across the ambition spectrum,
-not 8-10 unrelated spines.
+**Combine the two, never one number**, for ordering: `combined = 2 * O * F / (O + F)`
+(with a documented, env-tunable weighting in the eval, not a magic constant in
+prose). **But feasibility is a FLOOR, not a weight.** A harmonic mean punishes a
+low score in either axis by design, and a genuinely wild concept ALWAYS scores low
+on buildability at concept time, so using the blend to eliminate is precisely what
+killed the tail. Drop a candidate only when it cannot be built AT ALL, then use the
+blend to order what is left.
+
+**Then assign the survivors to the ambition ladder**, one concept per rung, and
+build one variant per rung:
+
+- **The endpoints are anchored, the middle interpolates.** Rung 1 is genuinely
+  restrained and rung N genuinely bold whether N is 4 or 10, so the count sets the
+  RESOLUTION and never the range. A set clustered in the middle cannot teach anyone
+  what they want.
+- **Three sub-axes rise together**: conceptual distance from the category default,
+  motion and interaction intensity, and structural risk (a layout that breaks its
+  own grid, navigation that is not a nav).
+- **Rung 1 is restrained and EXCELLENT, never the weak one.** It carries a
+  signature move like every rung; the move is quiet. Flawless restraint can win,
+  and a timid rung 1 rebuilds the original problem at the bottom of the ladder.
+- **Every rung stays on brief and on brand.** The top rung is the wildest
+  expression of THIS business, never a technology demo wearing its logo.
+- **No two adjacent rungs share a `lens`, and no donor slug is used twice.** If a
+  rung cannot be filled, sample more candidates at that ambition level rather than
+  duplicating its neighbour: two variants that differ slightly are the most
+  wasteful thing a preview can contain.
 
 Write `manifest.converge` (`{ ran: true, scored: [{ id, originality, craft_feasibility, combined }], advanced: [ids] }`).
 The deterministic pre-check `scripts/gate-novelty.mjs --manifest build-manifest.json`
-catches a safe-only converge: it fails when the advanced set's mean
-`conventionality` is above the threshold (you narrowed back to the mode and threw
-the tail away). It fails-open (skips) when DIVERGE did not run, so it never traps a
+catches a converge that threw the tail away: it fails when **not one** advanced
+concept sits at or below `PALATE_LOW_TAIL_MAX` (0.3), the same bar DIVERGE's own
+tail requirement uses.
+
+It scores the MINIMUM, not the mean, and the reason matters now that the advanced
+set is the whole ladder rather than one or two picks. A mean punishes exactly the
+shape this section asks for: rung 1 is deliberately restrained, so enough restrained
+rungs drag a genuinely bold ladder over the line. And a mean is passed by a set with
+nothing in it: eight concepts all self-tagged 0.55 average 0.55 and clear a 0.6 bar
+while not one of them came from the tail. The question is about the TOP rung, so it
+is answered by the minimum. If DIVERGE itself never sampled below the bar, the gate
+says so and names DIVERGE rather than sending you to re-run CONVERGE for a fault one
+step upstream. It fails-open (skips) when DIVERGE did not run, so it never traps a
 build that could not sample.
 
 ## From truth to concepts (elaborating the advanced concepts)
@@ -155,8 +194,9 @@ build that could not sample.
 Each Explore variant carries a demonstrative concept: a **mechanic** where the
 visitor does or witnesses something that enacts the transformation, a **3-beat
 arc** (tension, turn, payoff), and **one named feeling** that governs every craft
-choice. The variants **elaborate the 1-2 concepts CONVERGE advanced** (not a fresh
-spine each), spread across the ambition spectrum:
+choice. Each variant **elaborates the concept CONVERGE assigned to its rung** (not a
+fresh spine each, and no longer one or two concepts stretched across the whole set),
+so the set spans the ambition spectrum:
 
 - **safe-warm** - clear, human, low-risk, but still a real idea (not a brochure).
 - **bold** - one strong demonstrative move.

@@ -4,8 +4,8 @@ The headline phases in order, what each does, and the verify gate. The A-row
 numbers follow the canonical spine in `SKILL.md` (A.2 DIVERGE, A.3 CONVERGE,
 A.3.5 COMMISSION, A.5 pick, A.7 confirm, A.9 VISUAL LOOP + VERIFY, A.10/A.11
 gates are the spine sub-steps this table folds into its EXPLORE / COMPOSE /
-finalise rows). Every build is SSR + Sanity-wired from Phase A (see
-`build-stages.md`).
+finalise rows). Every build is SSR from Phase A; a CMS is opt-in and
+most builds have none (see `build-stages.md`).
 
 | Phase | Script | Verify | Produces |
 |-------|--------|--------|----------|

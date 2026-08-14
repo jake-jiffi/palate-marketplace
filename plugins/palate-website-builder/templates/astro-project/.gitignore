@@ -8,6 +8,20 @@ dist/
 .env.*
 !.env.example
 
+# Palate: DERIVED state is ignored, MEASURED state is committed. The distinction
+# matters. The index is a pure function of the repo and is rebuilt in
+# milliseconds, so committing it just makes every rebuild show up as a diff.
+# Baselines are the opposite: they record what this site looked like last time,
+# which cannot be recomputed from source, and they are the comparison point
+# drift is measured against. Ignore them and every contribution looks like the
+# first one.
+.palate/index.json
+.palate/*.log
+.palate-devserver.log
+.palate-devserver.pid
+!.palate/baselines/
+!.palate/brain/
+
 .DS_Store
 *.log
 npm-debug.log*

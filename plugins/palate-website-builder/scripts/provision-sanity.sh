@@ -8,6 +8,22 @@
 # Usage: provision-sanity.sh <slug> <display-name> <site-domain> [editors-csv]
 set -euo pipefail
 SLUG="${1:?slug}"; NAME="${2:?display name}"; SITE_DOMAIN="${3:?site domain}"; EDITORS="${4:-}"
+
+# The scaffold has NO CMS by default, so provisioning against an unwired project
+# would create a real Sanity project, dataset and tokens serving a site whose
+# loadPage() unconditionally returns the local fallback and which has no /studio
+# route. That failure is silent and expensive to diagnose, so refuse it here.
+# PALATE_PROJECT_DIR lets a caller point at the project; default is the cwd.
+_proj="${PALATE_PROJECT_DIR:-$PWD}"
+if [ -f "$_proj/package.json" ] && ! grep -q '"@sanity/astro"' "$_proj/package.json"; then
+  echo "provision-sanity: $_proj has no CMS wired (@sanity/astro is not a dependency)." >&2
+  echo "  Provisioning now would create a Sanity project the site cannot use." >&2
+  echo "  Run this first:  scripts/add-sanity.sh $_proj && (cd $_proj && npm install)" >&2
+  echo "  If this build genuinely needs no CMS, SKIP Phase B entirely (see SKILL.md rule 7)." >&2
+  echo "  To provision from elsewhere, set PALATE_PROJECT_DIR to the project directory." >&2
+  exit 1
+fi
+
 API="https://api.sanity.io/v2021-06-07"
 AUTH="Authorization: Bearer ${SANITY_AUTH_TOKEN:?set SANITY_AUTH_TOKEN}"
 SANITY_ORG_ID="${SANITY_ORG_ID:-}"

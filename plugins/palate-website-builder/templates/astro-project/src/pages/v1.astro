@@ -11,6 +11,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import SectionMark from "../components/SectionMark.astro";
 import { loadPage } from "../lib/load";
 import { home, type HomeContent } from "../lib/content";
+import { business } from "../lib/business";
 
 const data = await loadPage<HomeContent>(
   `*[_type == "page" && slug.current == "/"][0]`,
@@ -19,12 +20,9 @@ const data = await loadPage<HomeContent>(
 );
 const { hero } = data;
 ---
-<BaseLayout title="v1 - {{CLIENT_NAME}}">
+<BaseLayout title={`v1 - ${business.name}`}>
   <section class="bg-brand-bg relative px-6 py-24 text-center">
     <SectionMark id="v1-hero" />
-    {hero.eyebrow && (
-      <p class="text-brand-muted text-sm font-medium uppercase tracking-wide">{hero.eyebrow}</p>
-    )}
     <h1 class="font-display text-brand-text mx-auto mt-3 max-w-3xl text-4xl md:text-6xl">
       {hero.heading}
     </h1>

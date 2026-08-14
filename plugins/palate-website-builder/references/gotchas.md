@@ -12,13 +12,44 @@
 - **The form handler needs the WRITE token.** If only the read token is set, every submission 401s. Phase B creates both; provision-cloudflare.sh pushes the write token as a Worker secret.
 - **Digit-leading slugs** (e.g. "542 Partners") are rejected by Cloudflare and npm. derive-slug.sh surfaces this for confirmation.
 
-## `npm run dev` react-refresh error under Astro 6.4 (local-preview only)
+## Astro 7 holds a dev-server LOCK, so a leaked server hijacks the next preview
+`astro dev` in Astro 7 writes a lock file. If a previous run leaked a server -
+easy to do, because the PID scripts capture is npm's wrapper, not astro's, so
+`kill` can miss it - the next `astro dev` **refuses to start** and prints
+`Dev server already running at <url>`. Astro 6 just picked a free port. The
+danger is a script scraping that URL and handing it over as if it were the new
+build. `serve-preview.sh` clears the lock before starting and hard-fails if it
+sees the "already running" notice.
+
+**There is no `astro dev stop`, and there never was.** Astro 7.2.0's supported
+commands, read out of its own CLI source, are `add sync telemetry preferences
+dev build preview check create-key docs info`. The extra positional is ignored,
+so `npx astro dev stop` **starts a dev server**. This file used to recommend it,
+`serve-preview.sh` used to call it, and both CI workflows had it inside a
+`trap cleanup EXIT`, where it hung the job to GitHub's six-hour timeout on every
+run, pass or fail. `|| true` cannot rescue a process that never returns.
+
+To stop a dev server, kill the process group and then whatever still holds the
+port, because the recorded PID is npm's wrapper and astro survives it:
+
+```bash
+kill -- -$(cat .palate-devserver.pid) 2>/dev/null; lsof -ti tcp:4321 | xargs kill
+```
+
+The lesson generalises: a CLI silently ignoring an unknown subcommand means
+"command not found" and "command ran" look identical. Check the tool's own
+command list before recommending a subcommand in doctrine.
+
+## `npm run dev` react-refresh error (observed on Astro 6.4 + vite 7)
 `npm run dev` (and `--local-preview` via `serve-preview.sh`) can throw a
 `vite-react-refresh-wrapper ... Missing field 'moduleType'` error from the
-`@astrojs/react` integration under Astro 6.4's vite 7 dev pipeline. It affects
-DEV ONLY. The production build (`npm run build` / `astro build`) and the default
-deployed Vercel preview (`deploy-preview.sh`) are unaffected. Workaround: use the
-default shareable Vercel preview (not `--local-preview`) for client handover; if a
-local dev loop is needed, remove `@astrojs/react` from `astro.config.mjs` for the
-session (the marketing pages are `.astro`, React is only used by Sanity visual
-editing islands which are not exercised in a content.ts-fallback preview).
+`@astrojs/react` integration. Observed on Astro 6.4's vite 7 dev pipeline; NOT
+re-confirmed on the Astro 7 / vite 8 template, so treat it as possible rather
+than expected, and it affects DEV ONLY either way. The production build
+(`npm run build` / `astro build`) and the default deployed Vercel preview
+(`deploy-preview.sh`) are unaffected. Workaround: use the default shareable
+Vercel preview (not `--local-preview`) for client handover; if a local dev loop
+is needed, remove `@astrojs/react` from `astro.config.mjs` for the session (the
+marketing pages are `.astro`; React is only exercised by a Sanity Studio /
+visual-editing island or an opt-in Tier-2 R3F island, neither of which is in a
+default no-CMS build).

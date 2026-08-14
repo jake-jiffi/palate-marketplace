@@ -3,9 +3,9 @@
 Vercel is the skill's default host. Cloudflare is supported as the backup -
 pick it with `--host cloudflare` or when the brief calls for it. Either way the
 plan checkpoint always ASKS which host to use, stating Vercel as the default.
-Everything else (Astro 6, Sanity via `@sanity/astro`, the embedded Studio at
-`/studio`, the brand package, the reference library, the connective tissue, the
-evals) is host-agnostic and stays unchanged.
+Everything else (Astro 7, the brand package, the reference library, the
+connective tissue, the evals, and Sanity via `@sanity/astro` + the embedded
+Studio at `/studio` IF a CMS was added) is host-agnostic and stays unchanged.
 
 ## Why Vercel is the default
 
@@ -30,9 +30,10 @@ person confirms the choice at the plan checkpoint.
 ## The template is Vercel-native
 
 `templates/astro-project/` ships ready for Vercel: the `@astrojs/vercel/serverless`
-adapter (pinned `^10.0.7` for Astro 6), `@vercel/analytics`, a `vercel.json`
+adapter (pinned `11.0.5` for Astro 7), `@vercel/analytics`, a `vercel.json`
 (framework hint + cache and security headers, with `X-Frame-Options: SAMEORIGIN`
-so the embedded Sanity Studio preview iframe still works), `.env.example` with
+so an embedded Sanity Studio preview iframe still works if a CMS is added),
+`.env.example` with
 Vercel env conventions, and `.github/workflows/ci.yml` only. A default build
 does NOT run any host switch.
 
@@ -169,7 +170,7 @@ Prerequisites (one-time, account-level - everything else is automated):
 
 ## Pinned versions
 
-- `@astrojs/vercel` ^10.0.7 (must match the Astro 6 major)
+- `@astrojs/vercel` 11.0.5 (must match the Astro major: v11 peers `astro@^7`, v10 is Astro 6 only)
 - `@vercel/analytics` ^2.0.1 (only if you wire Web Analytics in code; the
   adapter's `webAnalytics: { enabled: true }` is the simpler path)
 - `vercel` (the CLI) ^48 - installed globally, not a project dep

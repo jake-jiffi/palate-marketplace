@@ -3,7 +3,7 @@
 #
 # The Claude plugin scaffolds + gates for you via hooks. A Cursor / Codex / Gemini / Copilot
 # user has none of that. This is the portable equivalent: ONE command that produces an
-# Astro 6 + Tailwind 4 + Vercel starter (no private deps), drops the tool's always-load Palate
+# Astro 7 + Tailwind 4 + Vercel starter (no private deps), drops the tool's always-load Palate
 # doctrine, and wires the gate as a committed pre-push hook AND CI so it cannot be skipped.
 # The agent then surveys the MCP, DIVERGEs, and builds inside it.
 #

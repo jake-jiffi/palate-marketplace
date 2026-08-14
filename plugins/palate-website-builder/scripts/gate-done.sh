@@ -36,7 +36,11 @@ SHOTS_MANIFEST="$SHOTS_DIR/manifest.json"
 SHOTS_ERRORS="$SHOTS_DIR/errors.json"
 
 fail() { echo "Done gate FAILED: $1" >&2; exit 2; }
-skip() { echo "Done gate skipped: $1"; exit 0; }
+# STDERR, like fail() and ungrounded(). Every caller spawns this with
+# stdio: ["ignore","ignore","pipe"], so a skip written to STDOUT is DISCARDED: no jq, no
+# manifest, or no renderable preview then turns the whole gate suite off and the transcript
+# is indistinguishable from a clean pass. A gate that was blocked is not a gate that passed.
+skip() { echo "Done gate skipped: $1" >&2; exit 0; }
 
 # --- FAIL-OPEN LADDER (mirrors gate-mcp-depth.sh:32-35, plus one render rung) ---
 # Never block closed when there is nothing to gate.
@@ -68,9 +72,21 @@ fi
 
 # --- KEEP THE FLOOR: the MCP-depth gate runs first and must pass ---------------
 # Capture its stderr so a depth failure surfaces the real reason through this gate.
-if ! depth_err="$(bash "$DEPTH_GATE" "$MANIFEST" 2>&1 1>/dev/null)"; then
-  fail "MCP-depth gate did not pass. ${depth_err}"
-fi
+# EXIT-CODE AWARE, not `if !`: the depth gate has THREE states (0 pass, 2 block,
+# 3 UNGROUNDED). Treating any non-zero as a failure would turn the non-blocking third
+# state into a hard block here, which is the exact inversion it exists to prevent. In
+# practice the ladder above already skips a zero-call build before this line, so 3 is
+# unreachable today; handling it keeps the two ladders in agreement if either trigger
+# ever widens, and surfaces the label instead of dropping it.
+set +e
+depth_err="$(bash "$DEPTH_GATE" "$MANIFEST" 2>&1 1>/dev/null)"
+depth_ec=$?
+set -e
+case "$depth_ec" in
+  0) ;;
+  3) echo "Done gate: ${depth_err}" >&2 ;;
+  *) fail "MCP-depth gate did not pass. ${depth_err}" ;;
+esac
 
 # --- DIVERGE wall (build-site-scoped): a BUILD SITE that skipped DIVERGE is CAUGHT,
 # not silently fail-open. This mirrors the PreToolUse write-gate at done-time. It is
@@ -205,7 +221,47 @@ elif [ ! -f "$NOVELTY_GATE" ]; then
   novelty_note="novelty=skipped(gate-novelty.mjs not present)"
 fi
 
+# SHIP-READY: the seam between "built" and "deliverable". A build can be visually
+# perfect and still carry eight rejected concept homepages into the client's sitemap, a
+# literal {{HUMBLYTICS_SITE_ID}} in a third-party script tag, and photographs nobody ever
+# measured. All three shipped on a real build that passed every other gate here, because
+# nothing owned that seam.
+SHIPREADY_GATE="$HERE/gate-shipready.mjs"
+shipready_note="shipready=skipped(gate-shipready.mjs not present)"
+if [ -f "$SHIPREADY_GATE" ]; then
+  # The `if` form, never a bare assignment: a non-zero command substitution in an assignment
+  # is fatal wherever errexit is in force, which killed this block before the case below was
+  # ever reached and turned every "cannot check" into a silent exit with no message at all.
+  if shipready_err="$(node "$SHIPREADY_GATE" "$PROJ" 2>&1)"; then shipready_rc=0; else shipready_rc=$?; fi
+  case "$shipready_rc" in
+    0) shipready_note="shipready=pass" ;;
+    # 2 is CANNOT CHECK (no src/pages, so not an Astro project shape), not a clean bill. It
+    # skips like every other sub-gate here, but it SAYS so, because a skip that reads as a
+    # pass is the failure mode this whole file exists to prevent.
+    2) shipready_note="shipready=skipped(not an Astro project shape)" ;;
+    *) fail "Not ready to hand over. ${shipready_err}" ;;
+  esac
+fi
+
+# SEO: the crawl surface. A build can be visually perfect, ship-ready and still be
+# undiscoverable: rejected Explore variants indexed, dynamic routes absent from the sitemap,
+# a preview inviting indexing of the client's content at a non-canonical domain. It lived only
+# in /sweep, which is a monthly pass somebody has to run, so nothing checked it at done-time.
+SEO_GATE="$HERE/gate-seo.mjs"
+seo_note="seo=skipped(gate-seo.mjs not present)"
+if [ -f "$SEO_GATE" ]; then
+  if seo_err="$(node "$SEO_GATE" "$PROJ" 2>&1)"; then seo_rc=0; else seo_rc=$?; fi
+  case "$seo_rc" in
+    0) seo_note="seo=pass" ;;
+    # 2 is CANNOT CHECK (nothing built yet, so there is no crawl surface to read). It skips like
+    # the other sub-gates, and it SAYS so, because a skip that reads as a pass is the failure
+    # this file exists to prevent.
+    2) seo_note="seo=skipped(nothing built to crawl)" ;;
+    *) fail "SEO gate did not pass. ${seo_err}" ;;
+  esac
+fi
+
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, intensity=${intensity:-calm}, $bold_note."
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

@@ -16,6 +16,17 @@ OVERLAY="${SKILL_DIR}/templates/host-cloudflare"
 [ -d "$OVERLAY" ] || { echo "switch-host-cloudflare: overlay not found at $OVERLAY" >&2; exit 1; }
 [ -d "$PROJ" ]    || { echo "switch-host-cloudflare: project dir not found at $PROJ" >&2; exit 1; }
 
+# This overlay OVERWRITES package.json and .env.example, so running it after
+# scripts/add-sanity.sh would silently strip the CMS deps back out and leave a
+# project whose astro.cms.mjs imports @sanity/astro that is no longer installed.
+# Host first, CMS second.
+if grep -q '"@sanity/astro"' "$PROJ/package.json" 2>/dev/null; then
+  echo "switch-host-cloudflare: this project already has Sanity added (add-sanity.sh)." >&2
+  echo "  Applying the host overlay now would overwrite package.json and remove it." >&2
+  echo "  Choose the host FIRST, then run scripts/add-sanity.sh $PROJ again afterwards." >&2
+  exit 1
+fi
+
 echo "applying Cloudflare overlay -> $PROJ"
 
 # Host-specific config, deps and env conventions.

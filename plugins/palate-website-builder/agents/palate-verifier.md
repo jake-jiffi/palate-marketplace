@@ -44,6 +44,11 @@ never held to the bold bar.
    Exit 2 = fail. It checks refs surveyed, a deep read, inner-page coverage, tool
    spread, and (R2) at least one RICH taste/craft layer (signature_moves / do_dont /
    component_prompts / format:design / pages). A token-only or one-DESIGN.md read fails.
+   **Exit 3 = UNGROUNDED: the build recorded no Palate MCP calls at all. That is a LABEL,
+   not a finding and not a fail.** Note it as context so the reader knows the taste layer
+   was absent, never put it in `findings`, and never let it move the verdict. A build with
+   no MCP connection is expected to reach you ungrounded; failing it here would route the
+   label into a hard block through the report, which is the one thing it must not do.
 
 2. **Uniqueness gate** (the Explore variants are genuinely distinct, not ritually
    varied): render each variant to HTML, then

@@ -2,12 +2,17 @@
 // Base layout: SEO meta, OG tags, brand tokens + fonts, analytics, view
 // transitions, and Sanity visual-editing wiring.
 import "@palate-projects/{{SLUG}}-brand/tokens.css";
+// PARTIAL BRAND: delete the next line when verify-brand-exports.sh reported
+// OK:PARTIAL:type-free (the client gave colours and no type, so the package has no
+// fonts.css and Vite fails hard on the missing export). The faces then come from the
+// site's own @font-face, and brand-record.json records "locked": { "type": false }.
 import "@palate-projects/{{SLUG}}-brand/fonts.css";
 import "../styles/globals.css";
 import { ClientRouter } from "astro:transitions";
-import { VisualEditing } from "@sanity/astro/visual-editing";
+import CmsVisualEditing from "../components/CmsVisualEditing.astro";
 import ExploreSwitcher from "../components/ExploreSwitcher.astro";
 import Motion from "../components/Motion.astro";
+import { business, businessJsonLd } from "../lib/business";
 
 interface Props {
   title: string;
@@ -15,7 +20,7 @@ interface Props {
   image?: string;
   noindex?: boolean;
 }
-const { title, description = "{{ONE_LINE_DESCRIPTION}}", image = "/og/default.png", noindex = false } = Astro.props;
+const { title, description = business.description, image = "/og/default.png", noindex = false } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 
 // Visual editing is gated by a build-time env var, set "true" only on the
@@ -40,13 +45,15 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
     <meta property="og:image" content={new URL(image, Astro.site)} />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <!-- JSON-LD Organization -->
-    <script type="application/ld+json" set:html={JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      name: "{{CLIENT_NAME}}",
-      url: Astro.site?.toString(),
-    })} />
+    <!-- JSON-LD: the business entity, built from src/lib/business.ts so the
+         structured data and the copy can never describe different businesses.
+         Never hardcode a name, phone or address here; edit the record. -->
+    <script type="application/ld+json" set:html={JSON.stringify(businessJsonLd(Astro.site?.toString()))} />
+    <!-- Per-page head content: page-specific structured data (BlogPosting,
+         Product, FAQPage), preloads, alternates. Without this slot a page's
+         JSON-LD is silently dropped rather than rendered, which is invisible
+         until an audit months later. -->
+    <slot name="head" />
     <!-- Analytics: Humblytics (swap for Plausible via flag). Skipped in preview. -->
     {!visualEditing && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
     <ClientRouter />
@@ -57,6 +64,6 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
     <slot name="header" />
     <main><slot /></main>
     <slot name="footer" />
-    <VisualEditing enabled={visualEditing} />
+    <CmsVisualEditing enabled={visualEditing} />
   </body>
 </html>

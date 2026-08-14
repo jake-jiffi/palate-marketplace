@@ -68,8 +68,17 @@ A website build calls the brand build in-process when the client has no brand pa
   - **PostToolUse** records real tool telemetry to `build-manifest.json` (the gate reads this, so
     depth is measured, not claimed).
   The gate is a plain script (`scripts/gate-mcp-depth.sh`), so it also runs in CI / pre-commit. It
-  fails OPEN whenever it cannot be satisfied (no manifest, no `jq`, or zero recorded Palate MCP
-  calls). Depth thresholds default to 5 refs / 2 inner pages / 1 deep read / 1 rich layer; raise
+  has **three** exit states, and a wrapper that treats any non-zero as a failure will block the
+  wrong people: **0** = passed, or nothing to gate (no manifest, no `jq`, unreadable manifest);
+  **2** = blocked, the build used the library too thinly; **3** = UNGROUNDED, the build recorded no
+  Palate MCP calls at all. Exit 3 is a label, not a failure: the plugin favours the MCP hard but
+  does not die without it. In CI or a pre-commit hook, guard for it explicitly, or an ungrounded
+  build turns the job red and refuses the commit:
+  ```bash
+  bash scripts/gate-mcp-depth.sh build-manifest.json; ec=$?
+  [ "$ec" -eq 2 ] && exit 1 || exit 0   # only a real depth failure blocks
+  ```
+  Depth thresholds default to 5 refs / 2 inner pages / 1 deep read / 1 rich layer; raise
   them (`PALATE_MIN_REFS=8 PALATE_MIN_INNER=3`) or disable entirely with `PALATE_GATE_OFF=1`.
 
 ### Updating
@@ -107,7 +116,14 @@ form, so the dashboard can hand it to you pre-filled):
 }
 ```
 Cursor hooks are beta and only `deny` reliably blocks; point Cursor's PreToolUse hook at
-`scripts/gate-mcp-depth.sh` with a `deny` decision (the portable gate is identical, only the wrapper differs).
+`scripts/gate-mcp-depth.sh` with a `deny` decision. The gate itself is identical, but **do not call
+it bare**: Cursor derives `deny` from a non-zero exit, and exit 3 (UNGROUNDED) is non-zero, so a
+bare call denies every source write for anyone whose Palate MCP is not connected. Wrap it so only a
+real depth failure denies:
+```bash
+bash scripts/gate-mcp-depth.sh build-manifest.json; ec=$?
+[ "$ec" -eq 2 ] && exit 1 || exit 0
+```
 
 ## Legacy / manual install (deprecated)
 
@@ -136,7 +152,7 @@ cat >> ~/.npmrc <<NPMRC
 //npm.pkg.github.com/:_authToken=\${GITHUB_PACKAGES_TOKEN}
 NPMRC
 
-# Build mode: Vercel + Sanity + email
+# Build mode: Vercel + email (the two SANITY_* vars are needed only if the build adds a CMS)
 # Vercel CLI: `vercel login` handles auth
 export SANITY_AUTH_TOKEN=...           # Sanity management token (manage scope)
 export SANITY_ORG_ID=...               # your Sanity org id (Settings then API in your Sanity dashboard)

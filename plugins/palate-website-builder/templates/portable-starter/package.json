@@ -9,12 +9,12 @@
     "typecheck": "astro check"
   },
   "dependencies": {
-    "astro": "6.4.4",
-    "@astrojs/vercel": "10.0.8"
+    "astro": "7.2.0",
+    "@astrojs/vercel": "11.0.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
-    "@tailwindcss/postcss": "^4.1.0",
+    "@tailwindcss/vite": "^4.1.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.7.0"
   }

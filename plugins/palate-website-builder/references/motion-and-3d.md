@@ -7,7 +7,7 @@ reference library is thin on a frontier mechanic (the buildability oracle in
 closed). Each recipe has a fixed shape: **when to use it, the minimal working
 implementation, a performance budget, and a `prefers-reduced-motion` fallback.**
 
-Stack (all already in the template, except the opt-in Tier-2 packages): Astro 6 +
+Stack (all already in the template, except the opt-in Tier-2 packages): Astro 7 +
 the Vercel adapter, `@astrojs/react`, `gsap` + `ScrollTrigger` + `@gsap/react`,
 `lenis`. Tier 2 (`three`, `@react-three/fiber`, `@react-three/drei`) is **opt-in per
 build, not a default dependency** - see the budget below.

@@ -28,6 +28,13 @@
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-stop.mjs\"" }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-sessionstart.mjs\"" }
+        ]
+      }
     ]
   }
 }

@@ -4,7 +4,7 @@ A Claude Code skill that builds production-grade Astro websites, grounded by the
 
 ## Two modes
 
-**Build a website.** Brief plus domain in, deployed Astro site out: Sanity CMS, Vercel hosting (Cloudflare as backup), GitHub repo, CI/CD, custom domain, full SEO and AI-crawler readiness, forms, search, analytics, the client's brand package, and an optional CRO + Ads module.
+**Build a website.** Brief plus domain in, deployed Astro site out: Vercel hosting (Cloudflare as backup), GitHub repo, CI/CD, custom domain, full SEO and AI-crawler readiness, forms, search, analytics, the client's brand package, an optional Sanity CMS (opt-in, added only when the client will edit their own copy), and an optional CRO + Ads module.
 
 **Build a brand package.** Raw brand assets in, published private npm package `@palate-projects/{slug}-brand` out: four-format design tokens, unified fonts.css, reference components, examples, brand docs. Usable standalone (feeds Claude Design, v0, Cursor, Figma) or as the brand step of a website build.
 
@@ -47,13 +47,13 @@ legacy/manual path: see `INSTALL.md`.
 - `SKILL.md`: mode dispatch + the two mode workflows
 - `references/`: build operational + detail docs, `brand/` (the brand-package docs), `reference-library/` (library machinery)
 - `scripts/`: build scripts, brand scripts (brand- prefixed where they'd collide), all tested bash
-- `templates/`: `astro-project/` (the site, build-in-CI workflows), `brand-repo-skeleton/` (the brand package shape), `sanity-schema/`, `github-workflows/`, `cro/` (dormant sub-skills as .tpl)
+- `templates/`: `astro-project/` (the site, build-in-CI workflows), `brand-repo-skeleton/` (the brand package shape), `cms-sanity/` (the opt-in CMS overlay, applied by `scripts/add-sanity.sh`), `sanity-schema/`, `github-workflows/`, `cro/` (dormant sub-skills as .tpl)
 
 ## Setup required once per machine
 
 `gh`, `node` 22+, `npm`, `jq`, plus env for the modes you use:
 
-- **Build a website**: Vercel CLI (`vercel`), `SANITY_AUTH_TOKEN`, `SANITY_ORG_ID` (your Sanity org id, from Settings then API in the Sanity dashboard), `RESEND_API_KEY`. The brand GitHub Packages token (`GITHUB_PACKAGES_TOKEN` in `~/.npmrc`, `read:packages` scope) is **Required unless you pass `--vendor-brand`**, since a build consumes the private brand package.
+- **Build a website**: Vercel CLI (`vercel`), `RESEND_API_KEY`. `SANITY_AUTH_TOKEN` + `SANITY_ORG_ID` (your Sanity org id, from Settings then API in the Sanity dashboard) are needed **only if the build adds a CMS**; the default scaffold has none. The brand GitHub Packages token (`GITHUB_PACKAGES_TOKEN` in `~/.npmrc`, `read:packages` scope) is **Required unless you pass `--vendor-brand`**, since a build consumes the private brand package.
 - **Build a brand package**: `GITHUB_PACKAGES_TOKEN` with `write:packages` scope (this mode publishes a package).
 
 `scripts/preflight.sh` (build) and `scripts/brand-preflight.sh` (brand) check what's needed.

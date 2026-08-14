@@ -23,6 +23,8 @@
  *     hook falls through to the original behaviour: NON-BLOCKING by default (the depth
  *     nudge is delivered by the skill and the Stop hook), HARD-BLOCK only under
  *     PALATE_GATE_STRICT=1, and even then fail-OPEN when the gate cannot be satisfied.
+ *     An UNGROUNDED build (gate exit 3, zero recorded Palate MCP calls) is a LABEL and
+ *     never blocks a write here, even under strict; the Stop hook states it once.
  *
  * Escape hatches (so it can never trap an ordinary edit or a non-build session):
  *   - PALATE_GATE_OFF=1 disables everything.
@@ -46,6 +48,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { resolveBuildContext } from "./project-dir.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
@@ -256,6 +259,16 @@ if (CONFIG.test(fp)) allow();
 
 const cwd = p.cwd || process.cwd();
 
+// The manifest follows the PROJECT, not the session cwd (hooks/project-dir.mjs). It has to be
+// read from the same place hooks/palate-manifest.mjs writes it, or the wall would look in the
+// cwd, find nothing once the manifest moved into the scaffolded project, and block the first
+// source write of a build that had already diverged. The hint is the file being written, which
+// is the strongest available signal for which project this write belongs to.
+//
+// The MARKER lookup below deliberately stays on the cwd. It decides WHETHER the wall applies at
+// all, and widening where it is looked for would widen the set of sessions that get walled.
+const buildCtx = resolveBuildContext(cwd, { hint: fp });
+
 // BUILD-SITE SCOPE: the DIVERGE wall only applies inside an active build-site flow.
 // state-init.sh writes .palate-skill-state.json before scaffold and before any source
 // write, and ONLY the BUILD SITE mode writes it (BUILD BRAND writes
@@ -284,7 +297,7 @@ try {
 
     let manifest = null;
     try {
-      manifest = JSON.parse(fs.readFileSync(path.join(cwd, "build-manifest.json"), "utf8"));
+      manifest = JSON.parse(fs.readFileSync(buildCtx.manifest, "utf8"));
     } catch {
       /* absent/unreadable => diverge not yet valid */
     }
@@ -307,13 +320,30 @@ try {
 if (process.env.PALATE_GATE_STRICT !== "1") allow();
 
 try {
-  execFileSync("bash", [GATE, path.join(cwd, "build-manifest.json")], {
+  execFileSync("bash", [GATE, buildCtx.manifest], {
     stdio: ["ignore", "ignore", "pipe"],
   });
   allow();
 } catch (e) {
-  const reason =
-    (e.stderr ? e.stderr.toString() : "").trim() ||
-    'MCP-depth gate failed: survey the library first: refs_search with concrete lexical terms (a font, "GSAP", "preloader", the business category), then refs_get your donors with a layer (signature_moves / do_dont / component_prompts) or format:design before writing code.';
-  deny(reason);
+  // THE THIRD STATE: exit 3 = UNGROUNDED (the gate ran, the build recorded no Palate MCP
+  // calls). That is a LABEL, never a block, so the write is ALLOWED even under
+  // PALATE_GATE_STRICT=1. execFileSync throws on ANY non-zero status, so without this
+  // exit-code check the non-blocking signal would deny a source write to precisely the
+  // person whose MCP is not connected. Nothing is printed here on purpose: PreToolUse
+  // fires on every write, and the Stop hook states the label once per build. Degrade
+  // loudly ONCE, never nag.
+  // The explicit else is load-bearing. allow() exits the process today, but this branch is
+  // the single thing keeping the third state non-blocking on the write path, and its
+  // correctness must not depend on a helper's side effect. Written as a bare `if` it would
+  // fall through to deny() the moment allow() stopped exiting, silently denying every
+  // source write for exactly the person whose MCP is not connected. (A `return` cannot be
+  // used here: this catch sits at module top level, not inside a function.)
+  if (e && e.status === 3) {
+    allow();
+  } else {
+    const reason =
+      (e.stderr ? e.stderr.toString() : "").trim() ||
+      'MCP-depth gate failed: survey the library first: refs_search with concrete lexical terms (a font, "GSAP", "preloader", the business category), then refs_get your donors with a layer (signature_moves / do_dont / component_prompts) or format:design before writing code.';
+    deny(reason);
+  }
 }

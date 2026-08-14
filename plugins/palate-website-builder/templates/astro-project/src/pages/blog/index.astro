@@ -1,43 +1,58 @@
 ---
-// Collection index - blog / news / job board. Lists `collectionItem` documents
-// via loadPage(), which falls back to an empty list during the preview stage.
-// Rename this folder and the GROQ type per project (e.g. /jobs + jobListing).
-// See references/cms-and-draft-preview.md.
+// The stream listing: blog, news, case studies, whatever this site calls it.
+//
+// Content comes from the `posts` collection (src/content/posts/*.md), NOT from
+// loadPage(). That is deliberate and it is the difference between a site that
+// can grow and one that cannot: page copy is hand-shaped and lives in
+// content.ts, but a stream is added to forever and belongs in the repo as
+// markdown the agent can write, diff and validate.
+//
+// Rename the folder and the collection per project (/news, /case-studies) and
+// keep src/content.config.ts in step.
+import { getCollection } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import { loadPage } from "../../lib/load";
+import { business } from "../../lib/business";
 
-type Item = { title: string; slug: string; excerpt?: string; publishedAt?: string };
-
-const items = await loadPage<Item[]>(
-  `*[_type == "collectionItem"] | order(publishedAt desc){
-    title, "slug": slug.current, excerpt, publishedAt
-  }`,
-  {},
-  [],
+// Drafts never reach a listing, in any environment. Newest first.
+const posts = (await getCollection("posts", ({ data }) => data.draft !== true)).sort(
+  (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
 );
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString("en-AU", { dateStyle: "long" });
 ---
-<BaseLayout title="Latest - {{CLIENT_NAME}}">
+<BaseLayout
+  title={`Latest - ${business.name}`}
+  description={`News and writing from ${business.name}.`}
+>
   <section class="bg-brand-bg mx-auto max-w-3xl px-6 py-20">
     <h1 class="font-display text-brand-text text-4xl md:text-5xl">Latest</h1>
 
-    {items.length === 0 && (
-      <p class="text-brand-muted mt-6">Nothing published yet - add items in the Studio.</p>
+    {posts.length === 0 && (
+      <p class="text-brand-muted mt-6">
+        Nothing published yet. Add a markdown file to <code>src/content/posts/</code>.
+      </p>
     )}
 
-    <ul class="mt-10 space-y-10">
-      {items.map((it) => (
-        <li>
-          <a href={`/blog/${it.slug}`} class="group block">
-            <h2 class="font-display text-brand-text text-2xl group-hover:underline">{it.title}</h2>
-            {it.publishedAt && (
-              <time class="text-brand-muted mt-1 block text-sm">
-                {new Date(it.publishedAt).toLocaleDateString("en-AU", { dateStyle: "long" })}
+    {posts.length > 0 && (
+      <ul class="mt-10 space-y-10">
+        {posts.map((post) => (
+          <li>
+            <a href={`/blog/${post.id}`} class="group block">
+              <h2 class="font-display text-brand-text text-2xl group-hover:underline">
+                {post.data.title}
+              </h2>
+              <time
+                datetime={post.data.publishedAt.toISOString()}
+                class="text-brand-muted mt-1 block text-sm"
+              >
+                {fmt(post.data.publishedAt)}
               </time>
-            )}
-            {it.excerpt && <p class="text-brand-muted mt-2">{it.excerpt}</p>}
-          </a>
-        </li>
-      ))}
-    </ul>
+              <p class="text-brand-muted mt-2">{post.data.description}</p>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
   </section>
 </BaseLayout>

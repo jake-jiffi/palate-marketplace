@@ -18,12 +18,16 @@ Cloudflare, GitHub or domain is touched.
 - [ ] The deliverable is a real Astro project copied from
       `templates/astro-project/` - NOT loose `.html` files.
 - [ ] `verify-is-real-astro.sh` passes.
-- [ ] `astro.config.mjs` has `output: "server"` and the `@sanity/astro`
-      integration - the CMS is wired from the first file, not stripped.
+- [ ] `astro.config.mjs` has `output: "server"` - SSR from the first file, even
+      though this build has no CMS, so nothing has to be re-architected later.
+- [ ] **NO CMS is added.** Four static pages for a joinery workshop is the
+      textbook case for skipping it (SKILL.md rule 7): `@sanity/astro` must NOT
+      be a dependency, there is no `/studio`, and `astro.cms.mjs` still returns
+      `[]`. Adding Sanity here is a regression, not thoroughness.
 - [ ] `src/lib/content.ts` is filled with real Northwind Joinery copy; no
       `{{PLACEHOLDER}}` tokens remain anywhere in the project.
-- [ ] Pages render from `loadPage()` against the `content.ts` fallback - the
-      preview runs with NO Sanity account.
+- [ ] Pages render through `loadPage()`, never by importing `content.ts`
+      directly - that seam is what keeps the CMS decision reversible.
 - [ ] The brand is applied via a brand package or vendored tokens through
       `BaseLayout` + the Tailwind preset - not ad-hoc inline styles per page.
 - [ ] A working preview URL was handed over (via `serve-preview.sh`); the user
@@ -33,5 +37,7 @@ Cloudflare, GitHub or domain is touched.
 
 ## Regression signals
 
-Loose `.html` output, placeholders left in, a static (non-SSR) config, or a
-preview that needed a Sanity account all indicate a regression.
+Loose `.html` output, placeholders left in, a static (non-SSR) config, a preview
+that needed a Sanity account, a page importing `content.ts` directly instead of
+going through `loadPage()`, or a CMS added to a four-page brochure site all
+indicate a regression.

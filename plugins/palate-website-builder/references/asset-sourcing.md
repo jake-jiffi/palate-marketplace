@@ -19,6 +19,17 @@ are.
   Google description, socials, press (Broadsheet, local news) and the reviews.
 - **Reviews:** the emotional language customers actually use (the Story Engine's
   fuel) and the proof (ratings, counts, named staff).
+- **The Wayback Machine, when the live surface is thin or dying.** An empty
+  archive page is not proof there was never anything in it. A real rebuild hit
+  exactly this: the live store's category pages all rendered "No products were
+  found", the commerce API reported a total of zero, and every product URL
+  404ed, while the full catalogue (70 products, prices, imagery) survived in
+  Wayback snapshots from the store's active years. Sites being rebuilt are
+  OFTEN neglected sites, so absence on the live surface is a prompt to check
+  web.archive.org before concluding the content never existed. When you harvest
+  from a snapshot, record the snapshot date per item as provenance, and say
+  plainly to the client that the data is historical: prices and availability
+  from an archive are a starting point for their review, never facts to ship.
 
 ## The quality bar (reject the bad ones)
 

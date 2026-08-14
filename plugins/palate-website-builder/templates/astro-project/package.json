@@ -9,26 +9,22 @@
     "preview": "vercel dev",
     "deploy": "vercel deploy --prod",
     "typecheck": "astro check",
-    "seed": "tsx scripts/seed-content.mjs",
-    "seed-collection": "tsx scripts/seed-collection.mjs",
-    "publish-all": "tsx scripts/publish-all.mjs"
+    "palate": "node scripts/palate.mjs",
+    "lint:ux": "node scripts/palate.mjs ux-lint .",
+    "verify": "node scripts/palate.mjs verify",
+    "check": "npm run typecheck && npm run lint:ux"
   },
   "dependencies": {
     "@palate-projects/{{SLUG}}-brand": "{{BRAND_VERSION}}",
-    "astro": "6.4.4",
-    "@astrojs/vercel": "10.0.8",
-    "@astrojs/sitemap": "^3.7.2",
-    "@astrojs/react": "5.0.7",
-    "@sanity/astro": "^3.4.0",
-    "@sanity/client": "^7.22.0",
-    "@sanity/image-url": "^1.1.0",
-    "@sanity/vision": "^5.26.0",
-    "sanity": "^5.26.0",
-    "@portabletext/to-html": "^5.0.2",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-is": "^19.2.0",
-    "styled-components": "^6.1.0",
+    "astro": "7.2.0",
+    "@astrojs/vercel": "11.0.5",
+    "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/mdx": "7.0.5",
+    "@astrojs/react": "6.0.2",
+    "react": "^19.2.2",
+    "react-dom": "^19.2.2",
+    "react-is": "^19.2.2",
+    "styled-components": "^6.1.19",
     "astro-pagefind": "^2.0.0",
     "pagefind": "^1.5.2",
     "tailwindcss": "^4.0.0",
@@ -39,12 +35,12 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.0",
-    "typescript": "^5.6.0",
-    "tsx": "^4.19.0",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0"
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.6.0"
   },
   "overrides": {
-    "vite": "^7"
+    "vite": "^8"
   }
 }

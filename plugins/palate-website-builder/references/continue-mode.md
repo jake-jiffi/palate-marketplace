@@ -47,12 +47,20 @@ This is why the mode can skip the DIVERGE wall: there is no identity to invent.
 ## Step 2 - the change loop (per page or section)
 
 1. **MCP liveness probe FIRST.** Call `mcp__palate__refs_list_verticals` once
-   (cheap, ungated). If the `mcp__palate__*` tools are absent or it errors, STOP
-   and tell the user to run `claude mcp add --scope user --transport http palate
-   https://mcp.palatemcp.com/api/mcp` and restart. Do not continue without the
-   MCP: the taste layer is the whole point, and the depth gate fails open, so an
-   ungrounded addition would pass silently. Honour the free-cap / upgrade STOP the
-   same as a build (SKILL.md 6.1).
+   (cheap, ungated). If the `mcp__palate__*` tools are absent or it errors,
+   continue in UNGROUNDED mode and state it ONCE: the Palate MCP is not
+   connected, so this addition gets no reference grounding, no taste percentile,
+   no judging exemplars and no certified grade; reconnect with `claude mcp add
+   --scope user --transport http palate https://mcp.palatemcp.com/api/mcp` and
+   restart. Everything else is unchanged - the addition is still built, still
+   ux-linted, still put through the rendered verifier, vitals and accessibility,
+   and still bound to the site's own extracted token vocabulary, which in this
+   mode is the strongest signal available anyway: the existing site is the
+   reference. The depth gate records UNGROUNDED, so the absence is labelled, not
+   silent. Say it once and do not repeat it per section. Probe again if the tools
+   appear later in the session; grounded is always the better addition. Honour
+   the free-cap / upgrade wall the same as a build (SKILL.md 6.1): stop calling
+   `refs_*`, offer the upgrade once, finish local-only.
 2. **Ground the addition in the MCP, per page/section** - the section-build recipe
    (`references/reference-library-usage.md`, "The section-build recipe"):
    `refs_search { pageType, uxPattern, uiElement, conversionPrimitive, query }` to

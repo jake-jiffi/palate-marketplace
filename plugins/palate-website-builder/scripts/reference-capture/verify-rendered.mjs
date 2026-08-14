@@ -58,8 +58,72 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const base = (args.url || '').replace(/\/+$/, '');
 if (!base) { console.error('verify-rendered: --url <base> is required'); process.exit(2); }
-const routes = (args.routes ? String(args.routes).split(',') : ['/', '/contact', '/blog'])
-  .map((r) => r.trim()).filter(Boolean);
+/**
+ * WHICH ROUTES GET RENDERED, and why this is not a hardcoded list any more.
+ *
+ * It used to default to ['/', '/contact', '/blog']. Nothing in the skill passes --routes, so in
+ * practice EVERY build was verified against three guessed paths, two of which often do not exist
+ * on the site being built. A real 57-page storefront was reported "all gates green" while the
+ * template behind 54 of those pages had never been rendered by anything, and a collection page
+ * opened with a 653px band of air and zero products above the fold. Grepping HTML passed it.
+ *
+ * The content graph already knows every route, so ask it:
+ *   - every STATIC route, because each is its own code and can fail on its own
+ *   - ONE representative per DYNAMIC template, because 54 pages sharing one source fail together;
+ *     rendering one catches the template, rendering all 54 buys nothing and costs minutes
+ *   - never endpoints, which have nothing to render
+ *
+ * NO SILENT TRUNCATION. Whatever is collapsed or dropped is printed, because a gate that quietly
+ * narrows its own coverage reads exactly like a gate that passed.
+ */
+function routesFromIndex(indexPath) {
+  try {
+    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    const all = Array.isArray(idx.routes) ? idx.routes : [];
+    if (!all.length) return null;
+    const statics = all.filter((r) => r.kind === 'static' && r.path);
+    const dynamic = all.filter((r) => r.kind === 'dynamic' && r.path);
+    const bySource = new Map();
+    for (const r of dynamic) if (!bySource.has(r.source)) bySource.set(r.source, r);
+    // Dynamic representatives first: each stands in for the most pages, so if anything is
+    // truncated below it must not be these.
+    const reps = [...bySource.values()];
+    const picked = [...reps, ...statics];
+    return {
+      routes: picked.map((r) => r.path),
+      reps: reps.length,
+      collapsed: dynamic.length - reps.length,
+      statics: statics.length,
+      endpoints: all.filter((r) => r.kind === 'endpoint').length,
+    };
+  } catch { return null; }
+}
+
+const MAX_ROUTES = Number(args['max-routes'] && args['max-routes'] !== 'true' ? args['max-routes'] : 14);
+let routes;
+if (args.routes) {
+  routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
+} else {
+  const indexPath = args.index && args.index !== 'true' ? args.index : '.palate/index.json';
+  const found = routesFromIndex(indexPath);
+  if (found) {
+    routes = found.routes.slice(0, MAX_ROUTES);
+    const dropped = found.routes.length - routes.length;
+    console.error(
+      `verify-rendered: ${routes.length} route(s) from ${indexPath} ` +
+      `(${found.reps} dynamic template representative(s) standing in for ${found.reps + found.collapsed} page(s), ` +
+      `${found.statics} static, ${found.endpoints} endpoint(s) not rendered)` +
+      (dropped > 0 ? ` — ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : ''),
+    );
+  } else {
+    routes = ['/', '/contact', '/blog'];
+    console.error(
+      `verify-rendered: no readable ${indexPath}, so falling back to ${routes.join(', ')}. ` +
+      'THESE ARE GUESSES AND MAY NOT EXIST. Run palate-index.mjs first, or pass --routes, ' +
+      'or this gate is checking three paths instead of your site.',
+    );
+  }
+}
 const outDir = args.out && args.out !== 'true' ? args.out : '';
 if (outDir) mkdirSync(outDir, { recursive: true });
 
@@ -272,6 +336,221 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 1) add('High', route, vpName, 'horizontal scroll: content is ' + overflow + 'px wider than the viewport');
+
+    /**
+     * THE FIRST SCREEN. Does this page show anything it is FOR, before you scroll?
+     *
+     * A collection page shipped with a 653px masthead that pushed the first product image to
+     * 917px, so at a 900px viewport it opened with zero products visible. On a collection page.
+     * Every text gate passed it, because the markup was fine: the bug was entirely geometric.
+     *
+     * WHAT COUNTS AS CONTENT IS THE WHOLE DIFFICULTY. That masthead contained a heading, a
+     * paragraph AND a nav list of sibling collections, so anything that counts headings, text or
+     * list items would have called it content-rich and passed. What it did not contain was a
+     * single thing the page exists to show. So: media and real controls, never anything inside a
+     * header or a nav, and headings never count, because a masthead IS headings.
+     *
+     * Positions are document-relative, so this is unaffected by the scroll above.
+     */
+    const firstScreen = await page.evaluate(() => {
+      const vh = window.innerHeight;
+      const root = document.querySelector('main') || document.body;
+      if (!root) return null;
+      const sel = 'img, picture, video, canvas, [style*="background-image"], ' +
+                  'a[href]:not([href^="#"]), button, input, select, textarea';
+      const inChrome = (el) => !!el.closest('nav, header, [role="navigation"], [role="banner"]');
+      let firstY = null, total = 0;
+      for (const el of root.querySelectorAll(sel)) {
+        if (inChrome(el)) continue;
+        const r = el.getBoundingClientRect();
+        // Ignore what is not actually painted: zero-size nodes, and tracking pixels.
+        if (r.width < 24 || r.height < 24) continue;
+        const style = getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
+        const y = Math.round(r.top + window.scrollY);
+        total++;
+        if (firstY === null || y < firstY) firstY = y;
+      }
+      return { firstY, total, vh };
+    });
+    /**
+     * IMAGES: SHOWN LARGER THAN THEY EXIST, OR NOT SHOWN AT ALL.
+     *
+     * A photo stretched past its own pixels reads as "cheap" long before anyone can say why,
+     * and it is invisible in source: the markup is correct, the CSS is correct, and only the
+     * relationship between the file and the box it landed in is wrong. Nothing in the plugin
+     * measured it (`naturalWidth` appeared nowhere), so a 800px photo in a 1440px full-bleed
+     * shipped looking soft with every gate green.
+     *
+     * A broken image is caught here too, because `complete && naturalWidth === 0` is the only
+     * reliable signal and it needs a real browser: a 404ed <img> still parses fine.
+     */
+    const imgs = await page.evaluate(() => {
+      const out = { upscaled: [], broken: [], cropped: [] };
+      for (const im of document.querySelectorAll("img")) {
+        const r = im.getBoundingClientRect();
+        if (r.width < 24 || r.height < 24) continue;
+        const style = getComputedStyle(im);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        const src = (im.currentSrc || im.src || "").split("/").pop().slice(0, 48);
+        if (im.complete && im.naturalWidth === 0) { out.broken.push(src); continue; }
+        if (!im.naturalWidth) continue;                       // still loading: not a finding
+
+        // CROPPED BY HAND, WITHOUT object-fit. A real build cropped a photo with
+        // `position:absolute; width:408.51%; left:-187.23%; top:-30.44%` inside an
+        // overflow:hidden box and used NO object-fit at all, so the cover-crop maths below is
+        // structurally blind to it. Those magic percentages are the tell: they are an agent
+        // working around a photograph that does not fit the slot it already committed to.
+        //
+        // Measuring the geometry instead of the technique catches both. Compare the image's own
+        // box against the nearest ancestor that actually clips, so whatever is outside it is
+        // simply not on screen, however that was achieved.
+        let clipper = im.parentElement;
+        while (clipper && clipper !== document.body) {
+          const cs = getComputedStyle(clipper);
+          if (cs.overflow === "hidden" || cs.overflow === "clip" ||
+              cs.overflowX === "hidden" || cs.overflowY === "hidden") break;
+          clipper = clipper.parentElement;
+        }
+        if (clipper && clipper !== document.body) {
+          const cr = clipper.getBoundingClientRect();
+          const w = Math.max(0, Math.min(r.right, cr.right) - Math.max(r.left, cr.left));
+          const h = Math.max(0, Math.min(r.bottom, cr.bottom) - Math.max(r.top, cr.top));
+          const area = r.width * r.height;
+          const shown = area > 0 ? (w * h) / area : 1;
+          // 0.7 matches the cover threshold. Only when the image is meaningfully bigger than
+          // its clip, so an ordinary rounded card trimming a few pixels is not a finding.
+          if (shown < 0.7 && area > cr.width * cr.height * 1.1) {
+            out.cropped.push({
+              src, visible: shown, byHand: true,
+              natural: `${im.naturalWidth}x${im.naturalHeight}`,
+              box: `${Math.round(r.width)}x${Math.round(r.height)} inside ${Math.round(cr.width)}x${Math.round(cr.height)}`,
+              pos: style.objectFit === "cover" ? (style.objectPosition || "50% 50%").trim() : `${style.position}, no object-fit`,
+              centred: false,
+            });
+            continue;                       // one crop finding per image, the specific one
+          }
+        }
+
+        // Crop loss under object-fit: cover. `contain` letterboxes rather than cutting, and
+        // `fill` distorts, which are different faults with different fixes.
+        if (style.objectFit === "cover" && im.naturalHeight > 0 && r.height > 0) {
+          const srcRatio = im.naturalWidth / im.naturalHeight;
+          const boxRatio = r.width / r.height;
+          const visible = Math.min(srcRatio, boxRatio) / Math.max(srcRatio, boxRatio);
+          if (visible < 0.7) {
+            const pos = (style.objectPosition || "50% 50%").trim();
+            out.cropped.push({
+              src, visible,
+              natural: `${im.naturalWidth}x${im.naturalHeight}`,
+              box: `${Math.round(r.width)}x${Math.round(r.height)}`,
+              pos,
+              centred: pos === "50% 50%" || pos === "center" || pos === "center center",
+            });
+          }
+        }
+        // Only genuine upscaling. Falling short of a 2x retina ideal is common and is a
+        // different, softer conversation; being shown bigger than you exist is a defect.
+        if (im.naturalWidth < Math.round(r.width)) {
+          out.upscaled.push({ src, natural: im.naturalWidth, shown: Math.round(r.width) });
+        }
+      }
+      return out;
+    });
+    for (const b of imgs.broken.slice(0, 3)) {
+      add("High", route, vpName, `broken image: "${b}" is in the page and loaded nothing (naturalWidth 0)`);
+    }
+    /**
+     * CROP LOSS: the one image property no gate measured, and the one the doctrine calls
+     * destructive. `references/assets.md` is built around a 2:3 portrait forced through a 3:1
+     * letterbox showing 22% of the frame, and a real build then repeated it at 25% on the very
+     * next site. palate-assets.mjs computes this for LOCAL files before a slot is chosen; nothing
+     * checked the slot a photo ACTUALLY landed in, so the rule was advisory the moment a build
+     * ignored it. Two independent builds also implemented the sharpness guard and not this one,
+     * which is the same asymmetry.
+     *
+     * A cover-crop shows min(source, box) / max(source, box) of the frame. Under 50% is
+     * destructive, under 70% risky. Reported per viewport, because a photo that survives the
+     * desktop crop is routinely destroyed by the mobile one.
+     */
+    for (const c of imgs.cropped.slice(0, 4)) {
+      const pct = Math.round(c.visible * 100);
+      const sev = c.visible < 0.5 ? "High" : "Medium";
+      if (c.byHand) {
+        add(sev, route, vpName,
+          `crop by hand: "${c.src}" (${c.natural}) renders at ${c.box}, so only ${pct}% of it is on screen, ` +
+          `and it is positioned rather than fitted (${c.pos}). object-fit reimplemented with offsets is a sign the ` +
+          `photograph does not fit the slot it was given: change the slot, or use a photograph that suits it.`);
+      } else {
+        add(sev, route, vpName,
+          `crop: "${c.src}" is ${c.natural} and its slot is ${c.box}, so only ${pct}% of the frame is shown` +
+          (c.centred ? ` with object-position left at the default 50% 50%` : ` (object-position ${c.pos})`) +
+          `. ${c.visible < 0.5 ? "That is destructive: pick a slot the photograph supports." : "Check what is being cut before shipping it."}`);
+      }
+    }
+
+    for (const u of imgs.upscaled.slice(0, 3)) {
+      add("High", route, vpName,
+        `image upscaled: "${u.src}" is ${u.natural}px wide and is being shown at ${u.shown}px ` +
+        `(${(u.shown / u.natural).toFixed(1)}x). It will look soft. Use a smaller slot, or source a larger file.`);
+    }
+
+    /**
+     * THE EYEBROW / KICKER, CAUGHT AS A PATTERN RATHER THAN A STYLING.
+     *
+     * `anti-patterns.md` is absolute: "Do not place a small label above a section heading at
+     * all ... it is a generic-AI tell REGARDLESS OF STYLING - it is the PATTERN". The ux-lint
+     * rule cannot enforce that, because it reads CSS blocks and BOTH its branches require a mono
+     * font, so the commonest form of all - `<p class="text-sm uppercase tracking-widest">What we
+     * do</p>` in the brand sans, styled entirely by utility classes with no CSS block to parse -
+     * matches nothing. Measured: that markup, and a mono eyebrow in the same folder, both produce
+     * zero findings while an em dash in the same folder fires Critical.
+     *
+     * The relationship "a small label immediately above a heading" is structural, so it is found
+     * here, where the DOM and the computed styles both exist, instead of guessed from a regex.
+     */
+    const eyebrows = await page.evaluate(() => {
+      const root = document.querySelector('main') || document.body;
+      if (!root) return [];
+      const out = [];
+      for (const h of root.querySelectorAll('h1, h2, h3')) {
+        const prev = h.previousElementSibling;
+        if (!prev) continue;
+        if (prev.closest('nav, header, [role="navigation"], [role="banner"]')) continue;
+        // A link or a control above a heading is a breadcrumb or an action, not a kicker.
+        if (prev.matches('a, button, nav, ul, ol, img, picture, video, svg, figure, hr')) continue;
+        const text = (prev.textContent || '').trim();
+        if (!text || text.length > 40) continue;          // a real paragraph is not a kicker
+        if (/[.!?]$/.test(text)) continue;                 // a sentence is not a label
+        const ps = getComputedStyle(prev), hs = getComputedStyle(h);
+        if (ps.display === 'none' || ps.visibility === 'hidden') continue;
+        const pSize = parseFloat(ps.fontSize) || 0, hSize = parseFloat(hs.fontSize) || 0;
+        if (!(pSize < hSize)) continue;                    // it has to be SMALLER than the heading
+        const pr = prev.getBoundingClientRect(), hr = h.getBoundingClientRect();
+        if (hr.top - pr.bottom > 48) continue;             // far apart is not "above the heading"
+        out.push({
+          label: text.slice(0, 32),
+          heading: (h.textContent || '').trim().slice(0, 32),
+          upper: ps.textTransform === 'uppercase' || text === text.toUpperCase(),
+        });
+      }
+      return out.slice(0, 4);
+    });
+    for (const e of eyebrows) {
+      add('High', route, vpName,
+        `eyebrow/kicker: the small label "${e.label}" sits immediately above the heading "${e.heading}"` +
+        (e.upper ? ' (uppercase)' : '') +
+        '. The kicker PATTERN is the AI tell regardless of styling. Default fix: DELETE the label and let the heading carry the section.');
+    }
+
+    if (firstScreen && firstScreen.total > 0 && firstScreen.firstY !== null && firstScreen.firstY >= firstScreen.vh) {
+      // Only a finding when the page HAS content and buried it. A page with nothing to show is a
+      // different fault and is already caught by the thin-content check below.
+      add('High', route, vpName,
+        'nothing this page is for is visible before scrolling: the first image or control sits at ' +
+        firstScreen.firstY + 'px, below the ' + firstScreen.vh + 'px fold (' + firstScreen.total +
+        ' further down). Whatever is above it is taller than the screen.');
+    }
 
     const textLen = await page.evaluate(() => (document.body && document.body.innerText ? document.body.innerText.trim().length : 0));
     if (textLen < 1) add('High', route, vpName, 'page renders blank (no text content)');

@@ -11,6 +11,14 @@ the variant routes evolve into the final pages, nothing is rebuilt.
 1. **Plan checkpoint (Explore)** - confirm brief, brand source, references,
    variant count and whether to include landing-page variants. Then ask:
    "Proceed?"
+
+   **ASK FOR THE COUNT, AND SAY WHAT IT BUYS.** The count sets the RESOLUTION of
+   the ambition ladder, never its range. Whether they pick 4 or 10, rung 1 is
+   genuinely understated and rung N is genuinely bold; a larger number buys finer
+   steps between those fixed ends, not a wider span. Say it in those terms, because
+   "how many do you want" invites the cheapest answer, while "four gives you the
+   range in coarse steps, eight lets you see where it turns" invites a choice.
+   Default 8 when they have no preference.
 2. **Generate variants** - 8-10 home-page variants as routes `/v1`..`/vN`.
    **Eight is the floor, not a suggestion.** The whole point of Explore is to put
    many genuinely different ideas in front of the client, so always ship at least
@@ -20,9 +28,27 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    reference donor's craft from the MCP (see `reference-library-usage.md`).
    plus 1-3 landing-page variants as `/lp1`..`/lpN` if the brief warrants. Each
    is a real `.astro` page composed of section components, with section labels
-   visible in Explore mode. The bottom-right `<ExploreSwitcher />` picker lists
+   visible in Explore mode.
+
+   **NO VARIANT IS REGISTERED UNTIL IT PASSES THE ANTI-AI GATE.** Run, per
+   variant, before it enters `src/lib/variants.ts`: `scripts/ux-lint.sh` (the
+   mechanical ruleset), `scripts/verify-rendered.sh` on its route (the structural
+   tells a text rule cannot see, including the eyebrow/kicker), and the visual
+   loop against `visual-rubric.md` + `ai-slop-tells.md`. Critical/High is a hard
+   BLOCK: fix and re-run, and after 3 attempts drop the variant and resample its
+   rung rather than show it. These gates used to run only at Compose, which is
+   downstream of the thing they protect: the client had already seen the tells.
+   The preview is the first impression of the product, so a variant that looks
+   AI-made has lost the argument before anyone reads a word.
+
+   The bottom-right `<ExploreSwitcher />` picker lists
    them by id + name (give each variant an evocative `name` in
-   `src/lib/variants.ts`). As each variant is registered, also record it in
+   `src/lib/variants.ts`), **in ladder order, with its rung shown**: the range is
+   only useful if the client can SEE it is a range. Add `ambition` to each entry
+   (`{ id, name, href, ambition }`, 1..N, 1 = most restrained) and let the picker
+   read left-to-right as understated toward bold. A client who can see the ends
+   can say "somewhere around 5, with 8's motion on the hero", which is a far more
+   useful sentence than "I like that one". As each variant is registered, also record it in
    `build-manifest.json` under `explore.shown`
    (`{ id, name, donor_slug, hero_pattern, position }`) so every direction SHOWN
    is captured for the taste flywheel, not just the one picked
@@ -55,7 +81,21 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    rejects (`shown` minus `picks`), so they are not listed again.
 4. **Compose** - Claude builds the canonical pages (`src/pages/index.astro`,
    etc.) from the picked sections, adopting the design tokens of the variant
-   that set the dominant tone (usually whichever supplied the hero). First
+   that set the dominant tone (usually whichever supplied the hero).
+
+   **THIS IS CONCEPT WORK, NOT A SPLICE, and it got harder on purpose.** When
+   every variant elaborated one spine, stitching picks together was clerical.
+   Now the rungs are genuinely different concepts, so lifting "v3 hero, v7
+   features" verbatim produces a page with two arguments in it. Ask what the
+   person was reaching for in each pick, and build the thing that serves BOTH
+   reasons better than either original did. Someone taking a hero from rung 7 and
+   features from rung 2 is usually telling you they want that intensity at the
+   entrance and calm once they are reading; the answer is a single design with a
+   deliberate falling intensity curve, not rung 7's hero pasted above rung 2's
+   grid. State the read out loud before composing ("you want the boldness at the
+   door and quiet inside"), so a wrong inference is corrected in a sentence rather
+   than in a rebuild. **Landing between two rungs is a legitimate destination**:
+   the ladder exists so someone can point between its steps. First
    **VIEW the lead reference's screenshot** (`refs_get_screenshot` on the spine
    donor) and design from the pixels - match its actual composition (weight,
    asymmetry, negative space, signature move), then re-skin with the brand. This
@@ -125,14 +165,26 @@ where direction-setting happens.
 ## Generating distinct variants - concept-led, not skin-deep
 
 Eight variants that all feel like a slightly-reskinned Linear is failure, and so
-is eight aesthetic skins of the same idea. **Each variant elaborates one of the
-1-2 ADVANCED concepts from the Story Engine's DIVERGE -> CONVERGE pass**
-(`story-engine.md`), not a fresh spine each: a mechanic that makes the visitor feel
-the transformation, a 3-beat arc, one named feeling. Run the Story Engine's
-DIVERGE -> CONVERGE first (research -> the one true thing -> sample N concepts wide
-with self-tagged conventionality -> score on originality + craft-feasibility ->
-advance the best 1-2), then spread the variants that elaborate those concepts
-across the ambition spectrum.
+is eight aesthetic skins of the same idea. **This paragraph used to mandate the
+second failure while naming it**: it required every variant to elaborate one of
+1-2 advanced concepts, which is the definition of eight skins of one idea, and
+that is exactly what previews became.
+
+**Each variant carries ITS OWN concept**, one per rung of the ambition ladder: a
+mechanic that makes the visitor feel the transformation, a 3-beat arc, one named
+feeling, and its own donor from the library. Run the Story Engine's DIVERGE ->
+CONVERGE first (research -> the one true thing -> sample wide, at least the
+variant count plus three, with self-tagged conventionality -> cull only what
+cannot be built -> curate the survivors onto the ladder), then build one variant
+per rung.
+
+The ladder is the product, not a side effect. Rung 1 is the most restrained
+expression and rung N the boldest, and **N sets the resolution, never the range**:
+both ends are genuinely reached whether the client asked for 4 or 10. A client
+cannot tell you how bold they want to be until they have seen both ends, and a
+set clustered in the middle teaches them nothing. **Rung 1 is restrained and
+excellent, never the weak one** - it carries a signature move like every other
+rung, and the move is simply quiet.
 
 **The variants elaborate the commission** (`references/build-commission.md`), which
 was issued at A.3.5 from the converged concept + the resolved brand. Hold every

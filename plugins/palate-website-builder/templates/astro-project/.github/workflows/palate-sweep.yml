@@ -1,0 +1,496 @@
+name: Palate site sweep
+
+# The site-level checks no contribution can trigger.
+#
+# The contract gate only ever sees a diff. These faults belong to the whole site and
+# arrive without anyone contributing anything: a firewall rule starts serving a challenge
+# page to ClaudeBot, a sitemap URL rots, a draft written in April is still a draft in
+# August. No commit caused any of it, so no commit gate will ever catch it.
+#
+# IT OPENS AN ISSUE, IT DOES NOT FAIL A BUILD. Nobody contributed anything, so there is
+# nothing to block and nobody waiting on a red tick. A failing scheduled job is a
+# notification people mute; an issue is a notification people can close.
+#
+# The job DOES fail when the sweep itself could not run: the origin never answered, the
+# index could not be built, the graph script crashed. "Nothing to report" and "nothing was
+# measured" are different results and this must never print the first while meaning the
+# second. An incomplete sweep also never closes the issue, for the same reason.
+#
+# It needs Issues enabled on the repository. With them switched off the final step fails,
+# which is the honest outcome: the findings exist and have nowhere to go.
+#
+# WHAT IS NOT SWEPT HERE. Expiring facts (sameAs profiles that 404, opening hours that
+# went stale over a public holiday, a service the business no longer offers) need a person
+# who knows the answer, so they belong to /palate-website-builder:sweep, which asks. A
+# scheduled job cannot ask, and inventing a verdict about a phone number is worse than
+# leaving the question open.
+#
+# ------------------------------------------------------------------ WHAT THIS COSTS
+#
+# One run a week. With a deployed origin configured it is about a minute (no install, no
+# build: the crawl checks are HTTP and the graph is a file parse). Falling back to the
+# local dev server adds npm ci and a dev boot, so three to four minutes. On a Free private
+# repo that is roughly 16 minutes a month of the 2,000; on a public repo it is free.
+#
+# Cloudflare Pages / Workers Builds on the Free plan gives 500 builds a month and ONE
+# concurrent build. This workflow triggers none of them: it reads a site that is already
+# deployed. It is deliberately the cheap half of the automation, which is why it can
+# afford to look at the WHOLE site every week while the contract gate looks only at a diff.
+
+on:
+  schedule:
+    # Mondays, 15:27 UTC. Deliberately not on the hour: scheduled jobs pile up at :00 and
+    # GitHub delays or drops them under load. A weekly sweep that silently does not run is
+    # the same failure as a check that cannot fail.
+    #
+    # TWO THINGS ABOUT SCHEDULES. They only ever run from the DEFAULT BRANCH, so editing
+    # this file on a branch changes nothing until it is merged. And GitHub disables
+    # scheduled workflows in a repository with 60 days of no activity, which is exactly
+    # the kind of quiet site this sweep is for, so re-enable it from the Actions tab if
+    # the site has been left alone for a couple of months.
+    - cron: '27 15 * * 1'
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: 'Origin to sweep (https://example.com). Blank uses the PALATE_ORIGIN variable, or a local dev server.'
+        required: false
+        default: ''
+      palate_ref:
+        description: 'Palate gate ref (release tag or full commit SHA). Blank uses the PALATE_REF variable.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  # Only needed on the local-server fallback, where npm ci resolves the brand package
+  # from GitHub Packages.
+  packages: read
+  issues: write
+
+concurrency:
+  # Never two sweeps writing to the same issue. Not cancel-in-progress: a manual sweep
+  # run to confirm a fix is fixed should not be killed by the weekly one.
+  group: palate-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    env:
+      # See the PIN note in palate-contract.yml. Same rule, same reason: a customer's CI
+      # must not execute whatever happens to be on our default branch at run time.
+      PALATE_REF: ${{ inputs.palate_ref || vars.PALATE_REF || '4669dcfc249deb5e0c30424b24fd0c95c4b1bc62' }}
+      # The origin to sweep. A deployed origin is the point: a crawlability fault caused by
+      # a CDN or a firewall rule is invisible on localhost, and that is the fault this
+      # exists to find. Set the PALATE_ORIGIN repository variable to your production URL.
+      SWEEP_ORIGIN: ${{ inputs.origin || vars.PALATE_ORIGIN }}
+      # Stale-content thresholds, in days. Both are judgements rather than laws, which is
+      # why they are named here and not buried in the script.
+      STALE_DRAFT_DAYS: '60'
+      STALE_PUBLISH_DAYS: '90'
+
+    steps:
+      - name: Check out the site
+        uses: actions/checkout@v4
+
+      - name: Check out the Palate gates at the pinned ref
+        uses: actions/checkout@v4
+          # If this step fails with "Ref ... not found", the pin below points at a tag or
+          # SHA that does not exist in the gate repository. That is the pin doing its job:
+          # it refuses rather than silently falling back to a moving branch. Set the
+          # PALATE_REF repository variable to a ref that exists.
+        with:
+          repository: jake-jiffi/palate-website-builder
+          ref: ${{ env.PALATE_REF }}
+          path: .palate-skill
+          sparse-checkout: |
+            scripts
+            references
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@palate-projects'
+
+      # ------------------------------------------------------------------- the graph
+      # No network and no dependencies: the index is a parse of the repository. Orphans,
+      # dead internal links and stale content all fall straight out of it.
+      - name: Build the content graph
+        run: |
+          set -euo pipefail
+          node .palate-skill/scripts/palate-index.mjs . --out .palate/index.json
+          # Exit 2 means there is no src/pages here, and it fails the job on purpose: a
+          # sweep that cannot find the site must not report a clean site.
+
+      - name: Orphans, dead links and stale content
+        id: graph
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/graph.cjs" <<'NODE'
+          const fs = require('fs');
+          const idx = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const draftDays = Number(process.env.STALE_DRAFT_DAYS || 60);
+          const pubDays = Number(process.env.STALE_PUBLISH_DAYS || 90);
+          const out = [];
+          const add = (sev, check, msg) => out.push([sev, check, msg].join('\t'));
+          const days = (d) => Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+
+          // Dead links are always a finding: an href to a path no route serves.
+          for (const d of idx.links.dead) {
+            add('BLOCKING', 'dead link', `${d} is linked from this site and no route serves it`);
+          }
+          // Orphans are REPORTED, never failed. A campaign landing page is legitimately
+          // unlinked. A published page nothing links to is usually a page someone forgot,
+          // and a page nothing links to is a page nothing ranks.
+          for (const o of idx.links.orphans) {
+            // Conventional non-linkable routes are orphans by definition: nothing ever
+            // links to a 404 page. Emitting them means the weekly issue can never be
+            // clean and never auto-closes, which trains people to stop opening it, and
+            // a sweep nobody reads is worse than no sweep.
+            if (o === '/404' || o === '/500' || o.startsWith('/api/')) continue;
+            add('REVIEW', 'orphan', `${o} is published and nothing links to it`);
+          }
+
+          const entries = idx.entries || [];
+          for (const e of entries) {
+            if (!e.publishedAt) continue;
+            const age = days(e.publishedAt);
+            if (e.draft && age > draftDays) {
+              add('REVIEW', 'stale draft', `"${e.title || e.id}" has been a draft for ${age} days (${e.file})`);
+            }
+            // The content config guards against future dates, so one that exists is a YAML
+            // rollover rather than an intention.
+            if (age < 0) {
+              add('REVIEW', 'future-dated', `"${e.title || e.id}" is dated ${e.publishedAt}, ${-age} days ahead (${e.file})`);
+            }
+          }
+          // Future-dated entries are excluded from "what was published most recently".
+          // Include them and a single YAML rollover silences the staleness check for a
+          // month, which is the one month you would want to hear about it.
+          const live = entries.filter((e) => !e.draft && e.publishedAt && days(e.publishedAt) >= 0);
+          if (live.length) {
+            const newest = live.reduce((a, b) => (new Date(a.publishedAt) > new Date(b.publishedAt) ? a : b));
+            const age = days(newest.publishedAt);
+            if (age > pubDays) {
+              add('REVIEW', 'nothing published', `the newest published entry is ${age} days old ("${newest.title || newest.id}"). The collection is the reason this site was given a content runtime.`);
+            }
+          }
+          fs.writeFileSync(process.argv[3], out.length ? out.join('\n') + '\n' : '');
+          console.error(`graph: ${idx.counts.routes} routes, ${idx.counts.entries} entries, ${idx.links.dead.length} dead, ${idx.links.orphans.length} orphan(s) -> ${out.length} finding(s)`);
+          NODE
+          node "$RUNNER_TEMP/graph.cjs" .palate/index.json "$RUNNER_TEMP/graph-findings.tsv"
+
+      # --------------------------------------------------------------- the origin
+      - name: Decide which origin to sweep
+        id: origin
+        run: |
+          set -euo pipefail
+          if [ -n "${SWEEP_ORIGIN:-}" ]; then
+            # Trailing slashes make every joined URL a double slash, and some hosts answer
+            # those differently from the canonical path.
+            base="${SWEEP_ORIGIN%/}"
+            echo "base=$base" >> "$GITHUB_OUTPUT"
+            echo "kind=deployed" >> "$GITHUB_OUTPUT"
+            echo "sweeping the deployed origin: $base"
+          else
+            echo "kind=local" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Sweeping localhost::No deployed origin is configured, so the crawl checks run against a local dev server. A robots or crawler-parity fault caused by a CDN, a WAF or a firewall rule is INVISIBLE there, and that is the fault this sweep exists to find. Set the PALATE_ORIGIN repository variable to your production URL."
+          fi
+
+      - name: Install (only needed to serve locally)
+        if: steps.origin.outputs.kind == 'local'
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Crawlability and AI-crawler fetch parity
+        id: crawl
+        env:
+          BASE_IN: ${{ steps.origin.outputs.base }}
+          KIND: ${{ steps.origin.outputs.kind }}
+        run: |
+          set -uo pipefail
+          cleanup() { [ "${KIND:-}" = "local" ] && [ -n "${SERVE_PID:-}" ] && { kill -- "-$SERVE_PID" 2>/dev/null || kill "$SERVE_PID" 2>/dev/null; }; true; }
+          # There is no `astro dev stop`; calling it starts a server and the trap never returns.
+          trap cleanup EXIT
+
+          base="$BASE_IN"
+          if [ "$KIND" = "local" ]; then
+            serve_out="$(bash .palate-skill/scripts/serve-preview.sh . 2>&1)"
+            printf '%s\n' "$serve_out"
+            base="$(printf '%s\n' "$serve_out"  | sed -n 's/^SERVE_URL=//p'  | head -1)"
+            http="$(printf '%s\n' "$serve_out" | sed -n 's/^SERVE_HTTP=//p' | head -1)"
+            if [ -z "$base" ] || [ "$http" != "200" ]; then
+              echo "::error title=Nothing to sweep::The local dev server never served a 200, so no crawl check ran. This is an unmeasured sweep, not a clean one."
+              exit 1
+            fi
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+          cat > "$RUNNER_TEMP/crawl.cjs" <<'NODE'
+          // robots.txt, sitemap reachability, and the check nobody runs: whether the site
+          // hands an answer engine the same page it hands a browser.
+          const fs = require('fs');
+          const base = process.argv[2].replace(/\/$/, '');
+          const out = [];
+          const add = (sev, check, msg) => out.push([sev, check, msg].join('\t'));
+
+          const BOTS = ['GPTBot', 'ClaudeBot', 'PerplexityBot'];
+          const UAS = {
+            browser: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+            GPTBot: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot',
+            ClaudeBot: 'Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)',
+            PerplexityBot: 'Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)',
+          };
+
+          async function get(url, ua) {
+            const res = await fetch(url, { headers: { 'user-agent': ua }, redirect: 'follow' });
+            const body = await res.text();
+            return { status: res.status, type: res.headers.get('content-type') || '', bytes: Buffer.byteLength(body), body };
+          }
+
+          // Group the directives by user-agent the way a crawler does: an agent obeys the
+          // group naming it, and falls back to * only when it is not named anywhere. That
+          // is why "a generic User-agent: * block does not cover them once one is named".
+          function parseRobots(txt) {
+            const groups = new Map();
+            let current = [];
+            let expectingAgents = false;
+            for (const raw of txt.split(/\r?\n/)) {
+              const line = raw.replace(/#.*$/, '').trim();
+              if (!line) continue;
+              const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);
+              if (!m) continue;
+              const field = m[1].toLowerCase(), value = m[2].trim();
+              if (field === 'user-agent') {
+                if (!expectingAgents) { current = []; expectingAgents = true; }
+                const key = value.toLowerCase();
+                if (!groups.has(key)) groups.set(key, []);
+                current.push(groups.get(key));
+              } else {
+                expectingAgents = false;
+                for (const g of current) g.push({ field, value });
+              }
+            }
+            return groups;
+          }
+
+          function rootAllowed(groups, bot) {
+            const g = groups.get(bot.toLowerCase()) || groups.get('*');
+            if (!g) return { allowed: true, why: 'no group applies, so the default is allow' };
+            // Only the root path matters here. Longest-match wins in the real spec; at "/"
+            // an explicit Allow of the same length beats the Disallow, which is the
+            // conventional way of carving one agent back out of a blanket block.
+            const blocked = g.some((d) => d.field === 'disallow' && d.value === '/');
+            const allowed = g.some((d) => d.field === 'allow' && d.value === '/');
+            const named = groups.has(bot.toLowerCase());
+            return { allowed: !blocked || allowed, why: named ? `its own User-agent: ${bot} group` : 'the User-agent: * group' };
+          }
+
+          (async () => {
+            let robots;
+            try {
+              robots = await get(base + '/robots.txt', UAS.browser);
+            } catch (e) {
+              // The origin did not answer at all. That is a broken sweep, not a finding
+              // about the site, and it must not be reported as either clean or faulty.
+              console.error(`crawl: ${base} is unreachable (${e.message})`);
+              process.exit(2);
+            }
+            console.error(`robots.txt: ${robots.status} ${robots.type} ${robots.bytes} bytes`);
+            if (robots.status !== 200) {
+              add('BLOCKING', 'robots.txt', `${base}/robots.txt returns ${robots.status}. Every crawler asks for this first.`);
+            } else {
+              if (!/text\/plain/.test(robots.type)) {
+                add('REVIEW', 'robots.txt', `served as "${robots.type}" rather than text/plain`);
+              }
+              const groups = parseRobots(robots.body);
+              for (const bot of BOTS) {
+                const r = rootAllowed(groups, bot);
+                console.error(`  ${bot}: ${r.allowed ? 'allowed' : 'BLOCKED'} by ${r.why}`);
+                if (!r.allowed) {
+                  add('BLOCKING', 'robots.txt', `${bot} is disallowed from / by ${r.why}. Answer engines cannot read this site.`);
+                }
+              }
+              const sitemaps = [...robots.body.matchAll(/^\s*sitemap\s*:\s*(\S+)/gim)].map((m) => m[1]);
+              if (!sitemaps.length) {
+                add('REVIEW', 'sitemap', 'robots.txt names no Sitemap:');
+              }
+              for (const sm of sitemaps) {
+                try {
+                  const r = await get(sm, UAS.browser);
+                  console.error(`  sitemap ${sm}: ${r.status}`);
+                  if (r.status !== 200) add('BLOCKING', 'sitemap', `${sm} returns ${r.status}, but robots.txt points crawlers at it`);
+                } catch (e) {
+                  add('BLOCKING', 'sitemap', `${sm} could not be fetched (${e.message})`);
+                }
+              }
+            }
+
+            // Fetch parity. Any status divergence is a finding, and so is a body more than
+            // 10% smaller for a crawler: that is a challenge page or a JS-only shell being
+            // served to the agents that cannot run JS.
+            const seen = {};
+            for (const [name, ua] of Object.entries(UAS)) {
+              try {
+                const r = await get(base + '/', ua);
+                seen[name] = r;
+                console.error(`  ${name.padEnd(14)} ${r.status} ${r.bytes} bytes`);
+              } catch (e) {
+                seen[name] = null;
+                add('BLOCKING', 'crawler parity', `${name} could not fetch ${base}/ at all (${e.message})`);
+              }
+            }
+            const ref = seen.browser;
+            if (ref) {
+              for (const bot of BOTS) {
+                const r = seen[bot];
+                if (!r) continue;
+                if (r.status !== ref.status) {
+                  add('BLOCKING', 'crawler parity', `${bot} gets ${r.status} where a browser gets ${ref.status}`);
+                } else if (ref.bytes > 0 && r.bytes < ref.bytes * 0.9) {
+                  const pct = Math.round((1 - r.bytes / ref.bytes) * 100);
+                  add('BLOCKING', 'crawler parity', `${bot} is served ${pct}% less HTML than a browser (${r.bytes} vs ${ref.bytes} bytes), which is what a challenge page or a JS-only shell looks like`);
+                }
+              }
+            }
+            fs.writeFileSync(process.argv[3], out.length ? out.join('\n') + '\n' : '');
+          })();
+          NODE
+
+          node "$RUNNER_TEMP/crawl.cjs" "$base" "$RUNNER_TEMP/crawl-findings.tsv"
+          rc=$?
+          if [ "$rc" -eq 2 ]; then
+            echo "::error title=Origin unreachable::Nothing answered at $base, so no crawl check ran. An unreachable origin is an unmeasured sweep, not a clean one."
+            exit 1
+          fi
+          [ "$rc" -eq 0 ] || { echo "::error::the crawl checks exited $rc"; exit 1; }
+
+      # ------------------------------------------------------------------- report
+      - name: Compose the report
+        id: report
+        if: always()
+        env:
+          BASE: ${{ steps.crawl.outputs.base }}
+          KIND: ${{ steps.origin.outputs.kind }}
+          GRAPH_OUTCOME: ${{ steps.graph.outcome }}
+          CRAWL_OUTCOME: ${{ steps.crawl.outcome }}
+        run: |
+          set -euo pipefail
+          f="$RUNNER_TEMP/report.md"
+          all="$RUNNER_TEMP/all.tsv"
+          cat "$RUNNER_TEMP/graph-findings.tsv" "$RUNNER_TEMP/crawl-findings.tsv" 2>/dev/null > "$all" || true
+          count="$(grep -c . "$all" 2>/dev/null || true)"
+          count="${count:-0}"
+
+          # WHICH CHECKS ACTUALLY RAN. This step runs on always(), so it also runs after a
+          # check has died, and an empty findings file then means "never measured" rather
+          # than "nothing found". Reporting the first as the second is the exact failure
+          # this automation exists to remove, and it is worse here than anywhere else
+          # because the issue step would then CLOSE the issue describing the fault.
+          missing=""
+          [ "${GRAPH_OUTCOME:-skipped}" = "success" ] || missing="${missing}orphans, dead links and stale content; "
+          [ "${CRAWL_OUTCOME:-skipped}" = "success" ] || missing="${missing}robots and AI-crawler fetch parity; "
+          if [ -n "$missing" ]; then complete=false; else complete=true; fi
+          echo "complete=$complete" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "# Site sweep"
+            echo
+            # Naming the origin is not decoration. A robots or parity result means nothing
+            # without it, because the whole point of the check is that the two can disagree.
+            echo "**Origin swept:** \`${BASE:-unknown}\` (${KIND:-unknown})"
+            echo "**Gate:** \`${PALATE_REF}\`"
+            echo "**Last run:** $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo
+            if [ "$KIND" = "local" ]; then
+              echo "> Swept against a local dev server. A crawlability fault caused by a CDN, a WAF"
+              echo "> or a firewall rule cannot be seen from there. Set the \`PALATE_ORIGIN\`"
+              echo "> repository variable to the production URL to make these checks mean something."
+              echo
+            fi
+            if [ "$complete" = "false" ]; then
+              echo "## This sweep did not finish"
+              echo
+              echo "The following did NOT run, so nothing below covers them: **${missing%; }**."
+              echo "Treat this as unmeasured, not clean. The workflow run has the reason."
+              echo
+            fi
+            if [ "$count" -eq 0 ] && [ "$complete" = "true" ]; then
+              echo "Nothing to report. Crawlability, fetch parity, the link graph and content freshness all clean."
+            elif [ "$count" -eq 0 ]; then
+              echo "No findings from the checks that did run."
+            else
+              # Ranked by what it costs, not by how easy it is to fix: crawler parity and
+              # dead links first, because those cost traffic.
+              for sev in BLOCKING REVIEW ASK; do
+                lines="$(awk -F'\t' -v s="$sev" '$1==s' "$all" || true)"
+                [ -z "$lines" ] && continue
+                case "$sev" in
+                  BLOCKING) echo "## Blocking" ;;
+                  REVIEW)   echo "## Review" ;;
+                  ASK)      echo "## Ask the owner" ;;
+                esac
+                echo
+                printf '%s\n' "$lines" | awk -F'\t' '{printf "- **%s** %s\n", $2, $3}'
+                echo
+              done
+            fi
+            echo "---"
+            echo "Opened by \`palate-sweep.yml\`. Re-run it from the Actions tab; it edits this issue rather than opening another."
+          } > "$f"
+
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          cat "$f" >> "$GITHUB_STEP_SUMMARY"
+          cat "$f"
+
+      - name: Open, update or close the sweep issue
+        if: always() && steps.report.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COUNT: ${{ steps.report.outputs.count }}
+          COMPLETE: ${{ steps.report.outputs.complete }}
+        run: |
+          set -euo pipefail
+          title="Palate site sweep"
+          body="$RUNNER_TEMP/report.md"
+          gh label create palate-sweep --color 'E2553D' --description 'Opened by the weekly Palate site sweep' >/dev/null 2>&1 || true
+          num="$(gh issue list --state open --label palate-sweep --limit 1 --json number --jq '.[0].number // empty')"
+
+          # THE ONE RULE: AN INCOMPLETE SWEEP NEVER CLOSES ANYTHING. Closing on a sweep
+          # that could not measure retires the exact fault it failed to look at, and
+          # whoever reads the closed issue reasonably concludes it was fixed. Findings
+          # from the half that DID run are still worth publishing, so they are, under the
+          # "this sweep did not finish" header the report already wrote.
+          if [ "$COUNT" -gt 0 ]; then
+            if [ -n "$num" ]; then
+              # Edit rather than open a second one. A sweep that opens a fresh issue every
+              # week is a sweep people stop reading by week four.
+              gh issue edit "$num" --title "$title" --body-file "$body"
+              echo "updated issue #$num ($COUNT finding(s), complete=$COMPLETE)"
+            else
+              # --label can fail if label creation was denied; the issue matters more than
+              # the label, so it is opened either way and only the auto-close lookup
+              # (which finds issues BY label) degrades.
+              gh issue create --title "$title" --body-file "$body" --label palate-sweep \
+                || gh issue create --title "$title" --body-file "$body"
+              echo "opened a new sweep issue ($COUNT finding(s), complete=$COMPLETE)"
+            fi
+          elif [ "$COMPLETE" != "true" ]; then
+            if [ -n "$num" ]; then
+              gh issue comment "$num" --body "The sweep on $(date -u '+%Y-%m-%d') did not finish, so this issue has NOT been re-checked and is being left open. See the workflow run for the reason."
+              echo "left issue #$num open (incomplete sweep)"
+            else
+              echo "incomplete sweep, nothing found by the checks that ran, no open issue: the failing workflow run is the notification"
+            fi
+          else
+            if [ -n "$num" ]; then
+              gh issue comment "$num" --body "Swept again on $(date -u '+%Y-%m-%d'): everything previously reported is clear. Closing."
+              gh issue close "$num"
+              echo "closed issue #$num (clean)"
+            else
+              echo "clean, and no open sweep issue to close"
+            fi
+          fi

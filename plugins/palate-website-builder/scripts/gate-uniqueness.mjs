@@ -52,10 +52,19 @@ const STRUCT_EFF = process.env.PALATE_UNIQ_STRUCT != null ? STRUCT_MAX : (BRAND_
 // cased. Captures the layout/section shape while ignoring copy and exact values.
 function structSig(html) {
   const sig = [];
-  const re = /<(section|header|main|footer|article|aside|nav|div|h1|h2|h3|ul|ol|figure)\b[^>]*?(?:class="([^"]*)")?[^>]*>/gi;
+  // TWO STEPS, NEVER ONE REGEX. The previous pattern put a lazy [^>]*? before an OPTIONAL
+  // class capture: the lazy part matched empty, the optional group matched empty, and the
+  // trailing [^>]* swallowed the real class attribute, so the capture NEVER fired. Every
+  // element signed as `tag.` with no class, all variants collapsed to the same tag sequence,
+  // and two genuinely different pages scored structure 1.00. TWO separate real builds hit the
+  // false block and had to adjudicate around this gate before the cause was fixed here. On a
+  // brand-provided build the style half is legitimately ~1.0 (same palette and faces by
+  // design), so the structural half is the only discriminator, and it was blind.
+  const re = /<(section|header|main|footer|article|aside|nav|div|h1|h2|h3|ul|ol|figure)\b([^>]*)>/gi;
   let m;
   while ((m = re.exec(html))) {
-    const cls = (m[2] || "").trim().split(/\s+/)[0] || "";
+    const cm = /class\s*=\s*"([^"]*)"/i.exec(m[2] || "");
+    const cls = ((cm && cm[1]) || "").trim().split(/\s+/)[0] || "";
     sig.push(`${m[1].toLowerCase()}.${cls.toLowerCase()}`);
   }
   return sig;

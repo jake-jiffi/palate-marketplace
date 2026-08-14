@@ -1,19 +1,51 @@
 import type { APIRoute } from "astro";
-// llms.txt: a concise, structured summary for AI crawlers. Populated from Sanity
-// siteSettings at build time in the real template; static fallback here.
-export const GET: APIRoute = () => {
-  const body = `# {{CLIENT_NAME}}
+import { getCollection } from "astro:content";
+import { business } from "../lib/business";
 
-> {{ONE_LINE_DESCRIPTION}}
+/**
+ * llms.txt - a concise, structured summary for answer engines.
+ *
+ * Built from the SAME sources the site renders from: the business record and
+ * the posts collection. Nothing here is retyped, so it cannot go stale the way
+ * a hand-maintained summary always does, and a fact corrected once is corrected
+ * here too.
+ */
+export const GET: APIRoute = async ({ site }) => {
+  const posts = (await getCollection("posts", ({ data }) => data.draft !== true))
+    .sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf())
+    .slice(0, 10);
 
-## Key pages
-- /: Home
-- /services: What we do
-- /about: Who we are
-- /contact: Get in touch
+  const lines: string[] = [
+    `# ${business.name}`,
+    "",
+    `> ${business.description}`,
+    "",
+  ];
 
-## Contact
-hello@{{DOMAIN}}
-`;
-  return new Response(body, { headers: { "Content-Type": "text/plain" } });
+  if (business.services.length) {
+    lines.push("## What we do", ...business.services.map((s) => `- ${s}`), "");
+  }
+
+  if (business.serviceAreas.length) {
+    lines.push("## Where we work", ...business.serviceAreas.map((a) => `- ${a}`), "");
+  }
+
+  if (posts.length) {
+    lines.push(
+      "## Recent writing",
+      ...posts.map((p) => `- [${p.data.title}](/blog/${p.id}): ${p.data.description}`),
+      "",
+    );
+  }
+
+  lines.push("## Contact", business.email);
+  if (business.telephone) lines.push(business.telephone);
+  if (business.openingHours.length) {
+    lines.push("", "## Hours", ...business.openingHours);
+  }
+  if (site) lines.push("", `## Canonical`, site.toString());
+
+  return new Response(lines.join("\n") + "\n", {
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
 };
