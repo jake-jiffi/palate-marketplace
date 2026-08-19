@@ -302,7 +302,8 @@ runw() {
   # The payload is built with jq, not printf. A hand-escaped script value produced INVALID
   # JSON, the hook read nothing, allowed, and the assertion failed while the guard was working
   # perfectly. The harness lied, not the code.
-  out=$(jq -cn --arg cwd "$cwd" '{tool_name:"Workflow",cwd:$cwd,tool_input:{script:"export const meta={name:1}"}}' \
+  local script="${SCRIPT:-export const meta={name:\"x\",description:\"y\"}}"
+  out=$(jq -cn --arg cwd "$cwd" --arg s "$script" '{tool_name:"Workflow",cwd:$cwd,tool_input:{script:$s}}' \
     | env "$@" node "$HOOK" 2>/dev/null)
   if printf '%s' "$out" | grep -q '"deny"'; then echo "DENY"; else echo "ALLOW"; fi
 }
@@ -314,6 +315,32 @@ want "Workflow + PALATE_GATE_OFF=1 -> allow" ALLOW "$(runw "$O1" PALATE_GATE_OFF
 
 O2="$TMP/orch-nonbuild"; mkdir -p "$O2"   # no marker: not a Palate build
 want "Workflow with no build-site marker -> allow" ALLOW "$(runw "$O2")"
+
+# CREATIVE vs MECHANICAL, tested against the REAL workflow names from the build that failed.
+# A blanket deny would have been wrong: the agent cannot set PALATE_ALLOW_WORKFLOW itself (the
+# env var belongs to the Claude Code process), so under an orchestration-first mode it would be
+# unable to comply with either instruction. Gathering in parallel is fine and stays allowed.
+wf() { SCRIPT="$2" runw "$1"; }
+for name in pelvy-explore pelvy-ladder-judging pelvy-signup-redesign pelvy-life-pass pelvy-content-layer; do
+  want "real workflow \"$name\" (design work) -> deny" DENY \
+    "$(wf "$O1" "export const meta={name:\"$name\",description:\"build the variants\"}")"
+done
+want "a workflow that writes .astro -> deny" DENY \
+  "$(wf "$O1" 'agent("write src/pages/v3.astro")')"
+want "an UNLABELLED workflow -> deny (fails closed)" DENY \
+  "$(wf "$O1" 'export const meta={name:"do-a-thing",description:"do a thing"}')"
+
+want "pelvy-harvest (gathering) -> allow" ALLOW \
+  "$(wf "$O1" 'export const meta={name:"pelvy-harvest",description:"crawl the live site and harvest content"}')"
+want "measuring every image -> allow" ALLOW \
+  "$(wf "$O1" 'export const meta={name:"assets",description:"measure every image dimension via range requests"}')"
+want "competitor research -> allow" ALLOW \
+  "$(wf "$O1" 'export const meta={name:"research",description:"research competitors and summarise"}')"
+want "an accessibility audit -> allow" ALLOW \
+  "$(wf "$O1" 'export const meta={name:"a11y",description:"run an accessibility audit across routes"}')"
+# The dangerous direction: gathering words must not launder a design workflow through.
+want "\"harvest\" plus variant writing -> deny (creative wins)" DENY \
+  "$(wf "$O1" 'export const meta={name:"harvest",description:"harvest refs then build each variant hero"}')"
 
 # The guard must not have broken the ordinary write path it shares a hook with.
 O3="$TMP/orch-write"; mkdir -p "$O3"

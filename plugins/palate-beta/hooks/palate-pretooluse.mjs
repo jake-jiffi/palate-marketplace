@@ -338,28 +338,80 @@ if (tool === "Workflow") {
   } catch {
     allow();
   }
+
+  // A BLANKET DENY WOULD LEAVE NO WAY OUT, and that matters more than it looks. The env-var
+  // escape is set on the Claude Code process, so an agent mid-build CANNOT set it: under an
+  // orchestration-first mode the agent would be told no, be unable to comply with either
+  // instruction, and thrash. Mechanical fan-out is also genuinely fine. Pelvy's `pelvy-harvest`
+  // was harmless; `pelvy-explore` and `pelvy-ladder-judging` are what cost the day.
+  //
+  // So the split is CREATIVE vs MECHANICAL, read off the script the caller is about to run.
+  // It fails CLOSED, because a false allow costs a rebuilt site and a false deny costs one
+  // reshaped call, and the deny says exactly what would pass.
+  // READ THE PAYLOAD DIRECTLY, never the `input` const below. This guard runs above that
+  // declaration, and a `const` referenced before its line is a ReferenceError at RUNTIME that
+  // `node --check` passes cleanly: written the obvious way, this hook crashed on every workflow
+  // call and the guard was dead. Third time today that a syntax check has hidden a TDZ.
+  const wf = p.tool_input || {};
+  const blob = [
+    typeof wf.script === "string" ? wf.script : "",
+    typeof wf.scriptPath === "string" ? wf.scriptPath : "",
+    typeof wf.name === "string" ? wf.name : "",
+    (() => { try { return JSON.stringify(wf.args ?? ""); } catch { return ""; } })(),
+  ].join("\n").toLowerCase();
+
+  // Authoring the site, or deciding how it should look. None of this may leave this session.
+  const CREATIVE = [
+    ".astro", ".svelte", ".vue", ".tsx", ".jsx", "src/pages", "src/components", "src/styles",
+    "variant", "explore", "diverge", "converge", "commission", "rung", "ladder", "compose",
+    "redesign", "hero", "art direction", "design direction", "concept", "palette", "typograph",
+    "motion", "signature move", "donor", "judge", "judging", "score the", "rank the", "pick the",
+    "write the copy", "copy voice", "section", "layout",
+  ];
+  // Reading, measuring, gathering. Parallelising these is a real win and costs nothing.
+  const MECHANICAL = [
+    "crawl", "harvest", "sitemap", "scrape", "fetch", "measure", "dimension", "audit",
+    "inventory", "extract", "transcript", "research", "competitor", "summar", "classify",
+    "categor", "lighthouse", "accessib", "migrate", "dedupe", "wayback", "screenshot",
+  ];
+  const hitsCreative = CREATIVE.filter((t) => blob.includes(t));
+  const hitsMechanical = MECHANICAL.some((t) => blob.includes(t));
+
+  if (!hitsCreative.length && hitsMechanical) allow(); // gathering, in parallel: fine
+
+  const why = hitsCreative.length
+    ? `This one names ${hitsCreative.slice(0, 4).map((t) => `"${t}"`).join(", ")}, so it is design work.`
+    : "This one does not read as pure gathering, and an unlabelled workflow on a build site is treated as design work rather than guessed at.";
+
   deny(
-    "Palate BUILD SITE gate: do not orchestrate a Palate build with the Workflow tool.\n" +
+    "Palate BUILD SITE gate: the creative stages of a Palate build stay in THIS session.\n" +
       "\n" +
       "A workflow agent gets the prompt your script hands it and nothing else. It does not load\n" +
-      "SKILL.md, explore-stage.md or build-commission.md, so the agents doing the work have never\n" +
-      "read the ambition ladder, the one-donor-per-rung rule, or the restraint clause. This is\n" +
-      "measured, not theoretical. Two real builds from the same prompt:\n" +
+      "SKILL.md, explore-stage.md or build-commission.md, so it has never read the ambition ladder,\n" +
+      "the one-distinct-donor-per-rung rule, or the restraint clause. Measured on two real builds\n" +
+      "from the same prompt:\n" +
       "\n" +
       "  The Wildlings   0 workflows, variants written in-session, surveyor ran.\n" +
       "                  28 Palate calls, 12 references, 8 inner pages, 5 craft layers. Delighted.\n" +
       "  Pelvy           10 workflows including one for Explore, zero variant writes in-session,\n" +
-      "                  no surveyor. 3 Palate calls. A day lost and every fault traced here.\n" +
+      "                  no surveyor. 3 Palate calls. A day lost, and every fault traced here.\n" +
       "\n" +
-      "Use the delegation that CARRIES the doctrine instead:\n" +
-      "  - palate-surveyor  for the library survey (keeps raw refs_* JSON out of your context)\n" +
-      "  - palate-verifier  for the gates and the visual loop, in a fresh context\n" +
-      "  - plain Agent spawns for research, crawling and asset work (Wildlings used 18)\n" +
-      "  - and write the variants YOURSELF, in this session, where the doctrine is loaded.\n" +
+      why +
+      "\n\n" +
+      "YOU HAVE NOT LOST THE PARALLELISM, only this route to it:\n" +
+      "  - Gathering workflows still run. Crawling, harvesting, measuring, auditing, research and\n" +
+      "    screenshots all pass this gate untouched.\n" +
+      "  - Fan out with the Agent tool instead for anything else that is not a design decision.\n" +
+      "    Wildlings ran eighteen research agents alongside its build.\n" +
+      "  - palate-surveyor does the library survey and keeps the raw refs_* JSON out of your\n" +
+      "    context, which is most of why you wanted a subagent.\n" +
+      "  - palate-verifier runs the gates and the visual loop in a fresh context.\n" +
+      "  - And write the variants YOURSELF, here, where the doctrine is loaded.\n" +
       "\n" +
-      "If this workflow is genuinely mechanical and touches no design decision, re-run with\n" +
-      "PALATE_ALLOW_WORKFLOW=1. (Not a Palate build? This only fires when .palate-skill-state.json\n" +
-      "exists. Everything off: PALATE_GATE_OFF=1.)",
+      "If you are running in an orchestration-first mode, this is the exception to it: on a Palate\n" +
+      "build the doctrine has to travel with whoever writes the page, and it only travels here.\n" +
+      "(Not a Palate build? This only fires when .palate-skill-state.json exists. Whole-build\n" +
+      "override, set before the session: PALATE_ALLOW_WORKFLOW=1. Everything off: PALATE_GATE_OFF=1.)",
   );
 }
 
