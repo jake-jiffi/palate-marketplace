@@ -2,7 +2,12 @@
 /**
  * hooks/palate-pretooluse.mjs - the build-site write gate (PreToolUse).
  *
- * Registered at the user level, matched on `Write|MultiEdit`. It does THREE things:
+ * Registered at the user level, matched on `Write|MultiEdit|Workflow`. It does FOUR things:
+ *
+ *  0. The ORCHESTRATION GUARD (build sites only). A Palate build must be driven by the
+ *     SKILL, because a workflow agent receives only its prompt and never loads the
+ *     doctrine. The two comparable real builds differ on exactly this and nothing else
+ *     that matters. See the block at the call site for the numbers.
  *
  *  1. The DIVERGE WALL (default-ON, but scoped to an active build site). A Palate
  *     BUILD SITE must begin by diverging into 8-10 genuinely different directions
@@ -300,6 +305,64 @@ const p = readStdin();
 if (!p || process.env.PALATE_GATE_OFF === "1") allow();
 
 const tool = p.tool_name || "";
+
+// ---------------------------------------------------------------------------------------
+// THE ORCHESTRATION GUARD. A Palate build must be DRIVEN BY THE SKILL, and this is the
+// difference between the two real builds we can compare directly.
+//
+//   The Wildlings: 0 Workflow calls, 20 subagents (a palate-surveyor, a palate-verifier and
+//   18 research agents), variants written IN the main session. Manifest: 28 Palate calls, 12
+//   references, 8 inner pages, all five craft layers. The client was delighted.
+//
+//   Pelvy: 10 Workflow calls including one named `pelvy-explore`, ZERO variant writes in the
+//   main session, no surveyor. Manifest: 3 Palate calls. It cost its owner a day and every
+//   fault in the review traces back here.
+//
+// WHY IT FAILS, precisely. A workflow agent receives only the prompt the script hands it. It
+// does not load SKILL.md, explore-stage.md or build-commission.md, so the agents that actually
+// wrote all eight variants had never read the ambition ladder, "one distinct donor per rung",
+// "rung 1 is restrained AND excellent", or "calm is not motionless". The orchestrator
+// paraphrases the brief into each worker, and a paraphrase of a restraint clause is applied
+// uniformly, which is exactly how eight rungs came out inside one narrow band.
+//
+// THE SKILL ALREADY HAS DELEGATION that keeps the doctrine: `palate-surveyor` and
+// `palate-verifier` carry it by construction, and plain Agent spawns are fine for research and
+// harvest (Wildlings used eighteen). So nothing is lost by holding this line, and a day was
+// lost by not having it. Escape: PALATE_ALLOW_WORKFLOW=1.
+// ---------------------------------------------------------------------------------------
+if (tool === "Workflow") {
+  if (process.env.PALATE_ALLOW_WORKFLOW === "1") allow();
+  try {
+    const marker = path.join(p.cwd || process.cwd(), ".palate-skill-state.json");
+    if (!fs.existsSync(marker)) allow(); // not a Palate build: none of our business
+  } catch {
+    allow();
+  }
+  deny(
+    "Palate BUILD SITE gate: do not orchestrate a Palate build with the Workflow tool.\n" +
+      "\n" +
+      "A workflow agent gets the prompt your script hands it and nothing else. It does not load\n" +
+      "SKILL.md, explore-stage.md or build-commission.md, so the agents doing the work have never\n" +
+      "read the ambition ladder, the one-donor-per-rung rule, or the restraint clause. This is\n" +
+      "measured, not theoretical. Two real builds from the same prompt:\n" +
+      "\n" +
+      "  The Wildlings   0 workflows, variants written in-session, surveyor ran.\n" +
+      "                  28 Palate calls, 12 references, 8 inner pages, 5 craft layers. Delighted.\n" +
+      "  Pelvy           10 workflows including one for Explore, zero variant writes in-session,\n" +
+      "                  no surveyor. 3 Palate calls. A day lost and every fault traced here.\n" +
+      "\n" +
+      "Use the delegation that CARRIES the doctrine instead:\n" +
+      "  - palate-surveyor  for the library survey (keeps raw refs_* JSON out of your context)\n" +
+      "  - palate-verifier  for the gates and the visual loop, in a fresh context\n" +
+      "  - plain Agent spawns for research, crawling and asset work (Wildlings used 18)\n" +
+      "  - and write the variants YOURSELF, in this session, where the doctrine is loaded.\n" +
+      "\n" +
+      "If this workflow is genuinely mechanical and touches no design decision, re-run with\n" +
+      "PALATE_ALLOW_WORKFLOW=1. (Not a Palate build? This only fires when .palate-skill-state.json\n" +
+      "exists. Everything off: PALATE_GATE_OFF=1.)",
+  );
+}
+
 if (tool !== "Write" && tool !== "MultiEdit") allow();
 
 const input = p.tool_input || {};

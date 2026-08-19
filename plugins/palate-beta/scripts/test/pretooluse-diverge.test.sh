@@ -287,6 +287,38 @@ S24="$TMP/survey24"; mkdir -p "$S24"
 write_valid_manifest "$S24"; add_calls "$S24" "$SHALLOW"   # no marker written
 want "no build-site marker + shallow survey -> allow" ALLOW "$(run "$S24" Write "$S24/src/pages/index.astro")"
 
+# ===================================================================================
+# THE ORCHESTRATION GUARD (25-29). A Palate build driven by the Workflow tool hands the
+# creative work to agents that never load the doctrine. Measured on two real builds from
+# the same prompt: Wildlings ran zero workflows and wrote its variants in-session (28
+# Palate calls, delighted client); Pelvy ran ten including one for Explore and wrote zero
+# variants in-session (3 Palate calls, a day lost).
+# ===================================================================================
+
+# runw <cwd> [env...] -> DENY or ALLOW, for a Workflow call (which carries no file_path)
+runw() {
+  local cwd="$1"; shift
+  local out
+  # The payload is built with jq, not printf. A hand-escaped script value produced INVALID
+  # JSON, the hook read nothing, allowed, and the assertion failed while the guard was working
+  # perfectly. The harness lied, not the code.
+  out=$(jq -cn --arg cwd "$cwd" '{tool_name:"Workflow",cwd:$cwd,tool_input:{script:"export const meta={name:1}"}}' \
+    | env "$@" node "$HOOK" 2>/dev/null)
+  if printf '%s' "$out" | grep -q '"deny"'; then echo "DENY"; else echo "ALLOW"; fi
+}
+
+O1="$TMP/orch-build"; mkdir -p "$O1"; echo "$MARKER" > "$O1/.palate-skill-state.json"
+want "Workflow on an active build site -> deny" DENY "$(runw "$O1")"
+want "Workflow + PALATE_ALLOW_WORKFLOW=1 -> allow" ALLOW "$(runw "$O1" PALATE_ALLOW_WORKFLOW=1)"
+want "Workflow + PALATE_GATE_OFF=1 -> allow" ALLOW "$(runw "$O1" PALATE_GATE_OFF=1)"
+
+O2="$TMP/orch-nonbuild"; mkdir -p "$O2"   # no marker: not a Palate build
+want "Workflow with no build-site marker -> allow" ALLOW "$(runw "$O2")"
+
+# The guard must not have broken the ordinary write path it shares a hook with.
+O3="$TMP/orch-write"; mkdir -p "$O3"
+want "a plain source write with no marker still passes" ALLOW "$(run "$O3" Write "$O3/src/pages/index.astro")"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

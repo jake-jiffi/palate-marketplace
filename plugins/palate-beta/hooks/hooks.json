@@ -16,7 +16,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|MultiEdit",
+        "matcher": "Write|MultiEdit|Workflow",
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-pretooluse.mjs\"" }
         ]
