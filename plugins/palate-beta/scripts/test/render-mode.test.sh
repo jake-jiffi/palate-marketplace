@@ -88,6 +88,19 @@ grep -q 'customPages' "$CONF" \
   && bad "astro.config.mjs still hand-lists posts for the sitemap; prerendered routes are enumerated natively" \
   || ok "the sitemap workaround is gone"
 
+# --- 7. THE RULE IS SCOPED TO NEW BUILDS ----------------------------------------------
+# A site built before this default is output: "server" and is working. An agent in CONTINUE
+# mode reading "static by default, and here is what SSR was costing you" could reasonably
+# decide to fix a live client site, which on a store means getStaticPaths on every dynamic
+# route and is exactly where product pages disappear. The doctrine has to say so in both
+# places an agent would look.
+grep -q "NEVER RETROFIT AN EXISTING SITE" "$DIR/../../SKILL.md" \
+  && ok "SKILL.md scopes the render mode to new builds" \
+  || bad "SKILL.md does not forbid retrofitting an existing site's render mode"
+grep -qi "Match the site you are in" "$DIR/../../references/continue-mode.md" \
+  && ok "continue-mode.md tells an edit to match the site it is in" \
+  || bad "continue-mode.md does not tell an edit to match the site's existing render mode"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

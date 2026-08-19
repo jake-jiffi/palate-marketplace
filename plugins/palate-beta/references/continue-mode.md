@@ -12,6 +12,19 @@ Webflow migration the plugin shipped, or a hand-built site the plugin has never
 seen (e.g. an existing Astro marketing site) are all valid inputs. The plugin
 reads the site it is handed and extends it in its own language.
 
+## Match the site you are in, never the current default
+
+**Read the project's `astro.config.mjs` before writing a page, and write for the mode you find.**
+A site built before the static default is `output: "server"` and is working. Retrofitting it is a
+change to a live deployment that was already handed over, and on a store it needs `getStaticPaths`
+on every dynamic route, which is exactly where product pages go missing. The same applies in
+reverse: do not add `prerender` declarations to a server-output site, where they are no-ops that
+read as intent.
+
+If the site would genuinely benefit (a dead `astro-pagefind` search box is the usual reason, see
+SKILL.md rule 7), say so plainly, price it as its own piece of work, and let the client decide. It
+is never a side effect of adding a page.
+
 ## The one rule that defines this mode: identity is LOCKED
 
 Continue mode is ALWAYS brand-provided. It NEVER runs DIVERGE / CONVERGE on
