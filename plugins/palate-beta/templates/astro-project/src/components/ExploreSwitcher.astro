@@ -4,13 +4,22 @@
 // own navigation so it never interferes with the real header. Renders only when
 // PUBLIC_EXPLORE_MODE=true AND at least one variant is registered in
 // src/lib/variants.ts. Zero-JS (native <details>). See references/explore-stage.md.
-import { variants, landingVariants } from "../lib/variants";
+//
+// IT LISTS IN LADDER ORDER AND SHOWS THE RUNG, because the set is a declared range and a
+// list in registration order hides that completely. It also always offers the way back to
+// /explore: a client who arrives on a deep link has otherwise no route to the page that
+// explains what they are looking at, and "I clicked one and could not get back" is how a
+// range gets judged on the first page someone happened to open.
+import { variants, landingVariants, byAmbition } from "../lib/variants";
 
 const exploreMode = import.meta.env.PUBLIC_EXPLORE_MODE === "true";
 const path = Astro.url.pathname;
-const all = [...variants, ...landingVariants];
+const rungs = byAmbition(variants);
+const landings = byAmbition(landingVariants);
+const all = [...rungs, ...landings];
 const show = exploreMode && all.length > 0;
 const current = all.find((v) => v.href === path) ?? all[0];
+const top = rungs.length ? Math.max(...rungs.map((v) => v.ambition || 1)) : 0;
 const optionClass = (active: boolean) =>
   [
     "block rounded-xl px-4 py-2.5 transition-colors",
@@ -25,20 +34,20 @@ const optionClass = (active: boolean) =>
     {/* Panel - opens upward, above the pill */}
     <div class="ev-panel absolute bottom-full right-0 mb-3 w-72 rounded-2xl border border-white/10 bg-neutral-900/95 p-3 shadow-2xl backdrop-blur">
       <p class="px-2 pb-2 pt-1 text-xs uppercase tracking-[0.2em] text-white/40">
-        Preview &middot; Pick a direction
+        Preview &middot; Restrained to bold
       </p>
       <ul class="max-h-[60vh] space-y-0.5 overflow-y-auto">
-        {variants.map((v) => (
+        {rungs.map((v) => (
           <li>
             <a href={v.href} class={optionClass(v.href === path)}>
-              <span class="text-white/40">{v.id}</span> {v.name}
+              <span class="text-white/40 tabular-nums">{v.ambition}</span> {v.name}
             </a>
           </li>
         ))}
-        {variants.length > 0 && landingVariants.length > 0 && (
+        {rungs.length > 0 && landings.length > 0 && (
           <li aria-hidden="true"><hr class="my-2 border-white/10" /></li>
         )}
-        {landingVariants.map((v) => (
+        {landings.map((v) => (
           <li>
             <a href={v.href} class={optionClass(v.href === path)}>
               <span class="text-white/40">{v.id}</span> {v.name}
@@ -46,13 +55,17 @@ const optionClass = (active: boolean) =>
           </li>
         ))}
       </ul>
+      <hr class="my-2 border-white/10" />
+      <a href="/explore" class="block rounded-xl px-4 py-2.5 text-white/70 transition-colors hover:bg-white/5 hover:text-white">
+        All {top} directions, explained
+      </a>
     </div>
 
     {/* Pill - the collapsed control */}
     <summary class="ev-pill flex cursor-pointer select-none items-center gap-2 rounded-full border border-white/10 bg-neutral-900/95 px-4 py-2.5 text-white shadow-2xl backdrop-blur">
       <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-300"></span>
       <span class="truncate">
-        <span class="text-white/40">{current.id}</span> {current.name}
+        <span class="text-white/40 tabular-nums">{current.ambition ?? current.id}</span> {current.name}
       </span>
       <svg class="ev-chevron ml-1 h-4 w-4 shrink-0 text-white/50 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path d="M18 15l-6-6-6 6" stroke-linecap="round" stroke-linejoin="round" />

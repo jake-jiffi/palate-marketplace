@@ -300,7 +300,23 @@ if [ -f "$SEO_GATE" ]; then
   esac
 fi
 
+# EXPLORE PRESENTATION: the range has to READ as a range. A set of /vN routes with no page
+# explaining them, or rungs with no stated intent, is a pile of links: the client opens two,
+# picks the nearest thing to what they already had in mind, and everything the ladder cost was
+# spent for nothing. NOTE the exit codes here are the OPPOSITE way round to the two gates above:
+# gate-explore.mjs skips with 0 and BLOCKS with 2, because it can always tell whether it applies
+# (no registered variants means no opinion), so there is no cannot-check state to signal.
+EXPLORE_GATE="$HERE/gate-explore.mjs"
+explore_note="explore=skipped(gate-explore.mjs not present)"
+if [ -f "$EXPLORE_GATE" ]; then
+  if explore_err="$(node "$EXPLORE_GATE" "$PROJ" 2>&1)"; then explore_rc=0; else explore_rc=$?; fi
+  case "$explore_rc" in
+    0) explore_note="explore=pass" ;;
+    *) fail "Explore is not presentable. ${explore_err}" ;;
+  esac
+fi
+
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, intensity=${intensity:-calm}, $bold_note."
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $explore_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

@@ -86,6 +86,9 @@ if (picked) {
   if (variantPages.length) {
     add("Explore not retired", `${variantPages.length} variant route(s) still live (${variantPages.slice(0, 4).join(", ")}${variantPages.length > 4 ? ", ..." : ""}) after the client picked. These are REJECTED concepts on the client's domain.`);
   }
+  if (existsSync(join(dir, "src/pages/explore.astro"))) {
+    add("Explore not retired", "src/pages/explore.astro is still live. It is a working document for one client (it names the rejected directions and coaches the choice), not a page of the site.");
+  }
   const vts = read("src/lib/variants.ts");
   if (vts && /\{\s*id:\s*["'](v|lp)\d+/.test(vts)) {
     add("Explore not retired", "src/lib/variants.ts still registers variants, so the direction picker renders on the delivered site.");

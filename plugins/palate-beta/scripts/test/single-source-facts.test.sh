@@ -53,7 +53,10 @@ missing=""
 while IFS= read -r f; do
   [ "$f" = "$RECORD" ] && continue
   grep -q "lib/business" "$TPL/$f" || missing="$missing $f"
-done < <(cd "$TPL" && grep -rl -E '\bbusiness(JsonLd)?\.' src/ 2>/dev/null || true)
+# A PROPERTY ACCESS, not the word. `business\.` alone matches an ordinary sentence ending in
+# "business." and reported a page whose only mention was prose, so the pattern requires an
+# identifier character after the dot.
+done < <(cd "$TPL" && grep -rl -E '\bbusiness(JsonLd)?\.[A-Za-z_$]' src/ 2>/dev/null || true)
 if [ -z "$missing" ]; then
   ok "every file using a fact imports lib/business"
 else
