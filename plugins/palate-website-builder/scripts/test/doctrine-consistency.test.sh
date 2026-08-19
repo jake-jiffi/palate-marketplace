@@ -87,6 +87,25 @@ grep -qiE "no donor slug (is )?used twice|one distinct donor" SKILL.md reference
   && ok "the no-donor-reused rule is stated" \
   || bad "the no-donor-reused rule vanished from the ladder doctrine"
 
+# --- 6. CALM IS NOT MOTIONLESS, AND THE RESTRAINT CLAUSE IS RUNG-SCOPED --------------------
+# A real build (a pelvic-health clinic) wrote a SITE-WIDE restraint clause at commission time,
+# which is BEFORE Explore, so it capped all 8 rungs: the boldest carried 2 keyframes. Two
+# statements have to survive together or the collapse comes back. First: calm governs the
+# CHARACTER of motion, not its existence. Second: the clause is written for RUNG 1, and the top
+# rung keeps its permission on any brand.
+grep -qi "CALM IS NOT MOTIONLESS" references/build-commission.md \
+  && ok "build-commission.md: calm is not motionless" \
+  || bad "build-commission.md lost the calm-is-not-motionless rule (a calm brief will ship inert again)"
+grep -qiE "RUNG-SCOPED|BINDS THE BOTTOM OF THE LADDER" references/build-commission.md \
+  && ok "build-commission.md: the restraint clause is rung-scoped" \
+  || bad "the restraint clause is site-wide again, so it caps every rung including the top one"
+grep -qi "CALM BRAND STILL SPANS THE LADDER" references/explore-stage.md \
+  && ok "explore-stage.md: a calm brand still spans the ladder" \
+  || bad "explore-stage.md no longer says a calm brand spans the full ladder"
+grep -qi "governs the CHARACTER of motion" SKILL.md \
+  && ok "SKILL.md: calm governs the character of motion, not its existence" \
+  || bad "SKILL.md reads 'a calm brand demands calm' with no character/existence split (reads as motionless)"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

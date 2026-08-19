@@ -2,7 +2,12 @@
 /**
  * hooks/palate-pretooluse.mjs - the build-site write gate (PreToolUse).
  *
- * Registered at the user level, matched on `Write|MultiEdit`. It does TWO things:
+ * Registered at the user level, matched on `Write|MultiEdit|Workflow`. It does FOUR things:
+ *
+ *  0. The ORCHESTRATION GUARD (build sites only). A Palate build must be driven by the
+ *     SKILL, because a workflow agent receives only its prompt and never loads the
+ *     doctrine. The two comparable real builds differ on exactly this and nothing else
+ *     that matters. See the block at the call site for the numbers.
  *
  *  1. The DIVERGE WALL (default-ON, but scoped to an active build site). A Palate
  *     BUILD SITE must begin by diverging into 8-10 genuinely different directions
@@ -19,7 +24,21 @@
  *     the brand); brand-provided LOCKS colour + type and judges distinctness on the
  *     within-brand axes (layout / composition / motion / density / art-direction).
  *
- *  2. The DEPTH NUDGE (unchanged, opt-in). When NO build-site marker is present the
+ *  2. The SURVEY WALL (default-ON on a build site, and ONLY once the MCP has proven
+ *     itself reachable). DIVERGE is a reasoning step; the SURVEY is where the library
+ *     actually enters the build, and this hook used to allow the write the moment DIVERGE
+ *     was valid, so nothing checked the survey before code existed. A real client build
+ *     reached eight finished variants on THREE Palate calls (one catalogue listing, two
+ *     hero screenshots) and its commission still cited a backbone as "the only reference in
+ *     the library that is literally the same machine", which is a claim about the whole
+ *     catalogue requiring a search nobody ran. The wall now runs the same depth gate the
+ *     Stop hook runs, at the moment it can still change the build. It binds ONLY when the
+ *     manifest records at least one Palate call that returned content, which is the proof
+ *     the MCP is connected: zero calls is the signature of a user with no token and allows
+ *     unchanged. It also stands down when refusals outnumber answers, so a degrading
+ *     connection cannot become a trap. Escape: PALATE_GATE_SURVEY=0.
+ *
+ *  3. The DEPTH NUDGE (unchanged, opt-in). When NO build-site marker is present the
  *     hook falls through to the original behaviour: NON-BLOCKING by default (the depth
  *     nudge is delivered by the skill and the Stop hook), HARD-BLOCK only under
  *     PALATE_GATE_STRICT=1, and even then fail-OPEN when the gate cannot be satisfied.
@@ -34,8 +53,11 @@
  *   - Edit is never matched (only Write/MultiEdit), so editing an existing file is
  *     structurally exempt; a Write OVER an already-scaffolded NON page/section file
  *     (config, layout chrome, lib) is iteration and also allowed.
- *   - DIVERGE is a reasoning step, NOT an MCP call, so the wall does NOT depend on MCP
+ *   - DIVERGE is a reasoning step, NOT an MCP call, so THAT wall does not depend on MCP
  *     liveness: the model writes manifest.diverge whether or not the MCP is connected.
+ *     The SURVEY wall is the opposite by design and is keyed on evidence the MCP answered,
+ *     never on a token, a config file or an env var, so it cannot fire on someone who has
+ *     no connection to satisfy it with.
  *     A tooling failure (fs throw) falls through to the depth path (allow under
  *     non-strict), so a failure can never wedge a write.
  *
@@ -125,6 +147,39 @@ function DIVERGE_REQUIRED_MESSAGE(mode) {
     "PALATE_GATE_OFF=1.)";
 
   return head + (mode === "brand-provided" ? provided : creation) + tail;
+}
+
+// The survey deny copy. It has to hand back the exact calls that clear the bar, because the
+// agent is mid-build and a vague "survey more" costs a round trip to work out what is missing.
+// House rules: Australian English, no em dashes, no AI-tell vocabulary.
+function SURVEY_REQUIRED_MESSAGE(gateReason, calls) {
+  return (
+    "Palate BUILD SITE gate: the SURVEY is not deep enough to start writing code.\n" +
+    "\n" +
+    `The Palate MCP is connected and this build has used it ${calls} time(s), so the library is\n` +
+    "reachable and the taste layer is the whole point of building here. Survey properly FIRST:\n" +
+    "what you write next should be carrying craft you have actually read, not craft you\n" +
+    "remember.\n" +
+    "\n" +
+    (gateReason ? gateReason + "\n\n" : "") +
+    "What clears it, in order:\n" +
+    "  1. refs_search with CONCRETE lexical terms (the business category, a page type, a named\n" +
+    "     mechanic like \"preloader\" or \"GSAP\", a font) across more than one vertical, or\n" +
+    "     refs_for_business / refs_match_brief on the brief. Five distinct references minimum.\n" +
+    "  2. refs_get on your backbone and donors with a REAL layer: layer:\"do_dont\",\n" +
+    "     layer:\"component_prompts\", layer:\"signature_moves\", layer:\"pages\", or\n" +
+    "     format:\"design\". Raw tokens and concept do not count: numbers without the why are\n" +
+    "     the shallow read this gate exists to stop.\n" +
+    "  3. refs_get_screenshot on at least two INNER pages of your donors (pricing, menu,\n" +
+    "     booking), not only their home page. Two minimum.\n" +
+    "\n" +
+    "Running the palate-surveyor subagent does all three and keeps the raw JSON out of your\n" +
+    "context.\n" +
+    "\n" +
+    "This only fires on an active build site whose MCP has already answered. A build with no\n" +
+    "Palate connection is never held to it. Escape for this build: PALATE_GATE_SURVEY=0.\n" +
+    "Everything off: PALATE_GATE_OFF=1."
+  );
 }
 
 function readStdin() {
@@ -250,6 +305,116 @@ const p = readStdin();
 if (!p || process.env.PALATE_GATE_OFF === "1") allow();
 
 const tool = p.tool_name || "";
+
+// ---------------------------------------------------------------------------------------
+// THE ORCHESTRATION GUARD. A Palate build must be DRIVEN BY THE SKILL, and this is the
+// difference between the two real builds we can compare directly.
+//
+//   The Wildlings: 0 Workflow calls, 20 subagents (a palate-surveyor, a palate-verifier and
+//   18 research agents), variants written IN the main session. Manifest: 28 Palate calls, 12
+//   references, 8 inner pages, all five craft layers. The client was delighted.
+//
+//   Pelvy: 10 Workflow calls including one named `pelvy-explore`, ZERO variant writes in the
+//   main session, no surveyor. Manifest: 3 Palate calls. It cost its owner a day and every
+//   fault in the review traces back here.
+//
+// WHY IT FAILS, precisely. A workflow agent receives only the prompt the script hands it. It
+// does not load SKILL.md, explore-stage.md or build-commission.md, so the agents that actually
+// wrote all eight variants had never read the ambition ladder, "one distinct donor per rung",
+// "rung 1 is restrained AND excellent", or "calm is not motionless". The orchestrator
+// paraphrases the brief into each worker, and a paraphrase of a restraint clause is applied
+// uniformly, which is exactly how eight rungs came out inside one narrow band.
+//
+// THE SKILL ALREADY HAS DELEGATION that keeps the doctrine: `palate-surveyor` and
+// `palate-verifier` carry it by construction, and plain Agent spawns are fine for research and
+// harvest (Wildlings used eighteen). So nothing is lost by holding this line, and a day was
+// lost by not having it. Escape: PALATE_ALLOW_WORKFLOW=1.
+// ---------------------------------------------------------------------------------------
+if (tool === "Workflow") {
+  if (process.env.PALATE_ALLOW_WORKFLOW === "1") allow();
+  try {
+    const marker = path.join(p.cwd || process.cwd(), ".palate-skill-state.json");
+    if (!fs.existsSync(marker)) allow(); // not a Palate build: none of our business
+  } catch {
+    allow();
+  }
+
+  // A BLANKET DENY WOULD LEAVE NO WAY OUT, and that matters more than it looks. The env-var
+  // escape is set on the Claude Code process, so an agent mid-build CANNOT set it: under an
+  // orchestration-first mode the agent would be told no, be unable to comply with either
+  // instruction, and thrash. Mechanical fan-out is also genuinely fine. Pelvy's `pelvy-harvest`
+  // was harmless; `pelvy-explore` and `pelvy-ladder-judging` are what cost the day.
+  //
+  // So the split is CREATIVE vs MECHANICAL, read off the script the caller is about to run.
+  // It fails CLOSED, because a false allow costs a rebuilt site and a false deny costs one
+  // reshaped call, and the deny says exactly what would pass.
+  // READ THE PAYLOAD DIRECTLY, never the `input` const below. This guard runs above that
+  // declaration, and a `const` referenced before its line is a ReferenceError at RUNTIME that
+  // `node --check` passes cleanly: written the obvious way, this hook crashed on every workflow
+  // call and the guard was dead. Third time today that a syntax check has hidden a TDZ.
+  const wf = p.tool_input || {};
+  const blob = [
+    typeof wf.script === "string" ? wf.script : "",
+    typeof wf.scriptPath === "string" ? wf.scriptPath : "",
+    typeof wf.name === "string" ? wf.name : "",
+    (() => { try { return JSON.stringify(wf.args ?? ""); } catch { return ""; } })(),
+  ].join("\n").toLowerCase();
+
+  // Authoring the site, or deciding how it should look. None of this may leave this session.
+  const CREATIVE = [
+    ".astro", ".svelte", ".vue", ".tsx", ".jsx", "src/pages", "src/components", "src/styles",
+    "variant", "explore", "diverge", "converge", "commission", "rung", "ladder", "compose",
+    "redesign", "hero", "art direction", "design direction", "concept", "palette", "typograph",
+    "motion", "signature move", "donor", "judge", "judging", "score the", "rank the", "pick the",
+    "write the copy", "copy voice", "section", "layout",
+  ];
+  // Reading, measuring, gathering. Parallelising these is a real win and costs nothing.
+  const MECHANICAL = [
+    "crawl", "harvest", "sitemap", "scrape", "fetch", "measure", "dimension", "audit",
+    "inventory", "extract", "transcript", "research", "competitor", "summar", "classify",
+    "categor", "lighthouse", "accessib", "migrate", "dedupe", "wayback", "screenshot",
+  ];
+  const hitsCreative = CREATIVE.filter((t) => blob.includes(t));
+  const hitsMechanical = MECHANICAL.some((t) => blob.includes(t));
+
+  if (!hitsCreative.length && hitsMechanical) allow(); // gathering, in parallel: fine
+
+  const why = hitsCreative.length
+    ? `This one names ${hitsCreative.slice(0, 4).map((t) => `"${t}"`).join(", ")}, so it is design work.`
+    : "This one does not read as pure gathering, and an unlabelled workflow on a build site is treated as design work rather than guessed at.";
+
+  deny(
+    "Palate BUILD SITE gate: the creative stages of a Palate build stay in THIS session.\n" +
+      "\n" +
+      "A workflow agent gets the prompt your script hands it and nothing else. It does not load\n" +
+      "SKILL.md, explore-stage.md or build-commission.md, so it has never read the ambition ladder,\n" +
+      "the one-distinct-donor-per-rung rule, or the restraint clause. Measured on two real builds\n" +
+      "from the same prompt:\n" +
+      "\n" +
+      "  The Wildlings   0 workflows, variants written in-session, surveyor ran.\n" +
+      "                  28 Palate calls, 12 references, 8 inner pages, 5 craft layers. Delighted.\n" +
+      "  Pelvy           10 workflows including one for Explore, zero variant writes in-session,\n" +
+      "                  no surveyor. 3 Palate calls. A day lost, and every fault traced here.\n" +
+      "\n" +
+      why +
+      "\n\n" +
+      "YOU HAVE NOT LOST THE PARALLELISM, only this route to it:\n" +
+      "  - Gathering workflows still run. Crawling, harvesting, measuring, auditing, research and\n" +
+      "    screenshots all pass this gate untouched.\n" +
+      "  - Fan out with the Agent tool instead for anything else that is not a design decision.\n" +
+      "    Wildlings ran eighteen research agents alongside its build.\n" +
+      "  - palate-surveyor does the library survey and keeps the raw refs_* JSON out of your\n" +
+      "    context, which is most of why you wanted a subagent.\n" +
+      "  - palate-verifier runs the gates and the visual loop in a fresh context.\n" +
+      "  - And write the variants YOURSELF, here, where the doctrine is loaded.\n" +
+      "\n" +
+      "If you are running in an orchestration-first mode, this is the exception to it: on a Palate\n" +
+      "build the doctrine has to travel with whoever writes the page, and it only travels here.\n" +
+      "(Not a Palate build? This only fires when .palate-skill-state.json exists. Whole-build\n" +
+      "override, set before the session: PALATE_ALLOW_WORKFLOW=1. Everything off: PALATE_GATE_OFF=1.)",
+  );
+}
+
 if (tool !== "Write" && tool !== "MultiEdit") allow();
 
 const input = p.tool_input || {};
@@ -302,11 +467,53 @@ try {
       /* absent/unreadable => diverge not yet valid */
     }
 
-    if (divergeValid(manifest, mode)) allow();
+    if (!divergeValid(manifest, mode)) {
+      // A build site is active, this is a NEW (or page/section) source write, and DIVERGE
+      // has not validly run FOR THIS MODE. Block it and tell the model to diverge first.
+      deny(DIVERGE_REQUIRED_MESSAGE(mode));
+    }
 
-    // A build site is active, this is a NEW (or page/section) source write, and DIVERGE
-    // has not validly run FOR THIS MODE. Block it and tell the model to diverge first.
-    deny(DIVERGE_REQUIRED_MESSAGE(mode));
+    // ---------------------------------------------------------------------------------
+    // THE SURVEY WALL. DIVERGE is a reasoning step; the SURVEY is where the library
+    // actually enters the build, and until now nothing checked it before code was written.
+    // The depth gate existed and was strict (5 references, 2 inner pages, 3 tools, 1 deep
+    // read, 1 rich layer), but on a build site this branch called allow() the moment
+    // DIVERGE was valid and never ran it. A real client build reached eight finished
+    // variants having made THREE Palate calls: one catalogue listing and two hero
+    // screenshots. Its own commission still claimed a backbone was "the only reference in
+    // the library that is literally the same machine", a claim about 2,169 references that
+    // requires a search nobody ran. The craft in that build was the model's, not the
+    // library's, which is the one thing Palate cannot afford to ship.
+    //
+    // WHY IT CANNOT TRAP ANYONE. It only binds once the MCP has PROVEN itself reachable, by
+    // returning content at least once in this build. Zero recorded calls is exactly the
+    // signature of a user whose token is not set, and that case allows, unchanged. So the
+    // rule is: you may build without Palate, and you may not pretend to build with it.
+    // ---------------------------------------------------------------------------------
+    if (process.env.PALATE_GATE_SURVEY !== "0") {
+      const calls = Array.isArray(manifest?.mcp_calls) ? manifest.mcp_calls.length : 0;
+      const failures = Array.isArray(manifest?.mcp_failures) ? manifest.mcp_failures.length : 0;
+      // A degrading connection must not become a trap: if the library is refusing more often
+      // than it answers, the agent cannot satisfy a depth bar no matter how it tries.
+      const degraded = failures > calls;
+      if (calls >= 1 && !degraded) {
+        try {
+          execFileSync("bash", [GATE, buildCtx.manifest], { stdio: ["ignore", "ignore", "pipe"] });
+        } catch (e) {
+          // DENY ONLY ON THE GATE'S OWN BLOCK CODE (2). execFileSync throws on any non-zero
+          // status AND on failing to spawn at all, so a missing bash, an unreadable script or a
+          // permissions problem arrives here looking exactly like a verdict. Treating those as
+          // a block would wall every source write for a reason that has nothing to do with the
+          // build. Exit 3 is the non-blocking UNGROUNDED label and is unreachable here anyway
+          // (it requires zero calls, which this branch has already excluded).
+          if (e && e.status === 2) {
+            deny(SURVEY_REQUIRED_MESSAGE((e.stderr ? e.stderr.toString() : "").trim(), calls));
+          }
+        }
+      }
+    }
+
+    allow();
   }
 } catch {
   // Any unexpected fs error: do NOT wedge a write. Fall through to the depth path,

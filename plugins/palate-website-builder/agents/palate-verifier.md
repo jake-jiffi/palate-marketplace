@@ -56,6 +56,16 @@ never held to the bold bar.
    Exit 2 = a near-duplicate pair (same shape AND same skin). Lead duplicates from
    different backbones and re-skin from different donors.
 
+2b. **Explore presentation gate** (the range READS as a range):
+   `node scripts/gate-explore.mjs <projectDir>`
+   Exit 2 = the client would be handed a pile of links. It blocks when variants are
+   registered and `src/pages/explore.astro` is missing, when a rung carries no
+   `what` / `why` / `feeling`, when two rungs claim one position, when the ladder has
+   gaps, when a name is "Option 2", or when a feeling would describe any website ever
+   built. It has NO opinion when no variants are registered, so it is silent on every
+   non-Explore build. Report its findings verbatim: they name the entry, and the fix is
+   always in `src/lib/variants.ts`.
+
 3. **Anti-default / slop lint** (no Claude-default shapes or AI-tell copy):
    `bash scripts/ux-lint.sh <built file(s)>` and read `references/anti-patterns.md` (and
    the full tell catalogue it links, `references/ai-slop-tells.md`). Flag a gradient hero,

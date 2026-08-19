@@ -95,6 +95,37 @@ copy equivalent of the default hero+three-cards layout. Record the chosen line +
 tag in the commission. Fail-open: a calm conversion brief still writes a specific headline, it
 just does not need the full spread.
 
+## CALM IS NOT MOTIONLESS, and the restraint clause is RUNG-SCOPED
+
+Two failures of this file, both found on a real build (a pelvic-health brand, calm by nature)
+whose commission wrote: *"Calm brand, calm build. The single permitted moment of life is the
+condition marquee. Anything that performs is wrong here."* The result had 2 keyframes and 4
+transitions on its BOLDEST rung. The owner's objection is the correct one and it is now doctrine.
+
+**MOTION IS NOT THE INTENSITY DIAL.** Calm governs the CHARACTER of motion, never its
+existence: how slow it is, how much it asks of the reader, whether it announces itself. A calm
+brand can carry substantial, generous, deliberate motion and still be calm, and often should,
+because stillness is not the same as serenity. What a calm brand rules out is motion that
+PERFORMS: the bounce, the confetti, the thing that wants applause. It does not rule out a
+considered reveal, a slow parallax, a page that breathes, a scroll that carries an argument.
+A build that ships motionless has made a CHOICE, and the commission must argue it in a
+sentence, not arrive there by default from the word "calm".
+
+**THE RESTRAINT CLAUSE BINDS THE BOTTOM OF THE LADDER, NOT THE WHOLE SITE.** The commission is
+written at A.3.5, BEFORE Explore, so a clause phrased site-wide ("anything that performs is
+wrong here") silently caps every rung including the top one, and the range the client is meant
+to choose from collapses into a narrow band. Write the clause as it applies to RUNG 1, and say
+what the top rung is permitted to do. Rung N must have permission to be genuinely bold on ANY
+brand: that is what the ladder is for. The client cannot ask for more than they were shown, so
+if the boldest thing they see is timid, the brief has answered a question they never got to ask.
+
+A worked example of the same brand, written correctly:
+
+> Rung 1 is still and generous: type, air and one photograph doing the work, motion only where
+> it helps someone read. Rung 8 may commit hard, a scroll-driven argument that carries the
+> six-and-a-half-year wait into the page, provided it stays slow, never startles, and honours
+> reduced-motion. Both are calm. Neither is inert.
+
 ## The bold mandate (when the brand is high-intensity, the commission must commit)
 
 This is the high-intensity half of the restraint clause, made explicit so it cannot be read

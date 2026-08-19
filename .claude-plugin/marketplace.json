@@ -11,13 +11,13 @@
   "plugins": [
     {
       "name": "palate-website-builder",
-      "version": "1.13.0",
+      "version": "1.14.0",
       "source": "./plugins/palate-website-builder",
       "description": "Builds AND maintains production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites): scaffold a new site, or continue an existing one (add pages, sections and features with the same rigour, CONTINUE mode), plus brand packages. It runs a divergent-to-convergent concept spine, a self-issued build commission held to an awards-grade bar, a screenshot-grounded visual self-review loop, and novelty + buildability gates that block on real evidence rather than a claim. The 1.4.x line adds anti-slop guards that catch generic AI-tell layouts and copy before they ship. After install, connect the Palate MCP with one claude mcp add --scope user command (free token at app.palatemcp.com)."
     },
     {
       "name": "palate-beta",
-      "version": "1.14.0-beta.5",
+      "version": "1.15.0-beta.1",
       "source": "./plugins/palate-beta",
       "description": "BETA, EXPECTED TO HAVE BUGS. The unstable track of the Palate website-builder, published so testers can opt in without disturbing a working install. Adds a repo-native content runtime (markdown collections, a single source for business facts), a content graph with blast radius, a contribution contract that gates every change on the same 41 checks the certified grader uses, and 24 slash commands. NOT for client work. Install ONE of palate-beta or palate-website-builder, never both: both register hooks on plain Write, so two manifest recorders would write the same build-manifest.json and double-count MCP calls."
     }

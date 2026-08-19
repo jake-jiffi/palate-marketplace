@@ -196,7 +196,16 @@ the rule (the same rule as type): a mechanism appears in a variant only where th
 direction actually needs it, and the restraint clause governs the spread (match
 intensity to the brand; maximal motion is not the bar). A safe-warm variant may sit
 on the Tier 0 floor while a one-of-a-kind variant earns a shader hero - the same
-spread the ambition spectrum below already calls for. **The restraint clause cuts both
+spread the ambition spectrum below already calls for.
+**A CALM BRAND STILL SPANS THE LADDER.**
+Calm sets the CHARACTER of the top rung, never its height: on a calm brand
+rung N is still the boldest thing the ladder contains, expressed slowly, quietly and
+without startling anyone, rather than a slightly warmer rung 1. A measured build (a
+pelvic-health clinic) whose commission read "calm brand, calm build, anything that
+performs is wrong here" shipped 8 rungs spanning 1 to 2 keyframes and 3 to 4
+transitions, so the client was shown a range that was not one and could not ask for
+more than they saw. If the spread of motion, structure and conceptual distance from
+rung 1 to rung N is not obvious IN A STILL AND IN MOTION, the ladder has collapsed. **The restraint clause cuts both
 ways** (`references/build-commission.md`, "The bold mandate"): if the brand is
 high-intensity (a label, a maximalist consumer brand, a creative studio, a launch, a
 culture / type brand) the bold mandate applies and a flat, safe variant set FAILS the
@@ -290,6 +299,68 @@ This works alongside Vercel Toolbar Comments on Vercel preview deployments -
 the labels give the client structured pointing ("v3 hero"), Comments give them
 free-form notes on the same page. The two compose.
 
+## The explore page (`/explore`) - the one thing the client opens first
+
+**A LINK TO EIGHT URLS DOES NOT COMMUNICATE A RANGE.** Everything expensive about the
+ladder is spent on the assumption that the client understands they are being shown a
+span. They do not, unless something says so. Handed `/v1` through `/v8` with no framing,
+a client reads eight guesses, opens two, picks whichever is nearest what they already
+had in mind, and the restrained rung reads as "the boring one" rather than as one
+deliberate end of a distance the boldest rung defines. So the preview always ships
+`src/pages/explore.astro`, and it is the URL you hand over, never `/v1`.
+
+It does four things a list of links cannot:
+
+1. **Says what just happened**, in the client's language: we sampled many genuinely
+   different concepts, kept the ones worth building, and put them in order from most
+   restrained to boldest. This is a range, not a shortlist.
+2. **DRAWS the ladder**, so the span is visible before anything is clicked: one bar per
+   rung, rising left to right, labelled `more restrained` and `bolder` at the ends. A
+   client who can see the ends can say "somewhere around 5, with 8's motion on the hero",
+   which is worth ten times "I like that one".
+3. **Gives every rung its own argument**: `what` it is (the structural idea, not the
+   mood), `why` it is doing that for THIS business, and the `feeling` it carries. This is
+   also a check on the BUILD, which is the half worth remembering: a rung whose `why`
+   restates its `what`, or whose feeling is "modern and clean", did not have an idea, and
+   it is far cheaper to find that out before a client reads it.
+4. **Says what happens next** (below), because that is the step clients most often do not
+   know they have.
+
+`scripts/gate-explore.mjs` enforces all of it and is wired into the done gate: it blocks
+when variants are registered and the page is missing, when a rung carries no
+`what`/`why`/`feeling`, when two rungs claim the same position, when the ladder has gaps,
+and when a name is "Option 2" or a feeling would describe any website ever built. It has
+no opinion at all when no variants are registered, so it never touches a non-Explore
+build. The page is DELETED at Compose with the `/vN` routes; `gate-shipready.mjs` catches
+it if it survives, because it names the rejected directions and belongs to nobody but this
+client.
+
+## The hand-off - what you SAY when the preview is ready
+
+The preview being ready is the moment the build is most often mis-handled, because the
+natural instinct is to ask "which one?" and stop. That collapses a range into a vote.
+Say all four of these, in this order:
+
+1. **Send them to `/explore`, not to a variant.** "Start here: it explains the set and
+   walks the range from restrained to bold." One link, not eight.
+2. **Invite reaction, not selection.** Ask them to open BOTH ENDS before forming a view,
+   and say plainly that mixing is normal and expected: "rung 5, but with 8's hero and 2's
+   navigation" is a better answer than a single page, and the section marks exist so they
+   can point at one by name.
+3. **Offer another pass, and mean it.** Anything they want tried gets rebuilt into the
+   preview so they look at the real thing rather than a description of one. Changes are
+   cheap here and expensive after Compose, and saying so is what gets the useful feedback
+   out rather than a polite yes.
+4. **THEN name the next phase explicitly.** Once a direction is settled it becomes the
+   design system, and the rest of the site (services, about, contact, blog, legal) is
+   built on it end to end, with accessibility, performance and mobile checked on every
+   page. Say that out loud: a client who thinks the preview IS the site will not
+   understand why there is more work, and a client who does not know the offer exists
+   will not ask for it.
+
+Do not skip step 3 to reach step 4 faster. A direction chosen without a round of changes
+is a direction nobody has argued with, and it comes back at Compose when it is expensive.
+
 ## The direction picker (`ExploreSwitcher.astro`)
 
 A floating pill in the **bottom-right corner** - never a top bar, so it stays
@@ -302,10 +373,17 @@ mint. Built on a native `<details>` (zero JS).
 
 Each variant gets a short, evocative **name** (not just `v1`) so the pick
 conversation is human: the client can say "go with Deep Trawl" or "v2 hero".
-Claude sets `{ id, name, href }` for each variant in `src/lib/variants.ts` as
-they are generated; the picker reads that registry, renders only when
-`PUBLIC_EXPLORE_MODE=true` and at least one variant exists, and always reflects
-what actually exists. It is mounted once in `BaseLayout.astro`.
+Claude sets `{ id, name, href, ambition, what, why, feeling }` for each variant in
+`src/lib/variants.ts` as they are generated; the picker reads that registry, renders only
+when `PUBLIC_EXPLORE_MODE=true` and at least one variant exists, and always reflects what
+actually exists. It is mounted once in `BaseLayout.astro`.
+
+**It lists in LADDER order and shows the rung, not the route id.** A panel in registration
+order hides the one property that makes the set worth building. It also always carries the
+way back to `/explore` ("All N directions, explained"), because a client who arrives on a
+deep link otherwise has no route to the page that frames what they are looking at, and "I
+opened one and could not get back" is how a range ends up judged on whichever page someone
+happened to click.
 
 ## Compose - turning picks into the canonical pages
 

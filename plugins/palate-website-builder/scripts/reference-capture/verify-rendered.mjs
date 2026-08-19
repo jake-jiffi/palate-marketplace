@@ -338,6 +338,74 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     if (overflow > 1) add('High', route, vpName, 'horizontal scroll: content is ' + overflow + 'px wider than the viewport');
 
     /**
+     * ASYMMETRIC DEAD SPACE. A band whose content is pinned to one side while the other side
+     * is a vast void is an unfinished layout, and it reads as one.
+     *
+     * WHY A GATE AND NOT A JUDGEMENT. On a real client build, variant 1 left 892px of a 1440px
+     * screen empty on 12 of 19 bands, with content running 148px to 548px. Two independent
+     * judges flagged it before the client saw it, and no gate caught it, so it shipped into the
+     * preview anyway. It is the rung a client reads first.
+     *
+     * THE DISTINCTION THAT MAKES THIS SAFE IS SYMMETRY, NOT WIDTH. A deliberately narrow
+     * measure is good typography: a 640px column centred in 1440px leaves 400px on each side
+     * and is correct. The same 640px pinned left, leaving 800px on the right, is not a
+     * decision, it is a layout that was never finished. So this measures the BALANCE of the
+     * gaps, never how much of the screen is used, and a centred band can be as narrow as it
+     * likes without ever tripping it.
+     *
+     * Desktop only: there is no void to leave at 390px. Full-bleed backgrounds are irrelevant
+     * because only the CONTENT box is measured, and a section with almost nothing in it is
+     * skipped rather than guessed at.
+     */
+    if (vpName === 'desktop') {
+      const voids = await page.evaluate(() => {
+        const root = document.querySelector('main') || document.body;
+        if (!root) return [];
+        const out = [];
+        const bands = [...root.children].filter((el) => el.nodeType === 1);
+        for (const band of bands) {
+          const br = band.getBoundingClientRect();
+          if (br.width < 600 || br.height < 120) continue; // not a full-width band
+          // The content box is the union of what is actually DRAWN: text runs and media. A
+          // wrapper div with a background is not content, which is the whole reason this reads
+          // leaves rather than containers.
+          let min = Infinity, max = -Infinity, seen = 0;
+          const walk = document.createTreeWalker(band, NodeFilter.SHOW_ELEMENT);
+          for (let el = walk.nextNode(); el; el = walk.nextNode()) {
+            const kids = [...el.children];
+            const isLeafText = kids.length === 0 && (el.textContent || '').trim().length > 1;
+            const isMedia = /^(IMG|SVG|VIDEO|CANVAS|PICTURE)$/.test(el.tagName);
+            if (!isLeafText && !isMedia) continue;
+            const cs = getComputedStyle(el);
+            if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue;
+            const r = el.getBoundingClientRect();
+            if (r.width < 4 || r.height < 4) continue;
+            min = Math.min(min, r.left); max = Math.max(max, r.right); seen++;
+          }
+          if (seen < 2 || !isFinite(min)) continue; // nothing measurable: say nothing
+          const left = Math.round(min - br.left);
+          const right = Math.round(br.right - max);
+          const used = Math.round(max - min);
+          // Both conditions must hold: the band is mostly empty AND the emptiness is lopsided.
+          const mostlyEmpty = used < br.width * 0.6;
+          const lopsided = Math.abs(left - right) > br.width * 0.25;
+          if (mostlyEmpty && lopsided) {
+            out.push({ used, left, right, w: Math.round(br.width), tag: band.tagName.toLowerCase(), id: band.id || null });
+          }
+        }
+        return out;
+      });
+      if (voids.length >= 2) {
+        const worst = voids.slice().sort((a, b) => Math.max(b.left, b.right) - Math.max(a.left, a.right))[0];
+        const side = worst.right > worst.left ? 'right' : 'left';
+        add('Medium', route, vpName,
+          voids.length + ' band(s) leave a one-sided void: content uses ' + worst.used + 'px of ' +
+          worst.w + 'px with ' + Math.max(worst.left, worst.right) + 'px empty on the ' + side +
+          '. Either bring something alongside it (a figure, a second column, a pull-quote), widen the measure, or centre the band so the emptiness is symmetrical and reads as a choice.');
+      }
+    }
+
+    /**
      * THE FIRST SCREEN. Does this page show anything it is FOR, before you scroll?
      *
      * A collection page shipped with a 653px masthead that pushed the first product image to
