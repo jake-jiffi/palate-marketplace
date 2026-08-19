@@ -5,6 +5,30 @@ What changed in the Palate website builder, and why it matters to a build you ar
 Update with `/plugin marketplace update palate`, then `/reload-plugins`. No reinstall is needed
 and no documented command has ever changed.
 
+## 1.15.0
+
+**Sites are static by default, and site search now works.** Every page of every build used to
+be server-rendered on demand. That produced no HTML files at all, and `astro-pagefind` — which
+ships in the scaffold and powers the search box — indexes built HTML. It had been indexing zero
+pages on every site. Astro printed the warning on every build. Measured on one scaffold built
+both ways: **0 pages found and indexed under the old mode, 7 under the new one.**
+
+What you get: every marketing page is a file on a CDN instead of a server invocation, the search
+box actually finds things, blog posts reach `sitemap.xml` without the hand-written workaround
+that used to list them, and the site keeps serving if the function runtime has a bad day.
+
+Three routes still render on demand, because they earn it: the contact endpoint, `robots.txt`
+(it reads the request host to stop a preview URL being indexed), and a CMS **preview**
+deployment, so an editor still sees drafts live while they work.
+
+**If you have a CMS, publishing now needs a rebuild.** Wire a Sanity webhook to a deploy hook
+and a change is a minute or two behind instead of instant. That is the one real cost, and it is
+worth telling a client up front. It buys something back: a CMS outage now hits the build, which
+falls back to the committed content, so the live site is untouched.
+
+Nothing changed in how a page is written. Every page still reads through `loadPage()`, so moving
+a route — or the whole site — back to on-demand is one line if you ever need it.
+
 ## 1.14.0
 
 The release that came out of reviewing two real client builds side by side: one the client was

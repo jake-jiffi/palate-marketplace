@@ -10,11 +10,19 @@ codebase, just not provisioned.
 Every build is a **server-rendered Astro site** whose content is read through
 one seam. Two halves, and only one of them is unconditional:
 
-- **SSR, not static. Not optional, not deferred.** The site renders on demand.
-  This is what keeps draft preview possible - a static site structurally cannot
-  show unpublished content - and retrofitting SSR onto a static build later IS a
-  re-architecture. So `output: "server"` from the first file **even when the
-  build has no CMS at all**.
+- **STATIC by default, on-demand where a route earns it.** `output: "static"`,
+  three declared exceptions (the contact endpoint, `robots.txt`, and a CMS
+  PREVIEW deployment). Escalating is genuinely one line, because the adapter
+  stays installed in both modes and no page knows the difference: every page
+  reads through `loadPage()`. The old rule here said SSR from the first file
+  because "retrofitting SSR later IS a re-architecture", and that was true once.
+  It cost a shipped capability: a server build produces ZERO html files, and
+  `astro-pagefind` indexes built HTML, so **site search indexed zero pages on
+  every site Palate ever made** while Astro warned about it on every build.
+  **Never write `export const prerender = true` on a page**: static is already
+  the default, and it would pin that page against a later flip. Declare
+  exceptions, never the rule. See rule 7 in SKILL.md for what should make you
+  flip the whole site to `"server"`.
 - **NO CMS by default.** Content is authored in `src/lib/content.ts`. The Sanity
   tree is ~850 packages (436 -> 1,291 on a scaffold), and most sites never need
   it. Add one with `scripts/add-sanity.sh <dir>` when the client will edit their

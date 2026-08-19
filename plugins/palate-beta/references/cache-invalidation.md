@@ -1,8 +1,15 @@
 # Cache invalidation / content freshness
 
-The site is SSR (`output: "server"`) on both hosts. Pages render on request and
-read the latest published Sanity content, so **content changes need no rebuild**
-and there is nothing to wire on publish.
+The site is STATIC (`output: "static"`) on both hosts, so **a publish needs a
+rebuild** and that is the one operational cost of the render mode. Wire a Sanity
+webhook to a deploy hook and a change is a minute or two behind rather than
+instant. Say that to the client rather than letting them discover it.
+
+Two things soften it. The PREVIEW deployment renders on demand (see
+`cms-and-draft-preview.md`), so an editor still sees drafts live while they
+work. And a Sanity outage now hits the BUILD, which falls back to
+`src/lib/content.ts`, leaving the live site untouched because it is already
+built: under SSR the same outage reached every visitor.
 
 ## Why a publish is live immediately
 `loadPage()` fetches through the Sanity client. In production it uses the Sanity

@@ -46,13 +46,16 @@ does NOT run any host switch.
   to `main` auto-deploys to production and every PR gets a preview deployment
   with the Toolbar live. No deploy workflow, no manual dashboard step.
 
-**Content changes need NO redeploy.** The site is SSR (`output: "server"`) and
-`vercel.json` sets no HTML cache, so each request renders fresh and reads the
-latest published Sanity content (the Sanity API CDN purges on publish). A
-publish is live on the next page load - there is no deploy hook or rebuild-on-
-publish webhook to wire. (The Cloudflare backup keeps `revalidate.yml` as an
-optional full-redeploy on publish, but it is not required for content freshness
-there either.)
+**Content changes DO need a redeploy.** The site is static (`output: "static"`),
+so published content is baked at build time and a publish is live once the site
+rebuilds. On a CMS build, wire a Sanity webhook to a Vercel deploy hook: a change
+then lands in a minute or two. This is the one real cost of the render mode and
+it is worth saying to the client up front. (The Cloudflare backup's
+`revalidate.yml` does the same job there.)
+
+What you get for it: every page is a file on a CDN rather than a serverless
+invocation, site search actually indexes (pagefind reads built HTML and saw none
+under SSR), and the site survives the function runtime being unavailable.
 
 ## The Cloudflare backup overlay
 
