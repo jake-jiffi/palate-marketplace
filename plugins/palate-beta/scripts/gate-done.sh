@@ -300,6 +300,30 @@ if [ -f "$SEO_GATE" ]; then
   esac
 fi
 
+# UNIQUENESS: the variants must be genuinely different, not ritually varied.
+#
+# THIS GATE HAD NO DETERMINISTIC CALLER, alone in the suite. The verifier agent was told to run
+# it, which means it ran when a model remembered to, and every other gate here is called by a
+# script. It could not have had one before: the scaffold is SSR from the first file, so `dist/`
+# holds no HTML and there was nothing on disk to compare. Two real client builds confirmed it,
+# zero .html files between them. screenshot-build.mjs now writes the rendered markup beside each
+# variant's screenshots, so the comparison has something real to read.
+#
+# Fail-open exactly like the rest: fewer than two rendered variants means nothing to compare.
+UNIQ_GATE="$HERE/gate-uniqueness.mjs"
+uniq_note="uniqueness=skipped(no rendered variants)"
+if [ -f "$UNIQ_GATE" ]; then
+  # shellcheck disable=SC2207
+  uniq_files=($(ls "$SHOTS_DIR"/v*/rendered.html 2>/dev/null || true))
+  if [ "${#uniq_files[@]}" -ge 2 ]; then
+    if uniq_err="$(node "$UNIQ_GATE" "${uniq_files[@]}" 2>&1)"; then
+      uniq_note="uniqueness=pass(${#uniq_files[@]} variants)"
+    else
+      fail "Variants are not distinct enough to show. ${uniq_err}"
+    fi
+  fi
+fi
+
 # EXPLORE PRESENTATION: the range has to READ as a range. A set of /vN routes with no page
 # explaining them, or rungs with no stated intent, is a pile of links: the client opens two,
 # picks the nearest thing to what they already had in mind, and everything the ladder cost was
@@ -318,5 +342,5 @@ fi
 
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $explore_note, intensity=${intensity:-calm}, $bold_note."
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

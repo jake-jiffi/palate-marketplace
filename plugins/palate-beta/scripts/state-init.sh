@@ -71,4 +71,10 @@ cat > "$STATE" <<JSON
   "cro": { "enabled": false, "dormantUntilSessions": 500 }
 }
 JSON
+# Keep Palate's own working files out of the client's repo, at the REAL git root rather than
+# wherever the scaffold's .gitignore happens to land. Best-effort and non-fatal: a build must
+# never die over an ignore rule, and no repo yet simply means this runs again later.
+HERE_DIR="$(cd "$(dirname "$0")" && pwd)"
+bash "$HERE_DIR/palate-gitignore.sh" "$(dirname "$STATE")" 2>/dev/null || true
+
 echo "state initialised: stage=${STAGE} brandMode=${BRAND_MODE}"

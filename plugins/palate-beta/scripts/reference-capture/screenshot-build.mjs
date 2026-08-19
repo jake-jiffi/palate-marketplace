@@ -219,6 +219,25 @@ async function shootViewport(browser, args, manifest, name) {
   try { await page.addStyleTag({ content: FREEZE_CSS }); } catch {}
   await page.waitForTimeout(350);
 
+  // PERSIST THE RENDERED HTML, once, from the desktop pass.
+  //
+  // scripts/gate-uniqueness.mjs compares variants from their markup, and it was the ONLY gate
+  // in the suite with no deterministic caller: the verifier agent was told to run it, which
+  // means it ran when a model remembered to. A deterministic caller was impossible because the
+  // scaffold is SSR from the first file, so `dist/` holds no HTML at all and there was nothing
+  // on disk to compare. Two real client builds confirm it: zero .html files between them.
+  //
+  // This page is already rendered and already in hand, so writing it out costs one call and
+  // makes the gate reachable. gate-done.sh globs .palate-shots/v*/rendered.html.
+  if (name === 'desktop') {
+    try {
+      writeFileSync(join(args.out, 'rendered.html'), await page.content());
+    } catch (e) {
+      // Never fail a capture over the copy: the screenshots are the point of this run.
+      manifest.notes.push('rendered.html not written: ' + (e.message || String(e)).split('\n')[0]);
+    }
+  }
+
   const fullPath = join(args.out, `${name}-full.png`);
   try {
     await page.screenshot({ fullPage: true, path: fullPath, timeout: 15000 });

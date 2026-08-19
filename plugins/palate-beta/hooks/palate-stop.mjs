@@ -235,8 +235,15 @@ function recordGrounding(manifest, depth) {
   try {
     const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
     const calls = Array.isArray(m.mcp_calls) ? m.mcp_calls.length : 0;
+    // "unchecked" means the gate could not RUN (no shell on this machine), and that must not
+    // collapse into "grounded" just because calls were recorded: nothing measured the depth of
+    // them. It is unknown, and the note says which kind of unknown.
     const state =
-      depth.state === "ungrounded" ? "ungrounded" : calls === 0 ? "unknown" : "grounded";
+      depth.state === "ungrounded"
+        ? "ungrounded"
+        : depth.state === "unchecked" || calls === 0
+          ? "unknown"
+          : "grounded";
     m.grounding = {
       state,
       mcp_calls: calls,
@@ -245,7 +252,7 @@ function recordGrounding(manifest, depth) {
         state === "ungrounded"
           ? depth.reason
           : state === "unknown"
-            ? "depth gate could not run (no jq, or unreadable manifest); grounding not determined"
+            ? (depth.state === "unchecked" ? depth.reason : "depth gate could not run (no jq, or unreadable manifest); grounding not determined")
             : null,
     };
     fs.writeFileSync(manifest, JSON.stringify(m, null, 2) + "\n");
@@ -505,6 +512,29 @@ function gateFailure(reason) {
   process.exit(0);
 }
 
+// A GATE THAT COULD NOT RUN IS NOT A GATE THAT FAILED, and on Windows that distinction is
+// the whole experience. Every deterministic gate is a bash script and the hooks spawn `bash`
+// directly; where there is no bash on PATH, execFileSync throws with no exit status at all,
+// which this hook read as "blocked" and reported as "this build is not done". So a Windows
+// user would be told their build had failed a quality gate, on every single build, by
+// machinery that had never looked at their site.
+//
+// ENOENT and status 127 are the two shapes that mean "the interpreter is missing", and they
+// are reported as a SKIP with the real reason, never as a verdict. The gates are genuinely
+// unavailable there: 89 of them are shell scripts, and pretending otherwise would be worse
+// than saying so.
+function isMissingShell(e) {
+  if (!e) return false;
+  if (e.code === "ENOENT") return true;
+  if (e.status === 127) return true;
+  return typeof e.message === "string" && /spawn\s+bash\s+ENOENT/i.test(e.message);
+}
+
+const NO_SHELL_NOTE =
+  "Palate gates were SKIPPED, not passed: `bash` could not be run on this machine, and the " +
+  "deterministic gates are shell scripts. Nothing about this build has been checked. On Windows, " +
+  "run inside WSL or Git Bash to get them.";
+
 const GATE_FALLBACK =
   "Palate gate: this build is not done - it did not draw on the library deeply enough, or the visual loop / verifier has not passed.";
 const UNGROUNDED_FALLBACK =
@@ -521,10 +551,15 @@ try {
   execFileSync("bash", [GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // KEEP THE FLOOR
 } catch (e) {
   const msg = (e && e.stderr ? e.stderr.toString() : "").trim();
-  depth =
-    e && e.status === 3
-      ? { state: "ungrounded", reason: msg || UNGROUNDED_FALLBACK }
-      : { state: "blocked", reason: msg || GATE_FALLBACK };
+  if (isMissingShell(e)) {
+    process.stderr.write(`[palate] ${NO_SHELL_NOTE}\n`);
+    depth = { state: "unchecked", reason: NO_SHELL_NOTE };
+  } else {
+    depth =
+      e && e.status === 3
+        ? { state: "ungrounded", reason: msg || UNGROUNDED_FALLBACK }
+        : { state: "blocked", reason: msg || GATE_FALLBACK };
+  }
 }
 
 // Record the grounding fact in the manifest BEFORE acting on it, so it travels to the
@@ -536,7 +571,11 @@ if (depth.state === "blocked") gateFailure(depth.reason);
 try {
   execFileSync("bash", [DONE_GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // visual loop + verifier (reads artefacts, fails open)
 } catch (e) {
-  gateFailure((e && e.stderr ? e.stderr.toString() : "").trim() || GATE_FALLBACK);
+  // Same distinction as above: a missing shell is a skip that says so, never a verdict that
+  // the build failed. It has already been reported once by the depth call, so stay quiet here.
+  if (!isMissingShell(e)) {
+    gateFailure((e && e.stderr ? e.stderr.toString() : "").trim() || GATE_FALLBACK);
+  }
 }
 
 // Only record the build to cross-build memory after ALL gates pass, and never when the latch
