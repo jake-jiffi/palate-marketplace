@@ -2,7 +2,7 @@
 /**
  * hooks/palate-pretooluse.mjs - the build-site write gate (PreToolUse).
  *
- * Registered at the user level, matched on `Write|MultiEdit`. It does TWO things:
+ * Registered at the user level, matched on `Write|MultiEdit`. It does THREE things:
  *
  *  1. The DIVERGE WALL (default-ON, but scoped to an active build site). A Palate
  *     BUILD SITE must begin by diverging into 8-10 genuinely different directions
@@ -19,7 +19,21 @@
  *     the brand); brand-provided LOCKS colour + type and judges distinctness on the
  *     within-brand axes (layout / composition / motion / density / art-direction).
  *
- *  2. The DEPTH NUDGE (unchanged, opt-in). When NO build-site marker is present the
+ *  2. The SURVEY WALL (default-ON on a build site, and ONLY once the MCP has proven
+ *     itself reachable). DIVERGE is a reasoning step; the SURVEY is where the library
+ *     actually enters the build, and this hook used to allow the write the moment DIVERGE
+ *     was valid, so nothing checked the survey before code existed. A real client build
+ *     reached eight finished variants on THREE Palate calls (one catalogue listing, two
+ *     hero screenshots) and its commission still cited a backbone as "the only reference in
+ *     the library that is literally the same machine", which is a claim about the whole
+ *     catalogue requiring a search nobody ran. The wall now runs the same depth gate the
+ *     Stop hook runs, at the moment it can still change the build. It binds ONLY when the
+ *     manifest records at least one Palate call that returned content, which is the proof
+ *     the MCP is connected: zero calls is the signature of a user with no token and allows
+ *     unchanged. It also stands down when refusals outnumber answers, so a degrading
+ *     connection cannot become a trap. Escape: PALATE_GATE_SURVEY=0.
+ *
+ *  3. The DEPTH NUDGE (unchanged, opt-in). When NO build-site marker is present the
  *     hook falls through to the original behaviour: NON-BLOCKING by default (the depth
  *     nudge is delivered by the skill and the Stop hook), HARD-BLOCK only under
  *     PALATE_GATE_STRICT=1, and even then fail-OPEN when the gate cannot be satisfied.
@@ -34,8 +48,11 @@
  *   - Edit is never matched (only Write/MultiEdit), so editing an existing file is
  *     structurally exempt; a Write OVER an already-scaffolded NON page/section file
  *     (config, layout chrome, lib) is iteration and also allowed.
- *   - DIVERGE is a reasoning step, NOT an MCP call, so the wall does NOT depend on MCP
+ *   - DIVERGE is a reasoning step, NOT an MCP call, so THAT wall does not depend on MCP
  *     liveness: the model writes manifest.diverge whether or not the MCP is connected.
+ *     The SURVEY wall is the opposite by design and is keyed on evidence the MCP answered,
+ *     never on a token, a config file or an env var, so it cannot fire on someone who has
+ *     no connection to satisfy it with.
  *     A tooling failure (fs throw) falls through to the depth path (allow under
  *     non-strict), so a failure can never wedge a write.
  *
@@ -125,6 +142,39 @@ function DIVERGE_REQUIRED_MESSAGE(mode) {
     "PALATE_GATE_OFF=1.)";
 
   return head + (mode === "brand-provided" ? provided : creation) + tail;
+}
+
+// The survey deny copy. It has to hand back the exact calls that clear the bar, because the
+// agent is mid-build and a vague "survey more" costs a round trip to work out what is missing.
+// House rules: Australian English, no em dashes, no AI-tell vocabulary.
+function SURVEY_REQUIRED_MESSAGE(gateReason, calls) {
+  return (
+    "Palate BUILD SITE gate: the SURVEY is not deep enough to start writing code.\n" +
+    "\n" +
+    `The Palate MCP is connected and this build has used it ${calls} time(s), so the library is\n` +
+    "reachable and the taste layer is the whole point of building here. Survey properly FIRST:\n" +
+    "what you write next should be carrying craft you have actually read, not craft you\n" +
+    "remember.\n" +
+    "\n" +
+    (gateReason ? gateReason + "\n\n" : "") +
+    "What clears it, in order:\n" +
+    "  1. refs_search with CONCRETE lexical terms (the business category, a page type, a named\n" +
+    "     mechanic like \"preloader\" or \"GSAP\", a font) across more than one vertical, or\n" +
+    "     refs_for_business / refs_match_brief on the brief. Five distinct references minimum.\n" +
+    "  2. refs_get on your backbone and donors with a REAL layer: layer:\"do_dont\",\n" +
+    "     layer:\"component_prompts\", layer:\"signature_moves\", layer:\"pages\", or\n" +
+    "     format:\"design\". Raw tokens and concept do not count: numbers without the why are\n" +
+    "     the shallow read this gate exists to stop.\n" +
+    "  3. refs_get_screenshot on at least two INNER pages of your donors (pricing, menu,\n" +
+    "     booking), not only their home page. Two minimum.\n" +
+    "\n" +
+    "Running the palate-surveyor subagent does all three and keeps the raw JSON out of your\n" +
+    "context.\n" +
+    "\n" +
+    "This only fires on an active build site whose MCP has already answered. A build with no\n" +
+    "Palate connection is never held to it. Escape for this build: PALATE_GATE_SURVEY=0.\n" +
+    "Everything off: PALATE_GATE_OFF=1."
+  );
 }
 
 function readStdin() {
@@ -302,11 +352,53 @@ try {
       /* absent/unreadable => diverge not yet valid */
     }
 
-    if (divergeValid(manifest, mode)) allow();
+    if (!divergeValid(manifest, mode)) {
+      // A build site is active, this is a NEW (or page/section) source write, and DIVERGE
+      // has not validly run FOR THIS MODE. Block it and tell the model to diverge first.
+      deny(DIVERGE_REQUIRED_MESSAGE(mode));
+    }
 
-    // A build site is active, this is a NEW (or page/section) source write, and DIVERGE
-    // has not validly run FOR THIS MODE. Block it and tell the model to diverge first.
-    deny(DIVERGE_REQUIRED_MESSAGE(mode));
+    // ---------------------------------------------------------------------------------
+    // THE SURVEY WALL. DIVERGE is a reasoning step; the SURVEY is where the library
+    // actually enters the build, and until now nothing checked it before code was written.
+    // The depth gate existed and was strict (5 references, 2 inner pages, 3 tools, 1 deep
+    // read, 1 rich layer), but on a build site this branch called allow() the moment
+    // DIVERGE was valid and never ran it. A real client build reached eight finished
+    // variants having made THREE Palate calls: one catalogue listing and two hero
+    // screenshots. Its own commission still claimed a backbone was "the only reference in
+    // the library that is literally the same machine", a claim about 2,169 references that
+    // requires a search nobody ran. The craft in that build was the model's, not the
+    // library's, which is the one thing Palate cannot afford to ship.
+    //
+    // WHY IT CANNOT TRAP ANYONE. It only binds once the MCP has PROVEN itself reachable, by
+    // returning content at least once in this build. Zero recorded calls is exactly the
+    // signature of a user whose token is not set, and that case allows, unchanged. So the
+    // rule is: you may build without Palate, and you may not pretend to build with it.
+    // ---------------------------------------------------------------------------------
+    if (process.env.PALATE_GATE_SURVEY !== "0") {
+      const calls = Array.isArray(manifest?.mcp_calls) ? manifest.mcp_calls.length : 0;
+      const failures = Array.isArray(manifest?.mcp_failures) ? manifest.mcp_failures.length : 0;
+      // A degrading connection must not become a trap: if the library is refusing more often
+      // than it answers, the agent cannot satisfy a depth bar no matter how it tries.
+      const degraded = failures > calls;
+      if (calls >= 1 && !degraded) {
+        try {
+          execFileSync("bash", [GATE, buildCtx.manifest], { stdio: ["ignore", "ignore", "pipe"] });
+        } catch (e) {
+          // DENY ONLY ON THE GATE'S OWN BLOCK CODE (2). execFileSync throws on any non-zero
+          // status AND on failing to spawn at all, so a missing bash, an unreadable script or a
+          // permissions problem arrives here looking exactly like a verdict. Treating those as
+          // a block would wall every source write for a reason that has nothing to do with the
+          // build. Exit 3 is the non-blocking UNGROUNDED label and is unreachable here anyway
+          // (it requires zero calls, which this branch has already excluded).
+          if (e && e.status === 2) {
+            deny(SURVEY_REQUIRED_MESSAGE((e.stderr ? e.stderr.toString() : "").trim(), calls));
+          }
+        }
+      }
+    }
+
+    allow();
   }
 } catch {
   // Any unexpected fs error: do NOT wedge a write. Fall through to the depth path,

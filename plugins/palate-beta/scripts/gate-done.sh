@@ -28,8 +28,21 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 DEPTH_GATE="$HERE/gate-mcp-depth.sh"
 NOVELTY_GATE="$HERE/gate-novelty.mjs"   # Move 1 (may not exist yet; treated fail-open)
 
-# The project dir is the directory holding the manifest, so artefacts resolve next to it.
+# THE PROJECT DIR IS NOT ALWAYS THE MANIFEST'S DIR, and assuming it was turned this whole gate
+# off on a real client build. A repo can hold the manifest at its root while the Astro site (and
+# therefore dist/, .palate-shots/ and verify-report.json) lives one level down; the manifest
+# already RECORDS where the project is, in `.project`, written by the hook from the build cwd.
+# Reading the path off the filesystem instead meant every artefact check resolved to a directory
+# that contained none of them, the render rung found no preview, and the gate skipped clean while
+# eight fully-built variants sat one directory away. Prefer the recorded path, fall back to the
+# manifest's own directory when it is absent, unreadable or not a directory.
 PROJ="$(cd "$(dirname "$MANIFEST")" 2>/dev/null && pwd || echo .)"
+if command -v jq >/dev/null 2>&1 && [ -f "$MANIFEST" ]; then
+  recorded="$(jq -r '(.project // empty)' "$MANIFEST" 2>/dev/null || true)"
+  if [ -n "$recorded" ] && [ -d "$recorded" ]; then
+    PROJ="$(cd "$recorded" && pwd)"
+  fi
+fi
 REPORT="$PROJ/verify-report.json"
 SHOTS_DIR="$PROJ/.palate-shots"
 SHOTS_MANIFEST="$SHOTS_DIR/manifest.json"
@@ -60,6 +73,17 @@ if [ "${mcpcalls:-0}" -lt 1 ]; then
     echo "  The build ran WITHOUT the Palate taste layer - the MCP is likely not connected or was renamed (e.g. after a plugin upgrade)." >&2
     echo "  Reconnect: claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp" >&2
     echo "  Then restart Claude Code (or run /mcp and reconnect) so the mcp__palate__* tools load." >&2
+  fi
+  # A SKIP THAT LOOKS LIKE A SHRUG IS THE PROBLEM. On a real client build this line was the only
+  # thing printed while EIGHT fully-built variants, a dist/ and a passing verify-report sat on
+  # disk: the visual loop, the ship-ready checks, uniqueness and the bold bar were all silently
+  # off because one manifest field was empty. Fail-open is kept (this still exits 0 and blocks
+  # nothing), but when the evidence says a real build happened, say what went unchecked.
+  if [ "${fileswritten:-0}" -ge 1 ] || [ -d "$PROJ/dist" ] || [ -f "$REPORT" ]; then
+    echo "Done gate: a real build is present here, and NONE of it was gated." >&2
+    echo "  Unchecked: the visual loop + rubric, console errors, ship-ready (unresolved {{TOKENS}}, Explore left live, photos never measured), variant uniqueness, and the bold bar." >&2
+    echo "  Cause: build-manifest.json records zero Palate MCP calls, which is the ladder every gate hangs off." >&2
+    echo "  If the survey DID run, its calls never reached this manifest (a subagent, a different project dir, or a manifest replaced after the calls were recorded). Check manifest.project resolves to the site: $PROJ" >&2
   fi
   skip "no Palate MCP calls recorded (MCP not connected, or surveyed in a subagent); cannot gate done."
 fi
@@ -168,6 +192,21 @@ if [ "${iter_count:-0}" -ge "$ITER_CAP" ]; then
 else
   escalate="revise the named gap, re-render, and re-verify (cap $ITER_CAP, then escalate)."
 fi
+
+# INTENSITY IS A CLOSED ENUM AND AN OFF-ENUM VALUE FAILS TOWARD TIMID, SILENTLY.
+# A real build recorded intensity "confident": not "high", not "calm", so `= "high"` was false,
+# the bold bar never bound, the pairwise ambition test never ran, and the build quietly got the
+# calm floor. Nothing said a word. The agent writes this field in prose, so a plausible synonym
+# (confident, considered, assured) is the likely case rather than the rare one. Say it out loud
+# and treat it as HIGH: the failure mode of a wrongly-bold build is a loud gate, and the failure
+# mode of a wrongly-calm one is a timid site nobody can explain.
+case "${intensity:-}" in
+  high|calm|"") ;;
+  *)
+    echo "Done gate: commission.intensity is \"$intensity\", which is not \"high\" or \"calm\". The bold bar reads this field exactly, so an off-enum value would silently take the calm path. Treating it as HIGH. Record \"high\" or \"calm\" in the commission." >&2
+    intensity="high"
+    ;;
+esac
 
 if [ "${PALATE_GATE_BOLD:-1}" = "1" ] && [ "$intensity" = "high" ]; then
   # (a) blinded pairwise vs a flagship library exemplar (the real ambition test)

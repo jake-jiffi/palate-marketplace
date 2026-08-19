@@ -67,6 +67,13 @@ scen "high + lost + cap(3) -> escalate" 2 '.commission.intensity="high"' '.pairw
 # escape hatch: PALATE_GATE_BOLD=0 disables the whole bold bar.
 scen "high + lost but BOLD=0 -> pass" 0 '.commission.intensity="high"' '.pairwise={ran:true,won:false}' "Done gate passed" PALATE_GATE_BOLD=0
 # CARDINAL: a calm build is never bound, even with a lost pairwise + variants:[] present.
+# OFF-ENUM INTENSITY. A real build recorded "confident", which is neither "high" nor "calm",
+# so `= "high"` was false and the bold bar silently took the calm path on a build that had
+# asked to be judged hard. An unrecognised value must be SAID and treated as high.
+scen "off-enum intensity -> treated as high, blocks a collapsed Explore" 2 '.commission.intensity="confident" | .variants=[]' '.' "Explore collapsed"
+scen "off-enum intensity -> says so out loud" 2 '.commission.intensity="confident" | .variants=[]' '.' "is not \"high\" or \"calm\""
+scen "absent intensity -> still calm (backward compat, no warning)" 0 'del(.commission)' '.pairwise={ran:true,won:false}' "Done gate passed"
+
 scen "calm + lost pairwise + variants:0 -> pass (not bound)" 0 '.commission.intensity="calm" | .variants=[]' '.pairwise={ran:true,won:false}' "Done gate passed"
 # heal BOLD-1/BOLD-2: a non-numeric numeric-env-var must NOT wrongly block or spew `[:` errors.
 scen "high + garbage MIN_VARIANTS -> pass (env sanitised)" 0 '.commission.intensity="high" | .variants=[{},{}]' '.pairwise={ran:true,won:true} | .ambition={clears:true,dock_list:[]}' "Done gate passed" PALATE_MIN_VARIANTS=xyz

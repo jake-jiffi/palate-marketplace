@@ -224,6 +224,69 @@ write_valid_manifest "$B17"
 want "legacy marker (no brandMode) + valid creation manifest -> allow" ALLOW \
   "$(run "$B17" Write "$B17/src/pages/index.astro")"
 
+# ===================================================================================
+# THE SURVEY WALL (18-24). DIVERGE being valid used to be the whole bar on a build site,
+# so a build could write every line of code having barely touched the library. It now
+# also has to clear the depth gate, but ONLY once the MCP has proven it answers.
+# ===================================================================================
+
+# Add MCP telemetry to an existing valid manifest. <dir> <jq-expr>
+add_calls() { local d="$1" expr="$2"; local t; t=$(mktemp)
+  jq "$expr" "$d/build-manifest.json" > "$t" && mv "$t" "$d/build-manifest.json"; }
+
+# The pelvy shape, exactly: one catalogue listing and two hero screenshots. Enough to prove
+# the MCP answers, nowhere near enough to have read anything.
+SHALLOW='.mcp_calls=[
+  {"tool":"mcp__palate__refs_list_verticals","args":{},"slugs":[],"evidence":"content"},
+  {"tool":"mcp__palate__refs_get_screenshot","args":{"slug":"therapy-in-london","viewport":"desktop"},"slugs":["therapy-in-london"],"evidence":"content"},
+  {"tool":"mcp__palate__refs_get_screenshot","args":{"slug":"august-health-ehr","viewport":"desktop"},"slugs":["august-health-ehr"],"evidence":"content"}
+] | .references_surveyed=["therapy-in-london","august-health-ehr"] | .inner_pages_viewed=[] | .layers_read=[]'
+
+# A real survey: 5 references, 3 distinct tools, a deep read that pulled a craft layer, and
+# two inner pages.
+DEEP='.mcp_calls=[
+  {"tool":"mcp__palate__refs_search","args":{"query":"pelvic health clinic"},"slugs":["a","b","c","d","e"],"evidence":"content"},
+  {"tool":"mcp__palate__refs_get","args":{"slug":"a","layer":["do_dont","component_prompts"]},"slugs":["a"],"evidence":"content"},
+  {"tool":"mcp__palate__refs_get_screenshot","args":{"slug":"a","page":"pricing"},"slugs":["a"],"evidence":"content"},
+  {"tool":"mcp__palate__refs_get_screenshot","args":{"slug":"b","page":"booking"},"slugs":["b"],"evidence":"content"}
+] | .references_surveyed=["a","b","c","d","e"]
+  | .inner_pages_viewed=[{"slug":"a","page":"pricing"},{"slug":"b","page":"booking"}]
+  | .layers_read=["do_dont","component_prompts"]'
+
+# === 18. valid diverge, ZERO Palate calls -> ALLOW. The tokenless user is never trapped,
+# and this is the invariant the whole wall is keyed on.
+S18="$TMP/survey18"; mkdir -p "$S18"; echo "$MARKER" > "$S18/.palate-skill-state.json"
+write_valid_manifest "$S18"
+want "no Palate calls at all (no token) -> allow" ALLOW "$(run "$S18" Write "$S18/src/pages/index.astro")"
+
+# === 19. THE PELVY CASE: valid diverge, MCP proven reachable, survey nowhere near depth.
+S19="$TMP/survey19"; mkdir -p "$S19"; echo "$MARKER" > "$S19/.palate-skill-state.json"
+write_valid_manifest "$S19"; add_calls "$S19" "$SHALLOW"
+want "MCP answered but the survey is 3 shallow calls -> DENY" DENY "$(run "$S19" Write "$S19/src/pages/index.astro")"
+
+# === 20. the same build once it has actually surveyed -> ALLOW.
+S20="$TMP/survey20"; mkdir -p "$S20"; echo "$MARKER" > "$S20/.palate-skill-state.json"
+write_valid_manifest "$S20"; add_calls "$S20" "$DEEP"
+want "a real survey (5 refs, 2 inner pages, craft layer) -> allow" ALLOW "$(run "$S20" Write "$S20/src/pages/index.astro")"
+
+# === 21/22. both escape hatches release it.
+want "shallow survey + PALATE_GATE_SURVEY=0 -> allow" ALLOW \
+  "$(run "$S19" Write "$S19/src/pages/index.astro" PALATE_GATE_SURVEY=0)"
+want "shallow survey + PALATE_GATE_OFF=1 -> allow" ALLOW \
+  "$(run "$S19" Write "$S19/src/pages/index.astro" PALATE_GATE_OFF=1)"
+
+# === 23. a DEGRADING connection must not become a trap: more refusals than answers means
+# the agent cannot satisfy any depth bar however hard it tries.
+S23="$TMP/survey23"; mkdir -p "$S23"; echo "$MARKER" > "$S23/.palate-skill-state.json"
+write_valid_manifest "$S23"; add_calls "$S23" "$SHALLOW"
+add_calls "$S23" '.mcp_failures=[{"tool":"mcp__palate__refs_search"},{"tool":"mcp__palate__refs_get"},{"tool":"mcp__palate__refs_get"},{"tool":"mcp__palate__refs_search"}]'
+want "refusals outnumber answers (degraded MCP) -> allow" ALLOW "$(run "$S23" Write "$S23/src/pages/index.astro")"
+
+# === 24. NOT a build site: the wall must not reach a session that never started one.
+S24="$TMP/survey24"; mkdir -p "$S24"
+write_valid_manifest "$S24"; add_calls "$S24" "$SHALLOW"   # no marker written
+want "no build-site marker + shallow survey -> allow" ALLOW "$(run "$S24" Write "$S24/src/pages/index.astro")"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

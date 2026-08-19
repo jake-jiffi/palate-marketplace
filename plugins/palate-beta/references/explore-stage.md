@@ -196,7 +196,16 @@ the rule (the same rule as type): a mechanism appears in a variant only where th
 direction actually needs it, and the restraint clause governs the spread (match
 intensity to the brand; maximal motion is not the bar). A safe-warm variant may sit
 on the Tier 0 floor while a one-of-a-kind variant earns a shader hero - the same
-spread the ambition spectrum below already calls for. **The restraint clause cuts both
+spread the ambition spectrum below already calls for.
+**A CALM BRAND STILL SPANS THE LADDER.**
+Calm sets the CHARACTER of the top rung, never its height: on a calm brand
+rung N is still the boldest thing the ladder contains, expressed slowly, quietly and
+without startling anyone, rather than a slightly warmer rung 1. A measured build (a
+pelvic-health clinic) whose commission read "calm brand, calm build, anything that
+performs is wrong here" shipped 8 rungs spanning 1 to 2 keyframes and 3 to 4
+transitions, so the client was shown a range that was not one and could not ask for
+more than they saw. If the spread of motion, structure and conceptual distance from
+rung 1 to rung N is not obvious IN A STILL AND IN MOTION, the ladder has collapsed. **The restraint clause cuts both
 ways** (`references/build-commission.md`, "The bold mandate"): if the brand is
 high-intensity (a label, a maximalist consumer brand, a creative studio, a launch, a
 culture / type brand) the bold mandate applies and a flat, safe variant set FAILS the

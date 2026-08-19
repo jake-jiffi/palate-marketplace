@@ -92,6 +92,36 @@ cat > "$PASS/verify-report.json" <<'JSON'
 JSON
 check "real pass evidence -> pass" 0 "$PASS/build-manifest.json"
 
+# --- PROJECT DIR COMES FROM THE MANIFEST, NOT FROM WHERE THE MANIFEST SITS --------
+# A real client build kept build-manifest.json at the repo root and the Astro site (dist/,
+# .palate-shots/, verify-report.json) in a subdirectory. Deriving the project from dirname
+# resolved to a directory holding none of them, so the render rung found no preview and the
+# whole gate skipped clean while eight built variants sat one level down.
+SUBROOT="$TMP/subdir-project"; SUBSITE="$SUBROOT/site"; mkdir -p "$SUBSITE"
+jq --arg p "$SUBSITE" '.project=$p' "$DEEP" > "$SUBROOT/build-manifest.json"
+make_shots "$SUBSITE" 0
+cat > "$SUBSITE/verify-report.json" <<'JSON'
+{ "verdict": "pass",
+  "visual": { "ran": true, "pass": true, "console_errors": 0,
+    "iterations": [ { "i": 1, "axes": { "philosophy": 5, "hierarchy": 4, "execution": 4, "specificity": 4, "restraint": 4, "variety": 4 }, "score": 25,
+      "shots": { "desktop_full": ".palate-shots/desktop-full.png", "mobile_full": ".palate-shots/mobile-full.png" } } ] },
+  "shots_dir": ".palate-shots" }
+JSON
+check "manifest.project points at a subdir -> artefacts are FOUND (real pass)" 0 "$SUBROOT/build-manifest.json"
+
+# The same layout with a FAILING report must now BLOCK. Without the fix this exits 0 by
+# skipping, which is the silent hole: a failed build reads exactly like a clean one.
+SUBFAIL="$TMP/subdir-fail"; SUBFSITE="$SUBFAIL/site"; mkdir -p "$SUBFSITE"
+jq --arg p "$SUBFSITE" '.project=$p' "$DEEP" > "$SUBFAIL/build-manifest.json"
+make_shots "$SUBFSITE" 0
+echo '{ "verdict": "fail", "visual": { "ran": true, "pass": false, "console_errors": 0, "iterations": [] }, "shots_dir": ".palate-shots" }' > "$SUBFSITE/verify-report.json"
+check "manifest.project subdir + failing report -> BLOCK (not a silent skip)" 2 "$SUBFAIL/build-manifest.json"
+
+# A recorded project path that no longer exists must fall back, never crash the gate.
+STALE="$TMP/stale-project"; mkdir -p "$STALE"
+jq '.project="/nonexistent/path/that/was/moved"' "$DEEP" > "$STALE/build-manifest.json"
+check "manifest.project missing on disk -> falls back to the manifest dir (skip, no crash)" 0 "$STALE/build-manifest.json"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

@@ -54,7 +54,21 @@ jq -e . "$MANIFEST" >/dev/null 2>&1 || skip "$MANIFEST is not readable JSON; not
 # The build ran without the taste layer. Say it ONCE, factually, with the one command
 # that fixes it, and do not block: the plugin favours the MCP, it does not die without it.
 mcpcalls=$(jq '((.mcp_calls // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
-[ "${mcpcalls:-0}" -ge 1 ] || ungrounded "no Palate MCP calls recorded, so this build carries no Palate taste layer (the MCP is not connected or was renamed, or the survey ran in a subagent whose calls never reached this manifest). Connect it with: claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp"
+if [ "${mcpcalls:-0}" -lt 1 ]; then
+  # THE JOURNAL IS THE SECOND OPINION. hooks/palate-manifest.mjs appends one line per Palate
+  # call to .palate/mcp-journal.jsonl beside the manifest, append-only, precisely so a survey
+  # survives a manifest that was blanked, moved, symlinked away or deleted. If the journal has
+  # entries and the manifest does not, the survey DID happen and the manifest lost it: that is a
+  # different fact from "this build never called Palate", and telling a user to reconnect an MCP
+  # that is already working would send them to fix the wrong thing.
+  JOURNAL="$(dirname "$MANIFEST")/.palate/mcp-journal.jsonl"
+  jlines=0
+  [ -f "$JOURNAL" ] && jlines=$(grep -c . "$JOURNAL" 2>/dev/null || echo 0)
+  if [ "${jlines:-0}" -ge 1 ]; then
+    ungrounded "the manifest records no Palate calls, but $JOURNAL has $jlines. The survey happened and this manifest lost it (blanked, moved or replaced). The next Palate call restores it automatically; re-run this gate after it."
+  fi
+  ungrounded "no Palate MCP calls recorded, so this build carries no Palate taste layer (the MCP is not connected or was renamed, or the survey ran in a subagent whose calls never reached this manifest). Connect it with: claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp"
+fi
 
 refs=$(jq '(.references_surveyed // []) | unique | length' "$MANIFEST")
 inner=$(jq '(.inner_pages_viewed // []) | length' "$MANIFEST")

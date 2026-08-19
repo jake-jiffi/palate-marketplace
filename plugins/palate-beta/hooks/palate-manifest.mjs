@@ -48,10 +48,63 @@ function readStdin() {
   }
 }
 
+// ABSENT AND UNREADABLE ARE NOT THE SAME THING, and treating them alike is how a build's whole
+// survey disappears without a word. Absent means a fresh start, which is correct. Unreadable
+// means evidence EXISTS and we are about to write over it: archive it first and say so.
+//
+// The symlink rung is not hypothetical. On a real build an agent replaced the manifest with a
+// symlink to a sibling path to "unify" two locations; the target had already been moved away, so
+// every subsequent write went through a dangling link and silently created a fresh default
+// manifest. Follow a live link (its target is the real file), and clear a dead one so the write
+// lands on a real file rather than conjuring one at the far end of a broken pointer.
 function load(manifestPath) {
   try {
-    return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const st = fs.lstatSync(manifestPath);
+    if (st.isSymbolicLink()) {
+      let target = null;
+      try {
+        target = fs.realpathSync(manifestPath);
+      } catch {
+        /* dangling */
+      }
+      if (!target) {
+        process.stderr.write(
+          `[palate] ${manifestPath} is a DANGLING symlink; removing it so telemetry lands on a real file.\n`,
+        );
+        try {
+          fs.unlinkSync(manifestPath);
+        } catch {
+          /* cannot remove: the write below will fail loudly enough */
+        }
+        return null;
+      }
+      process.stderr.write(
+        `[palate] ${manifestPath} is a symlink to ${target}; following it. A manifest should be a real file: two paths for one build is how evidence gets lost.\n`,
+      );
+    }
   } catch {
+    return null; // genuinely absent
+  }
+
+  let raw;
+  try {
+    raw = fs.readFileSync(manifestPath, "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Corrupt, but NOT empty. Keep it: it is the only copy of whatever it recorded.
+    const bak = `${manifestPath}.corrupt-${Date.now()}.json`;
+    try {
+      fs.writeFileSync(bak, raw);
+      process.stderr.write(
+        `[palate] build-manifest.json did not parse. The unreadable copy is kept at ${bak} and a fresh manifest starts now. Any survey recorded in it is NOT counted.\n`,
+      );
+    } catch {
+      process.stderr.write("[palate] build-manifest.json did not parse and could not be archived; a fresh manifest starts now.\n");
+    }
     return null;
   }
 }
@@ -263,6 +316,135 @@ function quotaStopDirective(q) {
   ].join("\n");
 }
 
+// ---------------------------------------------------------------------------------------
+// EVIDENCE SURVIVAL. Everything below exists because a survey is expensive, irreplaceable and,
+// until now, deletable by half a dozen ordinary accidents.
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Is the move from `was` to `now` the same build descending into its scaffold (or climbing back
+ * out), rather than a different build entirely? Containment either way, because a manifest can
+ * legitimately travel in both directions: down when the scaffold appears, up if a tool call is
+ * resolved from the workspace root before the project is detected again.
+ */
+function isSameBuildMove(was, now) {
+  try {
+    const a = path.resolve(was);
+    const b = path.resolve(now);
+    if (a === b) return true;
+    const under = (parent, child) => child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
+    return under(a, b) || under(b, a);
+  } catch {
+    return false;
+  }
+}
+
+/** Keep a copy before anything is thrown away. Returns the archive path, or null if it failed. */
+function archiveManifest(manifestPath, m) {
+  const calls = Array.isArray(m?.mcp_calls) ? m.mcp_calls.length : 0;
+  const files = Array.isArray(m?.files_written) ? m.files_written.length : 0;
+  if (calls === 0 && files === 0) return null; // nothing worth keeping
+  const bak = `${manifestPath}.previous-${Date.now()}.json`;
+  try {
+    fs.writeFileSync(bak, JSON.stringify(m, null, 2) + "\n");
+    return bak;
+  } catch {
+    return null;
+  }
+}
+
+const JOURNAL_REL = path.join(".palate", "mcp-journal.jsonl");
+
+function journalPath(manifestPath) {
+  return path.join(path.dirname(manifestPath), JOURNAL_REL);
+}
+
+/**
+ * Append one Palate call to the journal, which is the record of last resort.
+ *
+ * The manifest is a document: it gets rewritten whole on every tool call, moved when the
+ * scaffold appears, and is a single file that any number of accidents can empty. The journal is
+ * a LOG: one line per call, only ever appended, never rewritten. A survey recorded here survives
+ * a manifest that is deleted, blanked, symlinked away or corrupted, which between them account
+ * for every way we have actually lost one.
+ */
+function appendJournal(manifestPath, entry) {
+  const jp = journalPath(manifestPath);
+  try {
+    fs.mkdirSync(path.dirname(jp), { recursive: true });
+    fs.appendFileSync(jp, JSON.stringify(entry) + "\n");
+  } catch {
+    /* the journal is a safety net, never a reason to wedge a build */
+  }
+}
+
+/** Read the journal back. Tolerates a torn final line, which append-only files can have. */
+function readJournal(manifestPath) {
+  try {
+    return fs
+      .readFileSync(journalPath(manifestPath), "utf8")
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => {
+        try {
+          return JSON.parse(l);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Put back any Palate call the journal has and the manifest does not.
+ *
+ * Deliberately additive and idempotent: entries are matched on tool + timestamp, so a manifest
+ * that lost nothing is left byte-identical and a manifest that lost everything is rebuilt. It
+ * restores only what the journal actually witnessed, never a count.
+ */
+function rehydrateFromJournal(m, manifestPath) {
+  const journal = readJournal(manifestPath);
+  if (!journal.length) return;
+  if (!Array.isArray(m.mcp_calls)) m.mcp_calls = [];
+  const seen = new Set(m.mcp_calls.map((c) => `${c.tool}|${c.ts}`));
+  const missing = journal.filter((e) => !seen.has(`${e.tool}|${e.ts}`));
+  if (!missing.length) return;
+
+  for (const e of missing) m.mcp_calls.push(e);
+  m.mcp_calls.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+
+  if (!Array.isArray(m.references_surveyed)) m.references_surveyed = [];
+  if (!Array.isArray(m.inner_pages_viewed)) m.inner_pages_viewed = [];
+  if (!Array.isArray(m.layers_read)) m.layers_read = [];
+  for (const e of missing) {
+    for (const s of e.slugs || []) if (!m.references_surveyed.includes(s)) m.references_surveyed.push(s);
+    const a = e.args || {};
+    if (e.tool === "mcp__palate__refs_get_screenshot" && a.page && a.slug) {
+      if (!m.inner_pages_viewed.some((v) => v.slug === a.slug && v.page === a.page)) {
+        m.inner_pages_viewed.push({ slug: a.slug, page: a.page });
+      }
+    }
+    if (e.tool === "mcp__palate__refs_get") {
+      const layers = Array.isArray(a.layer) ? a.layer.slice() : typeof a.layer === "string" ? [a.layer] : [];
+      if (a.format === "design") layers.push("design");
+      for (const l of layers) if (!m.layers_read.includes(l)) m.layers_read.push(l);
+      if (layers.includes("pages")) {
+        for (const s of e.slugs || []) {
+          if (!m.inner_pages_viewed.some((v) => v.slug === s && v.page === "pages")) {
+            m.inner_pages_viewed.push({ slug: s, page: "pages" });
+          }
+        }
+      }
+    }
+  }
+  process.stderr.write(
+    `[palate] restored ${missing.length} Palate call(s) from ${JOURNAL_REL}; the manifest had lost them.\n`,
+  );
+}
+
 // Move a manifest that was started before the project directory existed into the project.
 // A build DIVERGES before it SCAFFOLDS, so the first half of a build legitimately writes its
 // telemetry beside the session cwd; the moment package.json + src/pages appear, that file
@@ -276,6 +458,23 @@ function adoptStaleManifest(ctx) {
     fs.writeFileSync(target, body);
   } catch {
     return ctx.manifest; // could not copy: stay where the data is
+  }
+  // The journal moves WITH the manifest, or the survey recorded before the scaffold would be
+  // stranded in the workspace root while the manifest that needs it lives in the project.
+  try {
+    const from = journalPath(ctx.stale);
+    const to = journalPath(target);
+    if (fs.existsSync(from) && !fs.existsSync(to)) {
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.copyFileSync(from, to);
+      try {
+        fs.rmSync(from);
+      } catch {
+        /* a leftover journal is untidy, not wrong */
+      }
+    }
+  } catch {
+    /* never wedge a build over the safety net */
   }
   try {
     fs.rmSync(ctx.stale);
@@ -301,17 +500,62 @@ function main() {
   const projectDir = ctx.dir;
 
   let m = load(MANIFEST) ?? blank();
-  // A manifest belongs to ONE build. If the project underneath it has changed, start fresh
-  // rather than keep appending: a merged manifest reports references and file writes from a
-  // different site, and every gate downstream reads it as one build's evidence.
+  // A manifest belongs to ONE build, so telemetry from an unrelated repo must not keep
+  // accumulating into one file. But the first version of this check compared the two paths for
+  // EQUALITY, and that destroyed the survey of very nearly every build.
+  //
+  // THE BUILD ORDER IS THE BUG. A Palate build surveys and diverges BEFORE it scaffolds, so for
+  // the first hour the only honest project is the session cwd and the manifest records it.
+  // The moment `package.json` + `src/pages` appear, the resolver correctly starts answering
+  // WORK_ROOT/{slug}-site, the recorded project no longer equals it, and this branch wiped
+  // mcp_calls, references_surveyed, inner_pages_viewed and layers_read: the entire survey, on
+  // the normal path, silently. Every gate downstream then read the build as ungrounded, which is
+  // exactly what happened on a real client build that had called the library and lost the record.
+  //
+  // A SCAFFOLD IS A DESCENT, A DIFFERENT BUILD IS NOT. So the rule is containment, not equality:
+  // if the recorded project contains the new one (or vice versa) this is the same build moving
+  // into its scaffold, and the evidence is carried over. Only a genuinely unrelated directory
+  // starts fresh, and even then the old file is ARCHIVED first: no path through this hook may
+  // destroy the only record of a survey.
   if (typeof m.project === "string" && m.project !== projectDir) {
-    process.stderr.write(
-      `[palate] build-manifest.json at ${MANIFEST} was recorded for ${m.project}; the project is now ${projectDir}. Starting a fresh manifest rather than merging two builds.\n`,
-    );
-    m = blank();
+    if (isSameBuildMove(m.project, projectDir)) {
+      process.stderr.write(
+        `[palate] the project moved from ${m.project} to ${projectDir} (the scaffold appeared). Carrying the survey across: ${(m.mcp_calls || []).length} Palate call(s), ${(m.references_surveyed || []).length} reference(s).\n`,
+      );
+    } else {
+      const archived = archiveManifest(MANIFEST, m);
+      process.stderr.write(
+        `[palate] build-manifest.json at ${MANIFEST} was recorded for ${m.project}; the project is now ${projectDir}. Starting a fresh manifest rather than merging two builds.` +
+          (archived ? ` The previous one is kept at ${archived}.` : "") +
+          "\n",
+      );
+      m = blank();
+    }
   }
-  m.project = projectDir;
-  m.project_resolved_by = ctx.how;
+  // Belt and braces for every OTHER way a manifest can lose its history (deleted by hand,
+  // replaced by a symlink to a file that was then moved, clobbered by a second writer): the
+  // journal is append-only and is the record of last resort.
+  //
+  // NOT ON EVERY CALL. A Write is the hottest path through this hook and re-parsing the whole
+  // log there would cost the build nothing but time. An empty mcp_calls is the catastrophic
+  // case and is a free check; a Palate call is the only moment a partial loss actually matters,
+  // since depth is measured from these numbers. Between them they cover every case a gate reads.
+  const couldHaveLostCalls =
+    !Array.isArray(m.mcp_calls) || m.mcp_calls.length === 0 || tool.startsWith("mcp__palate__");
+  if (couldHaveLostCalls) rehydrateFromJournal(m, MANIFEST);
+  // Record the project, but NEVER demote it to an ancestor. A tool call resolved from the
+  // workspace root (a scratch write, a fallback) legitimately answers the parent directory, and
+  // rewriting the anchor to it would leave the manifest pointing at the workspace rather than
+  // the site, which is what makes a SECOND build in the same workspace look like a continuation
+  // of the first. Descending is a real move and is recorded; climbing out is a resolution
+  // artefact and is not.
+  const climbingOut =
+    typeof m.project === "string" && m.project !== projectDir && isSameBuildMove(m.project, projectDir) &&
+    m.project.startsWith(projectDir.endsWith(path.sep) ? projectDir : projectDir + path.sep);
+  if (!climbingOut) {
+    m.project = projectDir;
+    m.project_resolved_by = ctx.how;
+  }
   if (!Array.isArray(m.layers_read)) m.layers_read = []; // back-compat with schema 1 manifests
   // Upgrade a schema-1/2 manifest in place: add the schema-3 evidence blocks
   // without disturbing any existing field. Never invents a pass; the blocks
@@ -367,7 +611,12 @@ function main() {
     if (typeof input.slug === "string") slugs.add(input.slug);
     if (Array.isArray(input.slugs)) for (const s of input.slugs) if (typeof s === "string") slugs.add(s);
     const slugList = [...slugs];
-    m.mcp_calls.push({ tool, args: input, slugs: slugList, evidence, ts: new Date().toISOString() });
+    const entry = { tool, args: input, slugs: slugList, evidence, ts: new Date().toISOString() };
+    m.mcp_calls.push(entry);
+    // The journal is written FIRST-class, beside the manifest, on the same call. If the manifest
+    // write below fails, or the file is later blanked, moved or symlinked away, this line is
+    // what proves the survey happened.
+    appendJournal(MANIFEST, entry);
     for (const s of slugList) if (!m.references_surveyed.includes(s)) m.references_surveyed.push(s);
     // An inner-page view = looking at a specific inner page screenshot.
     if (tool === "mcp__palate__refs_get_screenshot" && input.page && input.slug) {

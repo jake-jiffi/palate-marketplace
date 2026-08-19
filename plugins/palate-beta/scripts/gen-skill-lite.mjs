@@ -28,8 +28,15 @@ const CHECK = process.argv.includes("--check");
 // Codex truncates a combined project AGENTS.md past 32KiB; Cursor/Gemini/Copilot prefer small
 // always-load files. The doctrine asymptotes near 17KB once the verbatim closed lists (banned
 // faces, the 12 imagery motifs, the perceptual-floor numbers) are kept faithfully, which are
-// the anti-slop differentiator, so the ceiling sits at 20KB (still well under Codex's 32KiB).
-const BUDGET = 20480;
+// the anti-slop differentiator, so the ceiling sits at 20.5KB (still well under Codex's 32KiB).
+//
+// RAISED 20480 -> 20992 on 2026-08-19, deliberately and once, rather than deleting doctrine to
+// hold a round number. The file had grown to 20476, four bytes of headroom, which meant the next
+// real correction could not land at all. What landed instead was the calm-is-not-motionless rule,
+// after a real clinic build read "calm brand" as "no motion" and shipped 8 variants spanning one
+// to two keyframes. Codex's 32KiB truncation is the only HARD limit and this leaves ~11KB under
+// it; this number is the discipline, so move it by argument and never to fit a paragraph in.
+const BUDGET = 20992;
 
 const body = readFileSync(DOCTRINE, "utf8").trimEnd();
 const bytes = Buffer.byteLength(body, "utf8");
