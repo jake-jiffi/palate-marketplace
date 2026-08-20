@@ -25,6 +25,11 @@ import type { APIRoute } from "astro";
  * The canonical check is skipped while `site` still holds the {{DOMAIN}} scaffold token, or
  * the placeholder itself would block every environment including production.
  */
+// ON DEMAND, and one of only three routes that are. This reads the REQUEST host to close a
+// non-canonical origin, which a prerendered file cannot do: baked at build time it would
+// answer for whatever host the build imagined. See the render-mode note in astro.config.mjs.
+export const prerender = false;
+
 export const GET: APIRoute = ({ site, url }) => {
   // BOTH sources, and the process fallback is NOT redundant: astro.config inlines
   // PUBLIC_SITE_ENV at BUILD time, so an SSR deploy whose build did not know the environment

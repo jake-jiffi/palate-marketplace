@@ -3,25 +3,26 @@
 // Astro dynamic routes require the bracket syntax; the skill ships it
 // bracket-free as `slug.astro.tpl` only so the skill zip uploads cleanly.
 //
-// The detail page for one entry in the `posts` collection. SSR, so the slug
-// resolves per request and a new post needs no getStaticPaths and no rebuild
-// of every other route.
+// The detail page for one entry in the `posts` collection. Prerendered, so every post is
+// a real file on a CDN and @astrojs/sitemap enumerates it without help. This used to
+// resolve per request, which meant the sitemap integration could see none of the posts and
+// astro.config.mjs carried thirty lines of workaround to list them by hand.
 //
 // Content comes from the collection, so the markdown IS the source: no CMS, no
 // Portable Text, no rendering a body the repo cannot see.
-import { getEntry, render } from "astro:content";
+import { getCollection, render } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { business } from "../../lib/business";
 
-const { slug } = Astro.params;
-const post = slug ? await getEntry("posts", slug) : undefined;
-
-// A draft is a 404 in production and readable everywhere else, so a post can be
-// written, reviewed in a preview and merged without ever being publicly live.
-// import.meta.env.PROD is the build-time flag, so this costs nothing at runtime.
-if (!post || (post.data.draft && import.meta.env.PROD)) {
-  return new Response(null, { status: 404 });
+// A draft is simply NOT BUILT in production, which is a stronger guarantee than a 404 per
+// request: the page does not exist to be found. Everywhere else it is readable, so a post
+// can be written, reviewed in a preview and merged without ever being publicly live.
+export async function getStaticPaths() {
+  const posts = await getCollection("posts", (p) => !(p.data.draft && import.meta.env.PROD));
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
 }
+
+const { post } = Astro.props;
 
 const { Content } = await render(post);
 const { title, description, publishedAt, updatedAt, author, image, imageAlt } = post.data;

@@ -122,6 +122,42 @@ STALE="$TMP/stale-project"; mkdir -p "$STALE"
 jq '.project="/nonexistent/path/that/was/moved"' "$DEEP" > "$STALE/build-manifest.json"
 check "manifest.project missing on disk -> falls back to the manifest dir (skip, no crash)" 0 "$STALE/build-manifest.json"
 
+# --- UNIQUENESS NOW HAS A DETERMINISTIC CALLER ---------------------------------------
+# It was the only gate in the suite invoked solely by an agent instruction, and it could not
+# have been otherwise: the scaffold is SSR, so dist/ holds no HTML. screenshot-build.mjs now
+# writes rendered.html beside each variant's shots, which is what makes this reachable.
+mk_variant_html() { # <shots-dir> <vN> <body>
+  mkdir -p "$1/$2"
+  printf '<!doctype html><html><body>%s</body></html>' "$3" > "$1/$2/rendered.html"
+}
+
+UOK="$TMP/uniq-ok"; mkdir -p "$UOK"
+cp "$DEEP" "$UOK/build-manifest.json"; make_shots "$UOK" 0
+cat > "$UOK/verify-report.json" <<'JSON'
+{ "verdict": "pass", "visual": { "ran": true, "pass": true, "console_errors": 0,
+  "iterations": [ { "i": 1, "axes": { "philosophy": 5, "hierarchy": 4, "execution": 4, "specificity": 4, "restraint": 4, "variety": 4 }, "score": 25,
+    "shots": { "desktop_full": ".palate-shots/desktop-full.png" } } ] }, "shots_dir": ".palate-shots" }
+JSON
+mk_variant_html "$UOK/.palate-shots" v1 '<header class="masthead"><h1>One</h1></header><section class="rail"><p>A quiet column of type, one photograph, a great deal of air.</p></section>'
+mk_variant_html "$UOK/.palate-shots" v2 '<nav class="strip"><ul><li>a</li></ul></nav><main class="grid"><article class="tile"><h2>Two</h2></article><aside class="pin">Scroll-driven record opening as you go</aside></main>'
+check "distinct rendered variants -> pass" 0 "$UOK/build-manifest.json"
+
+# Two variants that are the same page twice must be caught rather than shipped.
+UBAD="$TMP/uniq-bad"; mkdir -p "$UBAD"
+cp "$UOK/build-manifest.json" "$UBAD/build-manifest.json"; cp "$UOK/verify-report.json" "$UBAD/verify-report.json"
+make_shots "$UBAD" 0
+DUP='<header class="masthead"><h1>Same</h1></header><section class="rail"><p>A quiet column of type, one photograph, a great deal of air.</p></section>'
+mk_variant_html "$UBAD/.palate-shots" v1 "$DUP"
+mk_variant_html "$UBAD/.palate-shots" v2 "$DUP"
+check "two near-identical variants -> block" 2 "$UBAD/build-manifest.json"
+
+# One variant is not a set: nothing to compare, and it must not block.
+USOLO="$TMP/uniq-solo"; mkdir -p "$USOLO"
+cp "$UOK/build-manifest.json" "$USOLO/build-manifest.json"; cp "$UOK/verify-report.json" "$USOLO/verify-report.json"
+make_shots "$USOLO" 0
+mk_variant_html "$USOLO/.palate-shots" v1 "$DUP"
+check "a single rendered variant -> pass (nothing to compare)" 0 "$USOLO/build-manifest.json"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

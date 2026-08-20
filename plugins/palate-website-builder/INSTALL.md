@@ -2,6 +2,19 @@
 
 One skill, two modes. It builds production-grade Astro websites grounded by the Palate MCP, and it builds brand packages that feed those builds.
 
+## What it runs on
+
+**macOS and Linux.** The quality gates are 89 shell scripts and the hooks spawn `bash`
+directly, so on Windows they cannot run at all.
+
+Nothing breaks loudly, which is the part worth knowing: the plugin still builds, and it says
+so out loud rather than reporting a pass. If `bash` is not available it prints *"Palate gates
+were SKIPPED, not passed"* and records the build's grounding as `unknown` rather than
+`grounded`, because nothing measured it. What you lose is every deterministic check: the
+MCP-depth gate, the visual loop, ship-ready, SEO, Explore and the bold bar.
+
+On Windows, run Claude Code inside **WSL** or **Git Bash** and you get all of it.
+
 ## Install (the Claude Code plugin)
 
 Palate ships as a Claude Code plugin that bundles the skill, the survey/verify agents, and the

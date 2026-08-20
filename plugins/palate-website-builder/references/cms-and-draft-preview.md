@@ -35,9 +35,21 @@ in six months?*
 
 Two things stay true from the first file, so a CMS is purely additive:
 
-1. **Output stays `"server"` (SSR) even with no CMS.** SSR is what the embedded
-   Studio and draft content need. Shipping a static site and retrofitting SSR
-   later IS a rebuild, so the scaffold never does that.
+1. **Output is `"static"`; the PREVIEW deployment is the exception.** Production wants files
+   on a CDN: published content, no overlay, nothing recomputed per visitor. The preview
+   deployment exists so an editor sees their DRAFT, and a prerendered preview freezes that
+   draft at build time, which defeats the Presentation tool. So `astro.cms.mjs` flips every
+   route to on-demand when `PUBLIC_SANITY_VISUAL_EDITING_ENABLED` is `"true"`, via the
+   `astro:route:setup` hook. Astro 5 removed dynamic `prerender` exports (only a literal
+   boolean compiles), and the hook belongs in `astro.cms.mjs` rather than `astro.config.mjs`
+   because the latter is customised per build and `add-sanity.sh` must never patch it.
+   Verified on a real scaffold with the Sanity tree installed: flag off -> 8 static pages,
+   flag on -> 0, all on demand. The one operational consequence: **publishing needs a rebuild
+   trigger** (a Sanity webhook to a Vercel deploy hook), so a change is a minute behind rather
+   than instant. Say that to the client. One upside comes free: a Sanity outage now hits the
+   BUILD, which falls back to `content.ts`, and the live site is untouched because it is
+   already built.
+
 2. **Every page calls `loadPage()`, never `content.ts` directly.** That
    indirection is the seam. Read `content.ts` straight from a page and you have
    signed up to rewrite every page the day a client wants to edit their own copy.
@@ -62,12 +74,13 @@ script hard-blocks the wrong order rather than silently stripping the CMS.
 
 ## The shape (once a CMS is added)
 
-- **Astro in SSR mode** (`output: "server"`) on the **Vercel adapter** by
-  default - or on the Cloudflare adapter, deployed as a Workers script, when
-  `--host cloudflare` is picked (see `references/hosting-vercel.md`). SSR is
-  required for the embedded Studio and for serving draft content, and is the
-  default with or without a CMS; everything in this doc applies identically on
-  either host. The Vercel Toolbar's
+- **Astro static** (`output: "static"`) on the **Vercel adapter** by default -
+  or on the Cloudflare adapter, deployed as a Workers script, when
+  `--host cloudflare` is picked (see `references/hosting-vercel.md`). The
+  embedded Studio is a client-side SPA and builds fine as a static shell at
+  `/studio`; only the PREVIEW deployment renders on demand, and `astro.cms.mjs`
+  arranges that from the visual-editing flag. Everything in this doc applies
+  identically on either host. The Vercel Toolbar's
   Comments feature complements Sanity's Presentation tool on preview
   deployments - reviewer notes on the page, plus Sanity click-to-edit.
 - **`@sanity/astro`** is the integration. It provides the data client (the

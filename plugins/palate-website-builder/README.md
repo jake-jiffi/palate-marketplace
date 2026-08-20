@@ -19,6 +19,12 @@ Palate MCP (268 references)  ──informs──>  BUILD SITE
 
 A website build can trigger a brand build in-process (Phase 0, when the client has no brand package yet). The Palate MCP's reference library feeds every build with real design taste.
 
+## Requirements
+
+**macOS or Linux.** The gates are shell scripts, so on Windows run Claude Code inside WSL or
+Git Bash. Without a shell the plugin still builds but every deterministic gate is skipped, and
+it says so rather than reporting a pass. Details in `INSTALL.md`.
+
 ## Install
 
 Palate is a Claude Code plugin (it bundles the skill, the agents, and the MCP-depth enforcement
