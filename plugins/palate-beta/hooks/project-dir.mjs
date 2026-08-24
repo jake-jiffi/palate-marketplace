@@ -173,6 +173,47 @@ function hasManifest(dir) {
  *   detected   the project directory, or null when nothing was detected (how === "fallback")
  *   stale      a manifest at the start dir that belongs in `detected` and has not moved yet
  */
+
+/**
+ * The nearest EXISTING manifest at or above a directory, or null.
+ *
+ * THE BUG THIS EXISTS FOR, seen on a live client build. An agent `cd`s into a subdirectory
+ * during a build (reading donors under `.palate/harvest`, say), the Palate calls it makes from
+ * there resolve to that subdirectory because no project shape is detectable inside it, and both
+ * the manifest AND the journal get written there instead. The build's real manifest, sitting two
+ * levels up with everything else in it, is ignored. The depth gate then reported "0 references
+ * surveyed" on a build that had made 23 calls, and the agent had to hand-write a script to merge
+ * three scattered journals back together before it could proceed.
+ *
+ * A build's manifest is at or above the working directory essentially always, so look up before
+ * falling back to the cwd. BOUNDED so it cannot reach into an unrelated project: it stops at a
+ * repository root (the directory holding `.git` is checked, nothing above it is), and at MAX_UP
+ * either way.
+ */
+function manifestAbove(from) {
+  let dir;
+  try {
+    dir = path.resolve(from);
+  } catch {
+    return null;
+  }
+  for (let i = 0; i < MAX_UP; i++) {
+    if (hasManifest(dir)) return dir;
+    // A repo root is the ceiling: a manifest above it belongs to something else.
+    let atRepoRoot = false;
+    try {
+      atRepoRoot = fs.existsSync(path.join(dir, ".git"));
+    } catch {
+      /* unreadable: treat as not a root and keep the MAX_UP bound */
+    }
+    if (atRepoRoot) return null;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
 export function resolveBuildContext(startDir, opts = {}) {
   const start = (() => {
     try {
@@ -200,6 +241,16 @@ export function resolveBuildContext(startDir, opts = {}) {
       manifest: path.join(start, MANIFEST_NAME),
       stale: path.join(start, MANIFEST_NAME),
     };
+  }
+
+  // NOTHING WAS DETECTED and the cwd holds no manifest: before accepting the cwd, look UP for one
+  // that already exists. This is the case where an agent has stepped into a subdirectory of its
+  // own build, and writing a second manifest there fragments the evidence the gates read.
+  if (how === "fallback" && !hasManifest(dir)) {
+    const above = manifestAbove(dir);
+    if (above && above !== dir) {
+      return { dir: above, how: "ancestor", detected: above, manifest: path.join(above, MANIFEST_NAME), stale: null };
+    }
   }
 
   return { dir, how, detected, manifest: path.join(dir, MANIFEST_NAME), stale: null };

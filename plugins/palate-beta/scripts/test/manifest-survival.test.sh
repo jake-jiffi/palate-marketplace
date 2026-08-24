@@ -104,6 +104,36 @@ call "$X/b-site" "mcp__palate__refs_search" '{"query":"site b"}' '{"results":[{"
 is "build B has its own manifest" "$(mancalls "$X/b-site/build-manifest.json")" "1"
 is "and B did not inherit A's references" "$(jq -r '.references_surveyed[0]' "$X/b-site/build-manifest.json")" "bbb"
 
+# =====================================================================================
+# 7. THE SHELL STEPS INTO A SUBDIRECTORY MID-BUILD. Seen on a live client build: an agent
+#    cd'd into .palate/harvest to read donors, every Palate call it made from there wrote a
+#    SECOND manifest and a SECOND journal beside it, and the depth gate then reported "0
+#    references surveyed" on a build that had made 23 calls. The agent had to hand-write a
+#    script to merge three scattered journals before it could carry on.
+# =====================================================================================
+D="$TMP/deep"; mkdir -p "$D"
+call "$D" "mcp__palate__refs_search" '{"query":"childrens health"}' '{"results":[{"slug":"aa"},{"slug":"bb"}]}'
+is "the build records its first calls at the root" "$(mancalls "$D/build-manifest.json")" "1"
+
+# the agent steps into a working subdirectory and keeps reading donors from there
+mkdir -p "$D/.palate/harvest"
+call "$D/.palate/harvest" "mcp__palate__refs_get" '{"slug":"aa","layer":["do_dont"]}' '{"slug":"aa","do_dont":{"do":["x"]}}'
+call "$D/.palate/harvest" "mcp__palate__refs_get_screenshot" '{"slug":"bb","page":"pricing"}' '{"slug":"bb","page":"pricing","image":"<png>"}'
+
+[ -f "$D/.palate/harvest/build-manifest.json" ] \
+  && bad "a second manifest was created inside the working subdirectory" \
+  || ok "no stray manifest inside the working subdirectory"
+is "every call landed in the ONE manifest" "$(mancalls "$D/build-manifest.json")" "3"
+is "and the inner page was recorded there" "$(jq '(.inner_pages_viewed|length)' "$D/build-manifest.json")" "1"
+is "one journal, not three" "$(find "$D" -name mcp-journal.jsonl | wc -l | tr -d ' ')" "1"
+
+# The bound matters: a manifest ABOVE a repository root belongs to something else.
+O="$TMP/outer"; mkdir -p "$O/inner"; git -C "$O/inner" init -q 2>/dev/null
+echo '{"schema":3,"mcp_calls":[]}' > "$O/build-manifest.json"
+call "$O/inner" "mcp__palate__refs_search" '{"query":"unrelated"}' '{"results":[{"slug":"zz"}]}'
+is "a manifest above a repo root is NOT adopted" "$(mancalls "$O/build-manifest.json")" "0"
+is "the repo gets its own" "$(mancalls "$O/inner/build-manifest.json")" "1"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
