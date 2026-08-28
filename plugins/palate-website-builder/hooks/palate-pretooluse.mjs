@@ -490,7 +490,16 @@ try {
     // signature of a user whose token is not set, and that case allows, unchanged. So the
     // rule is: you may build without Palate, and you may not pretend to build with it.
     // ---------------------------------------------------------------------------------
-    if (process.env.PALATE_GATE_SURVEY !== "0") {
+    // SCOPED TO PAGE AND SECTION SOURCE, which is the only thing composed FROM the library.
+    //
+    // The first version held every new source file, and a live build hit it writing
+    // `src/brand/tokens.css`: brand tokens are EXTRACTED from the client's own brand, not
+    // designed from references, so demanding a library survey before them inverts the order of
+    // the work. Same for `src/brand/fonts.css`, `src/styles/globals.css` and `src/lib/content.ts`
+    // (which is content, not craft). The survey is about what you COMPOSE, and composition
+    // happens in src/pages and src/components. Nothing is lost by scoping it: a site still needs
+    // pages, and those are held.
+    if (process.env.PALATE_GATE_SURVEY !== "0" && isPageOrSection) {
       const calls = Array.isArray(manifest?.mcp_calls) ? manifest.mcp_calls.length : 0;
       const failures = Array.isArray(manifest?.mcp_failures) ? manifest.mcp_failures.length : 0;
       // A degrading connection must not become a trap: if the library is refusing more often

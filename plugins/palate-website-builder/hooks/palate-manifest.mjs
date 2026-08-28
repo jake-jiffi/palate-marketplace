@@ -297,23 +297,72 @@ function detectQuota(result) {
   return found;
 }
 
+/**
+ * The facts, in the MCP's own words.
+ *
+ * The MCP knows the cap, the window and the reset date, and it deploys independently of this
+ * plugin. Quoting it is what stops this directive going stale, which it comprehensively did:
+ * it hardcoded "25 deep reference reads", called the cap DAILY and told the user it "resets
+ * at midnight UTC", while the real allowance has been 20 A MONTH since pricing v3, resetting
+ * on the 1st. A capped user was being told to wait a few hours when the true wait could be
+ * thirty days, at the exact moment we most want them to upgrade.
+ *
+ * Takes the first paragraph only: the MCP's message states what happened, and the call to
+ * action after it is composed below rather than quoted twice.
+ */
+function quotaFacts(result) {
+  const blocks = Array.isArray(result?.content) ? result.content : [];
+  for (const b of blocks) {
+    if (b && b.type === "text" && typeof b.text === "string" && !b.text.trimStart().startsWith("{")) {
+      const first = b.text.split(/\n\s*\n/)[0].trim();
+      if (first) return first;
+    }
+  }
+  return null;
+}
+
+/** When the allowance comes back, and whether waiting is a realistic answer. */
+function quotaResetLine(q) {
+  const t = Date.parse(q?.resetAt ?? "");
+  if (!Number.isFinite(t)) return null;
+  const days = Math.round((t - Date.now()) / 86_400_000);
+  const on = new Date(t).toISOString().slice(0, 10);
+  return days >= 1
+    ? `The allowance resets on ${on}, about ${days} day${days === 1 ? "" : "s"} away, so waiting is NOT a fix for this build.`
+    : `The allowance resets on ${on}.`;
+}
+
 // The hard-stop directive (PostToolUse decision:"block" feeds `reason` to the model).
-// Copy signed off (sec-49r.20). Data-driven from the MCP signal where present.
 // Aligns with SKILL.md 6.1's verbatim stop. The hook is the DETERMINISTIC backstop to that
 // prompt instruction: 6.1 tells the model what to say, this makes the model actually stop.
-function quotaStopDirective(q) {
-  const pricing = (q && q.upgradeUrl) || "https://palatemcp.com/pricing";
-  return [
-    "⛔ PALATE FREE-TIER LIMIT REACHED — STOP DEEP READS.",
-    "",
-    "This Palate call was refused: you have used the free tier's daily deep-read cap (25 deep reference reads). Search is still unlimited, but finishing a full build needs more deep reads. Further deep-read calls (refs_get, refs_get_tokens, refs_get_screenshot, refs_get_astro_recipe) will keep failing until the cap resets at midnight UTC.",
+// Every number in it is now read from the MCP signal; nothing about the plan is hardcoded.
+function quotaStopDirective(q, result) {
+  const facts = quotaFacts(result) || "A Palate deep read was refused: this plan's allowance is spent.";
+  const url = (q && q.upgradeUrl) || "https://palatemcp.com/pricing";
+  // upgradeUrlIsPersonalised means the MCP minted a signed one-click checkout link for THIS
+  // customer. Leading with the dashboard billing page instead (as this did) buries a
+  // no-sign-in path under one that needs a login and a six-digit code from an email client.
+  const oneClick = Boolean(q && q.upgradeUrlIsPersonalised);
+  const searchFree = !q || q.searchStillAvailable !== false;
+  const resets = quotaResetLine(q);
+
+  const lines = ["⛔ PALATE ALLOWANCE SPENT — STOP DEEP READS.", "", facts];
+  if (resets) lines.push("", resets);
+  lines.push(
     "",
     "DO THIS NOW:",
-    "1. Stop making Palate deep-read calls — do not retry them in a loop.",
-    `2. Tell the user, plainly: they have reached Palate's free daily limit; to finish this build now, upgrade to Pro at https://app.palatemcp.com/dashboard/billing (pricing: ${pricing}), then re-run the build.`,
-    "3. Search stays FREE and unlimited (refs_search, refs_for_business, refs_match_brief) — only deep reads are capped.",
-    "4. Continue only with the references already gathered, or pause until the user upgrades or the cap resets.",
-  ].join("\n");
+    "1. Stop calling Palate deep reads (refs_get, refs_get_tokens, refs_get_screenshot, refs_get_astro_recipe). They will keep failing. Do not retry them in a loop.",
+    oneClick
+      ? `2. Tell the user plainly that the build has reached Palate's allowance, and give them this link, which opens checkout directly with no sign-in: ${url}`
+      : `2. Tell the user plainly that the build has reached Palate's allowance, and point them at ${url}`,
+  );
+  if (searchFree) {
+    lines.push("3. Search stays FREE and unlimited (refs_search, refs_for_business, refs_match_brief). Only deep reads are capped, so keep searching if it helps.");
+  }
+  lines.push(
+    `${searchFree ? "4" : "3"}. Then either continue with the references already gathered, or pause until they upgrade. Do NOT claim the survey was deeper than it was.`,
+  );
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -602,7 +651,7 @@ function main() {
         /* never wedge a build over a manifest write */
       }
       const q = detectQuota(result);
-      if (q) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(q) }));
+      if (q) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(q, result) }));
       return;
     }
 
@@ -670,7 +719,7 @@ function main() {
   // on a real quota_exceeded signal; every other call stays silent (exit 0).
   if (tool.startsWith("mcp__palate__")) {
     const q = detectQuota(result);
-    if (q) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(q) }));
+    if (q) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(q, result) }));
   }
 }
 

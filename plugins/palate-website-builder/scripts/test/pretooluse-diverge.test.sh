@@ -346,6 +346,25 @@ want "\"harvest\" plus variant writing -> deny (creative wins)" DENY \
 O3="$TMP/orch-write"; mkdir -p "$O3"
 want "a plain source write with no marker still passes" ALLOW "$(run "$O3" Write "$O3/src/pages/index.astro")"
 
+# ===================================================================================
+# THE SURVEY WALL IS SCOPED TO WHAT IS COMPOSED FROM THE LIBRARY (42-47).
+# A live client build hit the wall writing src/brand/tokens.css. Brand tokens are
+# EXTRACTED from the client's own brand, not designed from references, so demanding a
+# library survey before them inverts the order of the work. The survey is about what you
+# COMPOSE, and composition happens in src/pages and src/components.
+# ===================================================================================
+S25="$TMP/survey-scope"; mkdir -p "$S25"; echo "$MARKER" > "$S25/.palate-skill-state.json"
+write_valid_manifest "$S25"; add_calls "$S25" "$SHALLOW"   # MCP answered, survey far too thin
+
+for f in src/brand/tokens.css src/brand/fonts.css src/styles/globals.css src/lib/content.ts; do
+  want "scaffold file $f -> allow (not composed from the library)" ALLOW \
+    "$(run "$S25" Write "$S25/$f")"
+done
+want "src/pages/index.astro -> still DENY (this IS composed)" DENY \
+  "$(run "$S25" Write "$S25/src/pages/index.astro")"
+want "src/components/Hero.astro -> still DENY" DENY \
+  "$(run "$S25" Write "$S25/src/components/Hero.astro")"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
