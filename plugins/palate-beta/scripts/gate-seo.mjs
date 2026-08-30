@@ -176,6 +176,30 @@ const unresolvedPrefixes = [];
 const unresolvable = (r) => unresolvedPrefixes.push(norm(r.path.replace(/\/?\[[^\]]*\].*$/, "")) || "/");
 
 /** Which collection a dynamic route renders, read from its own code rather than its path. */
+/**
+ * COMMERCE ROUTES ARE ENUMERATED FROM THE CATALOGUE, NOT THE CONTENT GRAPH.
+ *
+ * `collectionOf` reads a literal getCollection("...") call, which is how a blog names its posts.
+ * A storefront has no markdown: /products/[handle] gets its handles from Shopify via
+ * getStaticPaths, so this gate reported it "not enumerable" and its sitemap coverage as UNKNOWN
+ * on a build whose sitemap was in fact complete. A gate that cannot see 350 of 356 URLs is not
+ * measuring the thing it claims to measure.
+ *
+ * `.palate/catalogue.json` (scripts/palate-shopify.mjs) carries the real routes. ABSENT OR
+ * FAILED, THIS RETURNS NULL AND NOTHING CHANGES, so every content-collection build behaves
+ * exactly as before.
+ */
+function commerceUrlsFor(route, dir) {
+  let cat = null;
+  try { cat = JSON.parse(readFileSync(join(dir, ".palate", "catalogue.json"), "utf8")); } catch { return null; }
+  if (!cat || cat.ok !== true || !Array.isArray(cat.routes)) return null;
+  // "/products/[handle]" -> every catalogue route under "/products/"
+  const prefix = route.path.slice(0, route.path.indexOf("["));
+  if (!prefix || prefix === "/") return null;
+  const hits = cat.routes.filter((u) => typeof u === "string" && u.startsWith(prefix) && !u.includes("["));
+  return hits.length ? hits : null;
+}
+
 function collectionOf(route) {
   const src = read(join(dir, route.source)) || "";
   const m = src.match(/\bget(?:Collection|Entry|EntryBySlug)\s*\(\s*["'`]([\w-]+)["'`]/);
@@ -208,6 +232,11 @@ for (const r of index.routes) {
       "URLs cannot be derived from the content graph. Its sitemap coverage is UNKNOWN.",
     );
     unresolvable(r);
+    continue;
+  }
+  const commerceUrls = commerceUrlsFor(r, dir);
+  if (commerceUrls) {
+    for (const u of commerceUrls) expected.push({ path: norm(u), why: `${r.source} -> catalogue` });
     continue;
   }
   const collection = collectionOf(r);

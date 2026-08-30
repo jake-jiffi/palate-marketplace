@@ -78,9 +78,58 @@ password-gated prototype. **Not acceptable for a live store with promotional pri
 cache, and the build-stamped price as the island's **fallback slot content**. Instant LCP, a
 correct-in-almost-all-cases price, and a self-healing update.
 
-**The island must fail CLOSED.** On a fetch error it renders "check price in cart", NEVER a stale
-number. The cart is priced by Shopify at checkout regardless, so failing closed costs a click and
-failing open costs a misrepresentation.
+**The island must fail CLOSED**, and **ASTRO CANNOT DO THAT ON ITS OWN. You need TWO mechanisms.**
+
+Astro's entire island error handling is one line in `replaceServerIsland()`:
+
+```js
+if (!s || r.status !== 200 || r.headers.get('content-type')?.split(';')[0].trim() !== 'text/html') return;
+```
+
+On any non-200, any wrong content-type, or a rejected fetch it **returns and touches nothing, so
+the fallback stays on screen. There is no error slot: the fallback IS the error state.** And the
+fallback is the build-time price. Measured in a browser across seven failure modes, **five showed
+the stale price and four of those logged nothing at all**:
+
+| Island endpoint | Customer sees | Console |
+|---|---|---|
+| 200 `text/html` | live price | clean |
+| 500 | **STALE** | **silent** |
+| 502 with an HTML body | **STALE** | **silent** |
+| 200 but `application/json` | **STALE** | **silent** |
+| network abort / DNS fail | **STALE** | `Failed to fetch` |
+| hangs forever | **STALE indefinitely** | **silent** |
+| island caught its own error, returned 200 | "check price in cart" | clean |
+
+**Mechanism 1 — catch INSIDE the island** and render the error state yourself, so the response is
+still a 200 `text/html`. Covers Shopify being slow, throttling, or returning an error payload.
+
+**Mechanism 2 — a client-side watchdog on the host page**, because mechanism 1 cannot run when the
+island endpoint 500s, cold-starts, crashes, is blocked, or the props fail to decrypt after a deploy.
+On success Astro REMOVES the fallback node, so `isConnected` is the success signal:
+
+```html
+<script is:inline>
+  (function () {
+    setTimeout(function () {
+      document.querySelectorAll('[data-price-fallback]').forEach(function (el) {
+        if (!el.isConnected) return;            // the island resolved
+        el.textContent = 'Check price in cart';
+        el.setAttribute('data-price-state', 'unavailable');
+      });
+    }, 2500);
+  })();
+</script>
+```
+
+Verified end to end: the page paints the build price instantly, and with the island endpoint dead
+the watchdog replaces it inside the deadline.
+
+**One consequence to accept honestly.** The fallback is what every non-JS consumer reads: curl,
+most LLM scrapers, and the first-pass crawl. So the machine-readable price is the BUILD-TIME price.
+The island does not fix the machine-readability problem in §6, it just moves it. If exact price
+legibility to agents matters more than instant paint, use ISR or a webhook-driven rebuild instead
+and keep the price in the HTML.
 
 ---
 
@@ -96,6 +145,23 @@ gid://shopify/Cart/hWNGF16uSYsIVMh8xWFUngMG?key=fdd38b3114c8cad6a4616fe5e7adaf
 **HttpOnly Secure cookie, never localStorage.** Any XSS on a localStorage cart leaks buyer PII. All
 cart mutations run behind Astro server endpoints or Actions. Marking those routes
 `prerender = false` is the correct, narrow exception; the catalogue stays static.
+
+```
+httpOnly: true   secure: true   sameSite: 'lax'   path: '/'   maxAge: 60*60*24*14
+```
+
+**`sameSite: 'lax'`, NOT `'strict'`, and this is the one with a real consequence.** The buyer
+returns from Shopify's own checkout domain, which is a cross-site top-level navigation. A Strict
+cookie is not sent on it, so the cart vanishes at the worst possible moment in the funnel.
+
+**This is the field's most common mistake, so do not copy it from anywhere.** Of nine surveyed
+open-source Astro-Shopify storefronts, four put the cart id in `localStorage`, and three of those
+are the same file copy-pasted between repos. Even Hydrogen's own published cart example passes no
+`httpOnly`, no `secure` and no `sameSite`, so the copy-paste path from Shopify's own documentation
+yields a cart cookie `document.cookie` can read.
+
+Also note: nothing else in the ecosystem uses `server:defer` with Shopify. A GitHub code search
+returns hits in exactly one repository, and it is ours. The §2 pattern is not something to look up.
 
 **Never read `CartCost.totalTaxAmount`** or its sibling tax and duty fields: deprecated since
 2025-01, and on a taxes-included store the cart can never show a tax line anyway.

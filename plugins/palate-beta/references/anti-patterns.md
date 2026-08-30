@@ -531,8 +531,8 @@ framing, therapy-mode openers and the exact stock pricing / free-tier phrases
 - Severity: High
 - Mode: always
 - Files: *.astro,*.tsx,*.html
-- Pattern: `<input(?![^>]*\bautocomplete=)[^>]*>`
-- Fix: Inputs without `autocomplete` break browser autofill and harm conversion. Set the correct token (`email`, `name`, `tel`, `street-address`, `current-password`, etc.) or `autocomplete="off"` if truly free-form.
+- Pattern: `<input(?![^>]*\btype=["'](?:hidden|radio|checkbox|submit|button|reset|image|file|range|color)["'])(?![^>]*\bautocomplete=)[^>]*>`
+- Fix: Inputs without `autocomplete` break browser autofill and harm conversion. Set the correct token (`email`, `name`, `tel`, `street-address`, `current-password`, etc.) or `autocomplete="off"` if truly free-form. Input types that are never user-typed are EXEMPT: `autocomplete` has no meaning on hidden, radio, checkbox, submit, button, reset, image, file, range or color, and firing High on them made a product variant picker and a hidden form field look like accessibility defects on a real storefront build.
 
 ### Rule: input-missing-name
 - Severity: High
