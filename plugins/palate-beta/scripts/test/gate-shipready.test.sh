@@ -67,6 +67,31 @@ check "images with no assets.json fire" "$(run "$TMP/noassets")" "1"
 check "and it says the tool never ran" \
   "$(out "$TMP/noassets" | grep -c 'never ran')" "1"
 
+# 4b. COMMERCE: product photography lives on Shopify's CDN, so there are no local files and
+# assets.json is never written. The Storefront API returns width and height per image, so those
+# photographs ARE measured. The direction that matters most is the last one: with no catalogue,
+# nothing changes and the original finding still fires.
+scaffold "$TMP/cat"; rm "$TMP/cat/.palate/assets.json"
+cat > "$TMP/cat/.palate/catalogue.json" <<'JSON'
+{"ok":true,"products":[{"handle":"a","image":{"url":"https://cdn.shopify.com/a.jpg","width":1920,"height":2400}},
+                       {"handle":"b","image":{"url":"https://cdn.shopify.com/b.jpg","width":1000,"height":1000}}]}
+JSON
+check "catalogue photos measured from source do NOT fire" "$(run "$TMP/cat")" "0"
+check "and it says how many were measured" \
+  "$(out "$TMP/cat" | grep -c 'measured from the Storefront API')" "1"
+
+scaffold "$TMP/catnodim"; rm "$TMP/catnodim/.palate/assets.json"
+echo '{"ok":true,"products":[{"handle":"a","image":{"url":"https://cdn.shopify.com/a.jpg"}}]}' > "$TMP/catnodim/.palate/catalogue.json"
+check "a catalogue WITHOUT dimensions still fires (nothing was measured)" "$(run "$TMP/catnodim")" "1"
+
+scaffold "$TMP/catfailed"; rm "$TMP/catfailed/.palate/assets.json"
+echo '{"ok":false,"reason":"channel-locked"}' > "$TMP/catfailed/.palate/catalogue.json"
+check "a FAILED survey is not a measurement" "$(run "$TMP/catfailed")" "1"
+
+scaffold "$TMP/catbad"; rm "$TMP/catbad/.palate/assets.json"
+echo 'not json' > "$TMP/catbad/.palate/catalogue.json"
+check "an unreadable catalogue is not a measurement" "$(run "$TMP/catbad")" "1"
+
 scaffold "$TMP/unrev"
 node -e "const fs=require('fs');const p='$TMP/unrev/.palate/assets.json';const d=JSON.parse(fs.readFileSync(p));d.assets['a.jpg'].reviewed=false;fs.writeFileSync(p,JSON.stringify(d));"
 check "a measured but unreviewed photo fires" "$(run "$TMP/unrev")" "1"

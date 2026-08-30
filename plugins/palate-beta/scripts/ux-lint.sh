@@ -416,8 +416,27 @@ if [ "$(severity_rank High)" -ge "$SHOW_RANK" ]; then
   case ",$DISABLED," in
     *",hero-status-pill,"*) : ;;
     *)
+      # ON A PRODUCT TEMPLATE, A STATUS PILL ABOVE THE HEADING IS THE CORRECT PATTERN.
+      #
+      # This rule exists for decorative eyebrow chrome above a HERO heading. On a product detail
+      # page the pill above the <h1> is "In stock", "Sale", "Low stock" or a badge: it is product
+      # state the buyer needs, every serious storefront in the reference library does it, and this
+      # fired High on all of them. That is one of the three gates that false-fail a correct
+      # storefront.
+      #
+      # Scoped by BOTH conditions, never one: the file must sit under a products/ directory AND a
+      # commerce catalogue must exist. A brochure site with a /products page keeps the rule in
+      # full, because without .palate/catalogue.json nothing here changes at all.
+      _pill_commerce=0
+      if [ -f "$PROJECT_DIR/.palate/catalogue.json" ] \
+         && grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$PROJECT_DIR/.palate/catalogue.json" 2>/dev/null; then
+        _pill_commerce=1
+      fi
       while IFS= read -r f; do
         [ -z "$f" ] && continue
+        if [ "$_pill_commerce" -eq 1 ]; then
+          case "$f" in */products/*) continue ;; esac
+        fi
         run_hero_status_pill "$f" >> "$TMP"
       done < <(list_files "*.astro,*.html,*.tsx" "$PROJECT_DIR")
       ;;

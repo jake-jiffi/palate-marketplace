@@ -292,10 +292,26 @@ if [ -f "$SEO_GATE" ]; then
   if seo_err="$(node "$SEO_GATE" "$PROJ" 2>&1)"; then seo_rc=0; else seo_rc=$?; fi
   case "$seo_rc" in
     0) seo_note="seo=pass" ;;
-    # 2 is CANNOT CHECK (nothing built yet, so there is no crawl surface to read). It skips like
-    # the other sub-gates, and it SAYS so, because a skip that reads as a pass is the failure
-    # this file exists to prevent.
-    2) seo_note="seo=skipped(nothing built to crawl)" ;;
+    # 2 is CANNOT CHECK. It skips like the other sub-gates, and it SAYS so, because a skip that
+    # reads as a pass is the failure this file exists to prevent.
+    #
+    # IT NOW SAYS WHY IN GATE-SEO'S OWN WORDS. This hardcoded "nothing built to crawl" for ALL
+    # SEVEN of that gate's exit-2 paths, so a missing sitemap, a --base nothing answered, an
+    # unbuildable content index and a blocked crawl every one reported as an unbuilt site. Each
+    # of those already prints a specific reason ending "NOT a pass" and this threw it away, which
+    # is the exists-but-never-fires class: the gate ran, refused, and was filed as not applicable.
+    # Pure bash below on purpose: a pipe into an early-exiting grep or head SIGPIPEs the producer
+    # and fails the assignment under pipefail, which this repo has already paid for once.
+    2) seo_reason="${seo_err%%$'\n'*}"
+       seo_reason="${seo_reason#gate-seo: }"
+       # Strip the absolute project path. gate-seo leads its message with the path it looked in,
+       # which on a real machine is long enough to push the MEANING past the truncation, so the
+       # note would read "no /Users/.../src/pages. Not an Astro pro…" and lose the actual reason.
+       seo_reason="${seo_reason//$PROJ\//}"
+       seo_reason="${seo_reason//$PROJ/.}"
+       if [ "${#seo_reason}" -gt 100 ]; then seo_reason="${seo_reason:0:99}…"; fi
+       seo_note="seo=skipped(${seo_reason})"
+       [ -z "$seo_reason" ] && seo_note="seo=skipped(gate-seo exited 2 without a reason)" ;;
     *) fail "SEO gate did not pass. ${seo_err}" ;;
   esac
 fi

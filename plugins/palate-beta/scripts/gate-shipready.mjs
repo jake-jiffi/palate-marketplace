@@ -116,7 +116,36 @@ for (const f of srcFiles) {
 }
 if (usesImages) {
   const assetsDoc = read(".palate/assets.json");
-  if (!assetsDoc) {
+  /**
+   * A STOREFRONT'S PHOTOGRAPHY IS THE MERCHANT'S CATALOGUE, MEASURED FROM SOURCE.
+   *
+   * palate-assets.mjs measures files on disk. A commerce build renders product imagery from
+   * cdn.shopify.com, so there are no local files, assets.json is never written, and this check
+   * fired "photos never measured" on a build whose photographs were in fact measured more
+   * precisely than a local scan manages: the Storefront API returns width and height per image,
+   * which is exactly the number palate-assets exists to obtain.
+   *
+   * SO THIS EXEMPTS MEASUREMENT, NEVER REVIEW, and only for catalogue imagery. The review
+   * requirement below is about photographs WE art-direct into slots, where pixels cannot see
+   * where the subject is. A merchant's 250-product grid is not four hand-picked hero treatments
+   * and was never what that rule was written for. Any LOCAL asset still has to be measured and
+   * reviewed exactly as before, which is what the `else` branch continues to enforce.
+   *
+   * Engages only when a catalogue exists AND carries real dimensions, so a brochure build is
+   * untouched and a catalogue without dimensions still fails.
+   */
+  let cat = null;
+  try {
+    const raw = read(".palate/catalogue.json");
+    if (raw) cat = JSON.parse(raw);
+  } catch { /* an unreadable catalogue is no catalogue */ }
+  const measuredFromSource = cat && cat.ok === true
+    ? (cat.products || []).filter((x) => x && x.image && x.image.width > 0 && x.image.height > 0).length
+    : 0;
+
+  if (!assetsDoc && measuredFromSource > 0) {
+    console.log(`gate-shipready: ${measuredFromSource} catalogue photograph(s) measured from the Storefront API (width and height per image); no local assets to review.`);
+  } else if (!assetsDoc) {
     add("photos never measured", "src uses images but .palate/assets.json does not exist, so palate-assets.mjs never ran. Run it, then VIEW each photo and record subject + treatment: `node ${CLAUDE_PLUGIN_ROOT}/scripts/palate-assets.mjs <assets-dir>`.");
   } else {
     let doc = null; try { doc = JSON.parse(assetsDoc); } catch { /* handled below */ }

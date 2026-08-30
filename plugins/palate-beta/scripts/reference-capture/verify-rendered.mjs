@@ -37,6 +37,9 @@
  */
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+// Commerce route resolution lives with the survey that produces the catalogue.
+// It is a NO-OP without one, so a brochure build is untouched.
+import { resolveDynamic } from '../palate-shopify.mjs';
 import { createRequire } from 'module';
 import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
 import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
@@ -107,7 +110,12 @@ if (args.routes) {
   const indexPath = args.index && args.index !== 'true' ? args.index : '.palate/index.json';
   const found = routesFromIndex(indexPath);
   if (found) {
-    routes = found.routes.slice(0, MAX_ROUTES);
+    const catPath = args.catalogue && args.catalogue !== 'true' ? args.catalogue : '.palate/catalogue.json';
+    const res = resolveDynamic(found.routes, catPath);
+    if (res.resolved > 0) {
+      console.error(`verify-rendered: ${res.resolved} dynamic route(s) resolved to real handles from ${catPath}`);
+    }
+    routes = res.paths.slice(0, MAX_ROUTES);
     const dropped = found.routes.length - routes.length;
     console.error(
       `verify-rendered: ${routes.length} route(s) from ${indexPath} ` +
