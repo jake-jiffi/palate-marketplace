@@ -53,7 +53,7 @@ prerendered pages with one on-demand route. Do not reach for `output: "server"`.
 |---|---|---|
 | Home | **static** | No per-visitor content. Every argument for a server here is a separate decision. |
 | Collection listing | **static** | One page per collection via `getStaticPaths`. Fetch the WHOLE collection, not the first 24, or the count lies and products have no route in. |
-| Product detail | **static + a price island** | See §2. This is the sharp edge. |
+| Product detail | **static + a price island** | See §2. This is the sharp edge. A `server:defer` island does NOT promote the site: `output` stays `static`, one function is emitted, and only `/_server-islands/[name]` routes to it. An adapter is required. |
 | Cart | **client-side, server endpoints for mutations** | See §3. |
 | Search | static shell, client-side query | Shopify predictive search, not pagefind, once a catalogue exists. |
 | Customer account | on-demand | OAuth, and the session cannot be baked. |
@@ -162,6 +162,13 @@ yields a cart cookie `document.cookie` can read.
 
 Also note: nothing else in the ecosystem uses `server:defer` with Shopify. A GitHub code search
 returns hits in exactly one repository, and it is ours. The §2 pattern is not something to look up.
+
+**MEASURE THE QUANTITY. NEVER TRUST AN EMPTY `userErrors`.** `cartLinesAdd` can be accepted, return
+a cart, return `userErrors: []`, and have changed nothing: asking for more than is available is the
+confirmed case in Shopify's own feedback repo. So "no errors" is not "it worked". Read
+`totalQuantity` before and after and require it to move, or the buyer is told the item is in their
+bag while the bag stays empty. Identify lines by `id`: `view_key` (API 2026-07) is ADDITIVE, and
+`id`/`lineIds` keep working.
 
 **Never read `CartCost.totalTaxAmount`** or its sibling tax and duty fields: deprecated since
 2025-01, and on a taxes-included store the cart can never show a tax line anyway.
