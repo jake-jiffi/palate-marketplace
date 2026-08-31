@@ -506,6 +506,54 @@ test("E4-island-catches: an island that does not catch cannot return a 200 on fa
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a build with NO webhook handler reports unknowns, never passes", () => {
+  // This gate's contract is that "could not check" and "clean" are different words. Six ok()s
+  // here once reported checks that never ran as clean, and hid a real defect underneath.
+  const dir = correct();
+  try {
+    rmSync(join(dir, "src/pages/api/webhooks/products.ts"), { force: true });
+    rmSync(join(dir, "src/lib/webhooks/topics.ts"), { force: true });
+    const r = run(dir).json;
+    const unk = (r.unknowns ?? []).map((u) => u.id);
+    for (const id of ["O1-webhook-hmac", "O2-webhook-timing-unsafe", "O3-webhook-no-dedup",
+                      "O4-deploy-hook-uncoalesced", "O5-no-listing-topics"]) {
+      assert.ok(unk.includes(id), `${id} must be UNKNOWN, not a pass. unknowns: ${unk.join(", ")}`);
+      assert.ok(!(r.passes ?? []).includes(id), `${id} must not be reported clean when it never ran`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a baked catalogue with no webhook AND no scheduled job is a finding, not silence", () => {
+  // The real defect that branch was hiding: nothing refreshes the catalogue, so every price and
+  // stock state stays frozen at deploy until a human happens to redeploy.
+  const dir = correct();
+  try {
+    rmSync(join(dir, "src/pages/api/webhooks/products.ts"), { force: true });
+    rmSync(join(dir, "src/lib/webhooks/topics.ts"), { force: true });
+    rmSync(join(dir, "vercel.json"), { force: true });
+    const r = run(dir).json;
+    assert.ok((r.findings ?? []).some((f) => f.id === "O6-no-reconcile"),
+      `expected O6, got: ${(r.findings ?? []).map((f) => f.id).join(", ") || "(none)"}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the freshness test matches CONSTRUCTS, not words that happen to contain them", () => {
+  // It matched "isr" inside "misrepresentation" and "revalidat" inside a stale-while-revalidate
+  // CACHE header, so on our own storefront it passed for two spurious reasons at once.
+  const dir = correct();
+  try {
+    rmSync(join(dir, "src/pages/api/webhooks/products.ts"), { force: true });
+    rmSync(join(dir, "src/lib/webhooks/topics.ts"), { force: true });
+    rmSync(join(dir, "vercel.json"), { force: true });
+    w(dir, "src/pages/decoy.astro",
+      `---\n// A stale price is a misrepresentation under Australian Consumer Law.\n` +
+      `Astro.response.headers.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');\n---\n<p/>`);
+    const r = run(dir).json;
+    assert.ok((r.findings ?? []).some((f) => f.id === "O6-no-reconcile"),
+      "prose containing 'isr' and a cache header must not read as a freshness mechanism");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("every check in the gate has a case in this file", () => {
   const dir = correct();
   try {

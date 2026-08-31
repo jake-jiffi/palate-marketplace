@@ -514,16 +514,40 @@ if (webhookFiles.length) {
   } else ok("O5-no-listing-topics");
 
   // O6. Webhook-only is non-conformant by Shopify's own guidance.
-  const reconciles = has("vercel.json") && /"crons"/.test(read("vercel.json") ?? "")
-    || /cron|reconcile|scheduled/i.test(allText);
+  const reconciles = (/"crons"\s*:/.test(read("vercel.json") ?? ""))
+    || /\/api\/cron\/|\breconcile\w*\s*\(|export\s+const\s+revalidate\b/.test(
+         srcText.map(({ t }) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")).join("\n"));
   if (!reconciles) {
     add("O6-no-reconcile",
       "There is no scheduled reconcile, only webhooks.",
       "Shopify's own documentation states webhook delivery is NOT guaranteed and prescribes periodic reconciliation. A webhook-only design is non-conformant by the vendor's own guidance, and the failure is a catalogue that quietly drifts out of sync with no error anywhere. Add a scheduled job that re-reads the catalogue.");
   } else ok("O6-no-reconcile");
 } else {
+  // NO WEBHOOK HANDLER AT ALL. Six ok()s here was this gate breaking its own contract: it
+  // reported "clean" for checks that never ran, and hid a real defect underneath. A build with
+  // a baked catalogue and no refresh path of ANY kind is frozen at build time, and price and
+  // inventory are the two fields that must never be stale.
+  const hasFreshness = (() => {
+  const vj = read("vercel.json") ?? "";
+  if (/"crons"\s*:/.test(vj)) return true;                       // a real scheduled job
+  if (/\bisr\s*:/.test(vj) || /"isr"\s*:/.test(vj)) return true; // ISR configured on the adapter
+  const code = srcText.map(({ t }) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")).join("\n");
+  return /export\s+const\s+revalidate\b/.test(code)             // framework revalidation
+    || /\bisr\s*:\s*\{/.test(code)                              // adapter ISR block
+    || /\bbypassToken\b|\bexpiration\s*:/.test(code)            // ISR options
+    || /\/api\/cron\/|\breconcile\w*\s*\(/.test(code);        // a reconcile route or call
+})();
+  if (!hasFreshness) {
+    add("O6-no-reconcile",
+      "This build has no webhook handler and no scheduled job: nothing refreshes the catalogue.",
+      "The catalogue is baked at build time, so every price, every stock state and every publish/unpublish stays as it was the moment you deployed, until a human happens to redeploy. Shopify's docs say webhook delivery is not guaranteed and prescribe reconciliation, so a scheduled re-read is the floor, not the optional extra. Add one, or a coalesced webhook, or both.");
+  } else ok("O6-no-reconcile");
+  // The rest genuinely could not be checked. Saying so is the point: "could not check" and
+  // "clean" are different words in this gate.
   for (const id of ["O1-webhook-hmac", "O2-webhook-timing-unsafe", "O3-webhook-no-dedup",
-                    "O4-deploy-hook-uncoalesced", "O5-no-listing-topics", "O6-no-reconcile"]) ok(id);
+                    "O4-deploy-hook-uncoalesced", "O5-no-listing-topics"]) {
+    unknown(id, "no webhook handler in this build, so nothing to check");
+  }
 }
 
 // O7. The throttle and the complexity rejection are NOT ordinary HTTP failures.
