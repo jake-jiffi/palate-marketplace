@@ -58,6 +58,17 @@ has "doctrine: the cart ignores inContext"          "are ignored" "$DOC"
 has "doctrine: metafields are opt-in off Liquid"    "always accessible in Liquid" "$DOC"
 has "doctrine: pixel behaviour is unproven"         "Do not promise a merchant" "$DOC"
 
+# Customer accounts. The verdict is SKIP for most merchants, and the traps below are all
+# copied from either a shipped commercial template or Shopify's own documentation.
+has "doctrine: usually do not build customer accounts" "DO NOT BUILD THIS" "$DOC"
+has "doctrine: discovery hits the Shopify-served domain" "SHOPIFY-SERVED domain" "$DOC"
+has "doctrine: origin and user-agent are required"   "Node.s .fetch. sends neither" "$DOC"
+has "doctrine: app clients get no refresh token"     "never receives a refresh token" "$DOC"
+has "doctrine: refresh tokens rotate"                "Refresh tokens rotate" "$DOC"
+has "doctrine: auth cookies are Lax not Strict"      "Strict is not sent" "$DOC"
+has "doctrine: order scoping is unproven"            "404 rather than 403" "$DOC"
+has "doctrine: level 2 is an app gate"               "APP gate, not" "$DOC"
+
 # --- it must stay OPTIONAL ----------------------------------------------------
 has "commerce is an optional track" "OPTIONAL track" "$SKILL"
 if grep -q "commerce-doctrine\|shopify-runbook" "$DIR/../../references/core-doctrine.md" 2>/dev/null; then

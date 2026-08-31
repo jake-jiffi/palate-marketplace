@@ -182,6 +182,10 @@ indistinguishable from one that does not exist. Publish, then read the catalogue
 | Product count drops when a country is set | `@inContext(country:)` filters out products unpublished for it. Silent. §6f. |
 | Metafields are null but the old theme showed them | Storefront API access is opt-in per definition; Liquid never needed it. §6f. |
 | Buyers arrive at checkout signed out | No `Shopify-Storefront-Buyer-IP` on server-side calls. §6e. |
+| Discovery dies with a JSON parse error | It hit YOUR apex and got your 404 page. Discover against the Shopify-served domain. §6g. |
+| Login works locally, 401s on the server | Node's fetch sends no `origin`/`user-agent`. Reads like a bad token. §6g. |
+| Sign-in works for an hour, then never | An app client gets no refresh token, or the rotated one was not persisted. §6g. |
+| Login loops back to login forever | An auth cookie is `SameSite=Strict`, so it is absent on the return navigation. §6g. |
 
 ---
 

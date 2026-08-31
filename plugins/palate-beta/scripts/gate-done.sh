@@ -332,6 +332,23 @@ if [ -f "$HEADLESS_GATE" ]; then
   esac
 fi
 
+# CUSTOMER ACCOUNTS: a customer-account flow ships tokens, so it fails toward account takeover
+# rather than toward an ugly page. Silent (exit 0, scope "none") on any build with no account
+# surface, so it never speaks on a brochure site or on a storefront that sensibly linked out to
+# Shopify's hosted pages instead.
+CA_GATE="$HERE/gate-customer-auth.mjs"
+ca_note="customer-auth=skipped(no account surface)"
+if [ -f "$CA_GATE" ]; then
+  if ca_err="$(node "$CA_GATE" "$PROJ" 2>&1)"; then
+    case "$ca_err" in
+      *"no customer-account surface"*) ca_note="customer-auth=skipped(no account surface)" ;;
+      *) ca_note="customer-auth=pass" ;;
+    esac
+  else
+    fail "Customer-account flow is unsafe. ${ca_err}"
+  fi
+fi
+
 # UNIQUENESS: the variants must be genuinely different, not ritually varied.
 #
 # THIS GATE HAD NO DETERMINISTIC CALLER, alone in the suite. The verifier agent was told to run
@@ -374,5 +391,5 @@ fi
 
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

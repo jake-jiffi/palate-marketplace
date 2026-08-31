@@ -486,6 +486,76 @@ capped at **128** per shop (256 on Plus/Enterprise), **40 fields per definition*
 entries. Product tags are not translatable. `Market` is deprecated on the Storefront API's
 `Localization` and `Country`, so build on country/language/catalog context instead.
 
+## 6g. Customer accounts: usually DO NOT BUILD THIS
+
+**For a typical small merchant, link to Shopify's hosted account pages.** They sit on
+`accounts.theirbrand.com`, they are branded in the accounts editor, they show orders and
+addresses, they cost a subdomain and a nav link, and once the subdomain is set **the buyer
+cannot tell which one they are on**. The bespoke version costs a day and buys nothing.
+
+Build it only when at least one of these is true:
+
+1. **Reorder is a real behaviour** (consumables, coffee, pet food, supplements). One-click
+   "buy this again" writing straight into the cart cannot be done on the hosted pages.
+2. **B2B**: company locations, PO numbers, location-scoped history, draft orders awaiting
+   approval. The hosted pages do not cover it and the API does.
+3. **Self-serve subscription management**, but only on native Shopify subscriptions.
+4. **The account area IS the product**: loyalty tiers, referral status, downloads, membership.
+5. **Store credit is in play.** Balance and transactions are a genuine reason to return.
+
+Skip it when order history and addresses are the whole scope, when the merchant is pre-launch
+(nobody has a history to look at), when you cannot use a **Headless-channel** client, or when
+the client signs off on Vercel previews: **auth cannot work on a preview deployment**, and that
+is a thing to say before quoting, not after.
+
+**The intermediate position is usually right:** `/account` as a thin server-rendered page over
+the API showing orders, carrying ONE differentiated action (reorder, tier, subscription), and
+linking out to the hosted pages for profile and address editing. Half a day, and Shopify
+maintains the rest.
+
+### If you do build it, six things that are wrong everywhere you would look
+
+There is no correct Astro reference implementation. Nine harvested Astro+Shopify repositories
+were searched and **none implements this API**, so everything below is copied from something
+broken:
+
+- **Discovery is mandatory and must hit the SHOPIFY-SERVED domain.** The reference documents
+  the GraphQL endpoint as `{shop}/customer/api/{version}/graphql` and no live store matches it.
+  Worse, once your Astro app owns the apex, `yourbrand.com/.well-known/openid-configuration`
+  returns **your own 404 page**, which is HTML, so it fails `.json()` with a parse error rather
+  than an HTTP error. Keep the shop domain in its own variable, separate from the site origin.
+- **`origin` and `user-agent` are required**, and Node's `fetch` sends neither. Missing `origin`
+  is a 401 `invalid_token`; missing `user-agent` is a 403. Both read like a credential problem
+  and neither is. This is why code works in a browser console and fails in an Astro route.
+- **Use a confidential client on the Headless channel, never an app client.** Shopify's own
+  tutorial builds an app client, and that client type **never receives a refresh token**, so the
+  session dies at sixty minutes with no server-side recovery. Discovery also advertises
+  `refresh_token` support for client types that never get one, so do not trust it.
+- **Refresh tokens rotate.** Persist the new one from every refresh response, or the session
+  survives exactly one hour and then logs the buyer out permanently. The refresh grant does NOT
+  return a new `id_token`, so carry the original forward or you cannot log out.
+- **Nothing goes in the browser.** Shopify's reference puts the `code_verifier` in
+  `localStorage` and its tutorial returns the access token to the client; both are written for
+  an SPA with no server. A commercially sold Astro template sets `token=...; Path=/;
+  SameSite=Lax` under a comment claiming HttpOnly, and returns the token in the JSON body too.
+  Cookies are HttpOnly + Secure + **Lax** (Strict is not sent on the navigation back from
+  Shopify's hosted login, so the callback loops forever).
+- **`customerAccessTokenCreate` is the legacy password flow.** Shopify labels it "for legacy
+  customer accounts only" but has NOT deprecated it in the schema, which is why templates keep
+  shipping it and why nothing breaks until the merchant switches accounts, at which point every
+  sign-in fails at once.
+
+**UNPROVEN, and it is the one unknown with a security consequence:** the reference for the root
+`order(id:)` query never states whether it is buyer-scoped. Until you have tested it with two
+real accounts, confirm the id belongs to the session's customer before rendering, and return
+**404 rather than 403** (a 403 on a real id and a 404 on a fake one tells an attacker which
+order ids exist).
+
+`scripts/gate-customer-auth.mjs` enforces all of the above and is silent on any build with no
+account surface. Also corrected: **Level 2 Protected Customer Data approval is an APP gate, not
+an API gate** (there is no Partner app to submit for a Headless-channel client), and the June
+2026 metafield-definition rule touches only app-owned metafields, not customer or order ones.
+
 ## 7. Commerce anti-patterns
 
 The general anti-pattern list still applies. These are additional, and the first two are the ones
