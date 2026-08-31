@@ -115,6 +115,31 @@ export const POST = async ({ cookies }) => {
   return dir;
 }
 
+/**
+ * Run the gate WITH the CLI checks, against a stubbed `npx` on PATH.
+ *
+ * `mode` decides what the stub pretends: "absent" removes npx entirely, "no-session" makes it
+ * report a version but no authenticated store. Without this the two CLI checks could only ever
+ * be skipped, and a check that is only ever skipped is a check nobody has proven fires.
+ */
+function runWithCli(dir, mode) {
+  // The stub always shadows npx and node stays reachable, because emptying PATH hides the node
+  // that runs the gate and the test then proves nothing about the CLI check.
+  const bin = mkdtempSync(join(tmpdir(), "bin-"));
+  const stub = join(bin, "npx");
+  writeFileSync(stub, mode === "absent"
+    ? `#!/bin/sh\nexit 127\n`
+    : `#!/bin/sh\ncase "$*" in\n  *"store auth list"*) echo '{"sessions": []}' ;;\n  *version*) echo "4.7.0" ;;\n  *) echo "{}" ;;\nesac\n`);
+  spawnSync("chmod", ["+x", stub]);
+  const r = spawnSync("node", [GATE, dir, "--json"], {
+    encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+  });
+  rmSync(bin, { recursive: true, force: true });
+  let parsed = null;
+  try { parsed = JSON.parse(r.stdout); } catch { /* non-json */ }
+  return { code: r.status, out: `${r.stdout}${r.stderr}`, json: parsed };
+}
+
 function run(dir) {
   const r = spawnSync("node", [GATE, dir, "--no-cli", "--json"], { encoding: "utf8" });
   let parsed = null;
@@ -303,11 +328,53 @@ for (const [id, why, breakIt] of CASES) {
   });
 }
 
+/* ================================================== the CLI, and the island's own catch */
+
+test("A1-cli-present: without the Shopify CLI there is no path to the Admin API", () => {
+  const dir = correct();
+  try {
+    const found = (runWithCli(dir, "absent").json?.findings ?? []).map((f) => f.id);
+    assert.ok(found.includes("A1-cli-present"),
+      `a missing CLI must be a finding, got: ${found.join(", ") || "(nothing)"}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("A2-cli-authenticated: a CLI with no store session is reported UNKNOWN, never as a pass", () => {
+  const dir = correct();
+  try {
+    const r = runWithCli(dir, "no-session");
+    const unknownIds = (r.json?.unknowns ?? []).map((u) => u.id);
+    const passIds = (r.json?.passes ?? []);
+    assert.ok(unknownIds.includes("A2-cli-authenticated"),
+      `no session must be UNKNOWN, got unknowns: ${unknownIds.join(", ") || "(none)"}`);
+    assert.ok(!passIds.includes("A2-cli-authenticated"),
+      "an unauthenticated CLI must never be recorded as a pass");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("E4-island-catches: an island that does not catch cannot return a 200 on failure", () => {
+  const dir = correct();
+  try {
+    // The island fetches and renders a price with no try/catch and no neutral state, so a slow
+    // or throttling Shopify produces a 500 from the island, which Astro answers by leaving the
+    // STALE build price on screen.
+    w(dir, "src/components/LivePrice.astro",
+      `---\nconst r = await fetch('https://x.myshopify.com/api/v/graphql.json');\nconst j = await r.json();\n---\n<p>{j.price}</p>\n`);
+    const found = ids(run(dir));
+    assert.ok(found.includes("E4-island-catches"),
+      `an island with no error path must be a finding, got: ${found.join(", ") || "(nothing)"}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("every check in the gate has a case in this file", () => {
   const dir = correct();
   try {
     const all = run(dir);
-    const known = new Set([...CASES.map(([id]) => id), "A1-cli-present", "A2-cli-authenticated", "E4-island-catches"]);
+    // NO EXEMPTION LIST. This test previously carried one, and it contained exactly the three
+    // checks nobody had watched fire, which makes the completeness test complicit in the thing it
+    // exists to prevent. Every id below is now covered by a case above that breaks it.
+    const CLI_AND_ISLAND = ["A1-cli-present", "A2-cli-authenticated", "E4-island-catches"];
+    const known = new Set([...CASES.map(([id]) => id), ...CLI_AND_ISLAND]);
     const missing = (all.json.passes ?? []).filter((id) => !known.has(id));
     assert.deepEqual(missing, [],
       `these checks pass but nothing here proves they can FAIL, which is how a dead gate is born: ${missing.join(", ")}`);
