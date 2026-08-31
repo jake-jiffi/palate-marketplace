@@ -33,11 +33,19 @@ their own catalogue in eight directions is a categorically better pitch than lor
 - **Live stores only.** A dev store answers 400 "Online Store channel is locked".
 - **It dies on the apex at cutover.** Tokenless works only on a host Shopify serves. The moment the
   domain points at Vercel, `theirdomain.com/api/...` becomes our own 404.
-- **No per-buyer allowance, and the buyer-IP header cannot be sent.** A widely repeated "complexity
-  cap of 1,000" did NOT hold when tested: a tokenless query for 250 products x 100 variants x 20
-  media returned all 250 with `requestedQueryCost: 188` and no error. The Storefront API reports
-  `requestedQueryCost` but NO `throttleStatus`, unlike the Admin API, so you cannot read your own
-  headroom. Do not design against a number nobody can verify.
+- **A real complexity cap of 1,000, and it is TOKENLESS-ONLY.** Measured, and this corrects an
+  earlier claim here that the cap "did not hold": that test reached a cost of 188, which is
+  nowhere near 1,000, so it never tested the cap at all. Pinned properly against a live store:
+  6 aliased `products(first:250){ variants(first:250) }` connections cost **864 and succeed**;
+  **7 cost about 1,008 and fail**. The same query **succeeds with a Storefront token**, so the
+  cap is a property of tokenless access, not of the API.
+- **The failure is HTTP 429 with `MAX_COMPLEXITY_EXCEEDED`, and it reports NO cost at all.** The
+  `extensions.cost` block is absent on the rejection, so the one response that would tell you
+  how far over you were is the one that tells you nothing. Note the cost model is far cheaper
+  than people assume and is not multiplicative like the Admin API's: 250 products x 250 variants
+  x 250 media is a cost of **276**. You reach the cap by aliasing, not by depth.
+- **No `throttleStatus`.** Unlike the Admin API the Storefront API reports `requestedQueryCost`
+  and never your remaining headroom, so a client cannot back off before it is refused.
 
 **Never let a build reach production on tokenless.** It is a pitch-and-build capability. Production
 needs a Storefront token from the Headless channel.
@@ -556,6 +564,49 @@ account surface. Also corrected: **Level 2 Protected Customer Data approval is a
 an API gate** (there is no Partner app to submit for a Headless-channel client), and the June
 2026 metafield-definition rule touches only app-owned metafields, not customer or order ones.
 
+## 6h. Operations: the month-three failures
+
+These arrive on a store that is **succeeding**, and every one of them is silent.
+
+**NEVER wire a Shopify webhook straight to a Vercel deploy hook.** This file used to recommend
+it. Three facts kill it: `products/update` **fires on every ORDER** (verbatim from Shopify's own
+live schema, read off our dev store: *"Occurs whenever a product is updated, **ordered**, or
+variants are added, removed or updated"*); Vercel caps deploy hooks at **60 triggers per hour per
+project across all hooks**; and past that Vercel **drops the trigger rather than queueing it**. So
+sixty orders an hour stops the site updating, **at any catalogue size**, with nothing reporting a
+fault. Underneath, Shopify allows your endpoint **1 second to connect and 5 seconds total**,
+retries 8 times over 4 hours, and after repeated failures **deletes the subscription**, so a proxy
+that blocks on a slow deploy is working toward its own removal. Verify HMAC, return 2xx
+immediately, and coalesce with a trailing debounce plus a hard maximum wait (a pure trailing
+debounce never fires during a sustained catalogue sync). No vendor publishes a window; the shape
+is cited, the number is your choice.
+
+**Webhooks alone are non-conformant by Shopify's own guidance.** Their docs say delivery is not
+guaranteed and prescribe periodic reconciliation. Run a scheduled job that re-reads the
+catalogue, or it quietly drifts.
+
+**Subscribe the listing topics too.** `products/update` does NOT fire when a merchant publishes
+or unpublishes to your channel, so without `PRODUCT_LISTINGS_ADD` / `PRODUCT_LISTINGS_REMOVE` the
+storefront keeps serving pages for products they deliberately took down.
+
+**Verify the HMAC against the RAW bytes, before any parse**, and compare in constant time. An
+unverified webhook endpoint is a public unauthenticated trigger for whatever it does. Delivery is
+**at-least-once**, so dedupe on `x-shopify-webhook-id`: a handler that is slow once will
+legitimately receive the same event again.
+
+**A GraphQL error arrives inside a 200.** A client that branches only on `res.ok` treats a failed
+query as a successful empty one and renders an empty page. And `THROTTLED` and
+`MAX_COMPLEXITY_EXCEEDED` are not the same failure: a throttle clears if you wait, a query over
+the cap **never** succeeds, so retrying it burns rate limit and fails anyway. Split it instead.
+
+**Pinning an API version defers behaviour, it does not freeze it.** When a version leaves its
+support window Shopify falls forward to the oldest supported one **inside successful responses**,
+so you are served a version you never tested and nothing errors. Keep the version in one named
+constant (repeated literals produce partial upgrades, where one call site moves and the rest do
+not), and read `X-Shopify-API-Version` off responses to detect fall-forward when it happens. With
+no Partner app, that header and `X-Shopify-API-Deprecated-Reason` are the ONLY deprecation signal
+available: the API health report is dashboard-only and per-app.
+
 ## 7. Commerce anti-patterns
 
 The general anti-pattern list still applies. These are additional, and the first two are the ones
@@ -614,7 +665,7 @@ in their OS keychain. **No Palate-hosted service ever sees the merchant's data o
 | 0 · prototype | **0** | Real catalogue and cart, live store, no credential |
 | 1 · production | **3** admin clicks | Headless channel → Add storefront → copy the public token |
 | 2 · Admin API | **1** browser consent | `shopify store auth` then `store execute`, keychain-stored |
-| 3 · deploy + freshness | 0 beyond `vercel login` | Vercel deploy hook fired by a Shopify webhook |
+| 3 · deploy + freshness | 0 beyond `vercel login` | Shopify webhook -> your coalescing endpoint -> deploy hook (never direct, see the runbook) |
 | 4 · customer login | **1**, after first deploy | Callback URI on the real HTTPS URL, **no tunnel ever** |
 
 **Four steps is the floor** for a complete production storefront, and every one is a Shopify admin

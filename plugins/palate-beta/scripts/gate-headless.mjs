@@ -441,6 +441,138 @@ if (/_shopify_[ys]\b/.test(allText)) {
     "Shopify stopped setting these on merchant storefronts (changelog says from 1 January 2026; the Hydrogen migration guide says 30 April 2026 — plan for the earlier). Reading them yields undefined and every downstream identity join quietly degrades. clientId on a Web Pixels event replaces _y; _s has no replacement, so mint your own session value.");
 } else ok("Y4-retired-shopify-cookies");
 
+/* ============================================================ O. operations
+ *
+ * These are the failures that arrive in month three, on a store that is SUCCEEDING, and every
+ * one of them is silent. The worst is a Shopify webhook wired straight to a Vercel deploy hook:
+ * `products/update` fires on every ORDER (Shopify's own live schema: "updated, ORDERED, or
+ * variants are added, removed or updated"), Vercel caps deploy hooks at 60/hour per project,
+ * and past that the trigger is DROPPED rather than queued. Sixty orders an hour and the site
+ * stops updating, at any catalogue size, with nothing reporting it.
+ */
+
+const isHandler = (t) => /export\s+const\s+(POST|ALL)\b|APIRoute|export\s+async\s+function\s+POST/.test(t);
+const webhookFiles = srcText.filter(({ f, t }) =>
+  isHandler(t) && (/webhook/i.test(f) || /x-shopify-hmac-sha256|shopify-topic/i.test(t)));
+// Comments are not behaviour. A handler whose comment mentions "schedule" is not thereby
+// coalescing, and the O4 test below would otherwise excuse a direct deploy-hook call.
+const codeOf = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+if (webhookFiles.length) {
+  // O1. HMAC must be verified against the RAW body. Parsing first destroys the bytes it signed.
+  const unverified = webhookFiles.filter(({ t }) => !/hmac/i.test(t));
+  const parsesFirst = webhookFiles.filter(({ t }) => {
+    const j = t.search(/request\.json\(\)|await\s+\w+\.json\(\)/);
+    const h = t.search(/hmac/i);
+    return j > -1 && h > -1 && j < h;
+  });
+  if (unverified.length || parsesFirst.length) {
+    add("O1-webhook-hmac",
+      unverified.length
+        ? `A webhook route never verifies an HMAC: ${unverified.map((x) => relative(dir, x.f))[0]}.`
+        : `A webhook route parses JSON before verifying the HMAC: ${parsesFirst.map((x) => relative(dir, x.f))[0]}.`,
+      "An unverified webhook endpoint is a public unauthenticated trigger for whatever it does, and anyone who guesses the URL can fire it. The signature covers the RAW bytes, so read request.text() first and verify, then parse. Parsing first and re-serialising will not reproduce the bytes Shopify signed.");
+  } else ok("O1-webhook-hmac");
+
+  // O2. A timing-unsafe comparison leaks the signature one byte at a time.
+  const unsafeCompare = webhookFiles.filter(({ t }) => {
+    const c = codeOf(t);
+    if (!/hmac/i.test(c) || /timingSafeEqual|timing_safe/i.test(c)) return false;
+    // Any equality comparison on a line that is about the signature.
+    return c.split("\n").some((ln) => /hmac|signature|digest/i.test(ln) && /(===|!==|==(?!=)|!=(?!=))/.test(ln));
+  });
+  if (unsafeCompare.length) {
+    add("O2-webhook-timing-unsafe",
+      `The HMAC is compared with === rather than a constant-time comparison: ${unsafeCompare.map((x) => relative(dir, x.f))[0]}.`,
+      "String equality returns early on the first differing byte, so response timing leaks the signature progressively and the endpoint becomes forgeable. Use crypto.timingSafeEqual on equal-length buffers.");
+  } else ok("O2-webhook-timing-unsafe");
+
+  // O3. Dedup. Shopify's delivery is at-least-once and duplicates are expected, not exceptional.
+  if (!/x-shopify-webhook-id|webhookId|webhook_id/i.test(allText)) {
+    add("O3-webhook-no-dedup",
+      "No webhook route reads x-shopify-webhook-id.",
+      "Delivery is AT-LEAST-ONCE: Shopify retries 8 times over 4 hours, so a handler that is slow once will legitimately receive the same event again. Without deduping on the webhook id, every retry re-runs the work. Store the id and ignore repeats.");
+  } else ok("O3-webhook-no-dedup");
+
+  // O4. THE DANGEROUS ONE. A deploy hook fired straight from the webhook handler.
+  const direct = webhookFiles.filter(({ t }) => {
+    const c = codeOf(t);
+    return /api\.vercel\.com\/v\d\/integrations\/deploy|DEPLOY_HOOK|deploy-hooks/i.test(c) &&
+      !/debounce|coalesc|queue|enqueue|schedule|setTimeout|kv\.|redis|throttle|pending/i.test(c);
+  });
+  if (direct.length) {
+    add("O4-deploy-hook-uncoalesced",
+      `A webhook route fires a Vercel deploy hook with no coalescing: ${direct.map((x) => relative(dir, x.f))[0]}.`,
+      "products/update fires on every ORDER, not only on catalogue edits (Shopify's own schema says 'updated, ORDERED, or variants added, removed or updated'). Vercel caps deploy hooks at 60/hour per project and DROPS triggers past that rather than queueing them, so at 60 orders an hour the site silently stops updating regardless of catalogue size. Worse, Shopify allows 1s to connect and 5s total, and repeated failures DELETE the subscription. Return 2xx immediately and coalesce with a trailing debounce plus a hard maximum wait.");
+  } else ok("O4-deploy-hook-uncoalesced");
+
+  // O5. Publish/unpublish is invisible to the product topics.
+  if (/PRODUCTS_UPDATE|products\/update/i.test(allText) && !/PRODUCT_LISTINGS_(ADD|REMOVE)|product_listings\//i.test(allText)) {
+    add("O5-no-listing-topics",
+      "Product topics are subscribed but the listing topics are not.",
+      "products/update does not fire when a merchant publishes or unpublishes a product to your channel, so the storefront keeps serving pages for products they deliberately took down and never learns about ones they added. Subscribe PRODUCT_LISTINGS_ADD and PRODUCT_LISTINGS_REMOVE too.");
+  } else ok("O5-no-listing-topics");
+
+  // O6. Webhook-only is non-conformant by Shopify's own guidance.
+  const reconciles = has("vercel.json") && /"crons"/.test(read("vercel.json") ?? "")
+    || /cron|reconcile|scheduled/i.test(allText);
+  if (!reconciles) {
+    add("O6-no-reconcile",
+      "There is no scheduled reconcile, only webhooks.",
+      "Shopify's own documentation states webhook delivery is NOT guaranteed and prescribes periodic reconciliation. A webhook-only design is non-conformant by the vendor's own guidance, and the failure is a catalogue that quietly drifts out of sync with no error anywhere. Add a scheduled job that re-reads the catalogue.");
+  } else ok("O6-no-reconcile");
+} else {
+  for (const id of ["O1-webhook-hmac", "O2-webhook-timing-unsafe", "O3-webhook-no-dedup",
+                    "O4-deploy-hook-uncoalesced", "O5-no-listing-topics", "O6-no-reconcile"]) ok(id);
+}
+
+// O7. The throttle and the complexity rejection are NOT ordinary HTTP failures.
+const wire = srcText.filter(({ t }) => /graphql\.json/.test(t) && /fetch\s*\(/.test(t));
+if (wire.length) {
+  // PER FILE. A `.some()` here would let one correct client excuse a broken one, which is the
+  // same mistake that made an earlier check inert: correctness elsewhere is not correctness here.
+  const blind = wire.filter(({ t }) => !/\.errors|json\.errors|\berrors\b\s*[?.&|)]/.test(t));
+  if (blind.length) {
+    add("O7-graphql-errors-ignored",
+      `The Storefront client branches only on the HTTP status: ${blind.map((x) => relative(dir, x.f))[0]}.`,
+      "A GraphQL error arrives inside a 200 with an `errors` array and a null `data`, so a client that checks only res.ok treats a failed query as a successful empty one and renders an empty page. Inspect `errors` on every response, including 200s.");
+  } else ok("O7-graphql-errors-ignored");
+
+  // Measured, not assumed: 7 aliased connections cost ~1008 and came back HTTP 429 with
+  // MAX_COMPLEXITY_EXCEEDED and NO cost block at all. A THROTTLED-only retry loop hammers it.
+  if (/THROTTLED/.test(allText) && !/MAX_COMPLEXITY_EXCEEDED/.test(allText)) {
+    add("O8-complexity-error-unhandled",
+      "THROTTLED is handled but MAX_COMPLEXITY_EXCEEDED is not.",
+      "They are not the same failure. A throttle clears if you wait; a query over the complexity cap NEVER succeeds, so retrying it burns the rate limit and fails anyway. Measured tokenless: 6 aliased product connections cost 864 and pass, 7 cost about 1,008 and come back HTTP 429 with MAX_COMPLEXITY_EXCEEDED and no cost block at all. Split the query instead of retrying it.");
+  } else ok("O8-complexity-error-unhandled");
+} else { ok("O7-graphql-errors-ignored"); ok("O8-complexity-error-unhandled"); }
+
+// O9. One version constant, and it must still be inside its supported window.
+const versions = [...new Set([...allText.matchAll(/["'`](\d{4})-(\d{2})["'`]|\/api\/(\d{4})-(\d{2})\//g)]
+  .map((m) => `${m[1] ?? m[3]}-${m[2] ?? m[4]}`))];
+const versionLiterals = [...allText.matchAll(/\/api\/(\d{4}-\d{2})\/graphql/g)].length;
+if (versionLiterals > 1) {
+  add("O9-version-literal-repeated",
+    `The API version appears as a literal in ${versionLiterals} places.`,
+    "Partial upgrades are the failure: one call site moves to a new version and the rest do not, so the same build talks to two API versions and the difference shows up as a field that is null on one path only. One named constant.");
+} else ok("O9-version-literal-repeated");
+
+if (versions.length) {
+  // Purely arithmetic, no network. Shopify supports a version for about 12 months.
+  const now = new Date();
+  const stale = versions.filter((v) => {
+    const [y, mo] = v.split("-").map(Number);
+    if (!y || mo < 1 || mo > 12) return false;
+    const months = (now.getUTCFullYear() - y) * 12 + (now.getUTCMonth() + 1 - mo);
+    return months >= 9;
+  });
+  if (stale.length) {
+    add("O10-api-version-near-expiry",
+      `The pinned API version ${stale[0]} is ${(() => { const [y, mo] = stale[0].split("-").map(Number); return (now.getUTCFullYear() - y) * 12 + (now.getUTCMonth() + 1 - mo); })()} months old.`,
+      "Pinning does not freeze behaviour, it DEFERS it. When a version leaves its support window Shopify falls forward to the oldest supported one, inside successful responses, so you are served a version you never tested and nothing errors. Move the pin, and read X-Shopify-API-Version off responses to detect fall-forward when it happens.");
+  } else ok("O10-api-version-near-expiry");
+} else ok("O10-api-version-near-expiry");
+
 /* ============================================================ H. the agent surface */
 
 const agentRoutes = [

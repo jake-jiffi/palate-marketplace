@@ -144,11 +144,36 @@ in about ninety seconds, on a build that had just passed 43 automated checks.
 ```bash
 vercel deploy --prod
 HOOK=$(vercel deploy-hooks create shopify-rebuild --ref main)
-# then register a Shopify products/update webhook against $HOOK via store execute
+# The webhook goes to YOUR endpoint, which coalesces, and only then fires $HOOK. See below.
 ```
 
-A webhook to a deploy hook, no middleman. **A dependency that only exists in `node_modules` builds
-locally and fails on the platform**, and the only signal is a deploy-failure email.
+**NEVER wire a Shopify webhook straight to a Vercel deploy hook.** This runbook said to, and it
+is the most dangerous line it carried. Three facts kill it, and the failure lands on a store that
+is SUCCEEDING:
+
+1. **`products/update` fires on every ORDER.** Verbatim from Shopify's own live schema, read off
+   our dev store: *"Occurs whenever a product is updated, **ordered**, or variants are added,
+   removed or updated."* It is not a catalogue-edit event.
+2. **Vercel deploy hooks cap at 60 triggers per hour, per project, across all hooks.** So a store
+   doing 60 orders an hour saturates the ceiling on **order volume alone, at any catalogue size**.
+3. **Past the cap Vercel returns 429 and the trigger is DROPPED, not queued.** The site silently
+   goes stale, and nothing reports it.
+
+Underneath that, Shopify gives your endpoint a **1-second connect and 5-second total timeout**,
+retries 8 times over 4 hours, and after repeated failures **deletes the subscription entirely**.
+A proxy that blocks on a slow deploy call is therefore working toward its own removal.
+
+**The correct shape:** the webhook hits your own endpoint, which verifies HMAC, returns 2xx
+immediately, and coalesces into a trailing debounce with a hard maximum wait (a pure trailing
+debounce never fires during a sustained catalogue sync). Subscribe **`PRODUCT_LISTINGS_ADD` and
+`PRODUCT_LISTINGS_REMOVE` alongside the product topics** or the storefront cannot see
+publish/unpublish and will keep serving pages for products the merchant took down. And **run a
+scheduled reconcile**: Shopify's own documentation says delivery is not guaranteed, so a
+webhook-only design is non-conformant by the vendor's own guidance. No vendor publishes a
+debounce window; the shape is cited, any specific number is your choice.
+
+**A dependency that only exists in `node_modules` builds locally and fails on the platform**, and
+the only signal is a deploy-failure email.
 
 ---
 
@@ -186,6 +211,11 @@ indistinguishable from one that does not exist. Publish, then read the catalogue
 | Login works locally, 401s on the server | Node's fetch sends no `origin`/`user-agent`. Reads like a bad token. §6g. |
 | Sign-in works for an hour, then never | An app client gets no refresh token, or the rotated one was not persisted. §6g. |
 | Login loops back to login forever | An auth cookie is `SameSite=Strict`, so it is absent on the return navigation. §6g. |
+| Site stopped updating on a busy store | `products/update` fires per ORDER and Vercel drops deploy-hook triggers past 60/hour. §6h. |
+| The webhook subscription vanished | Shopify deletes it after repeated failures. Your handler is too slow: return 2xx first. §6h. |
+| A product the merchant unpublished is still live | No listing topics subscribed. `products/update` does not cover it. §6h. |
+| Empty page, no error in the logs | A GraphQL error arrives inside a 200 and the client only checked `res.ok`. §6h. |
+| HTTP 429 with no cost reported | `MAX_COMPLEXITY_EXCEEDED`. Tokenless caps at 1,000; retrying never helps, split the query. §6h. |
 
 ---
 

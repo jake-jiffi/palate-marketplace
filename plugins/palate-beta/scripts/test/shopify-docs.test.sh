@@ -69,6 +69,19 @@ has "doctrine: auth cookies are Lax not Strict"      "Strict is not sent" "$DOC"
 has "doctrine: order scoping is unproven"            "404 rather than 403" "$DOC"
 has "doctrine: level 2 is an app gate"               "APP gate, not" "$DOC"
 
+# Operations. The deploy-hook line is a CORRECTION of advice this repo used to give, and the
+# complexity cap is a correction of a claim it made from a measurement that could not support it.
+has "doctrine: never wire a webhook to a deploy hook" "NEVER wire a Shopify webhook straight" "$DOC"
+has "doctrine: products/update fires on every order" "fires on every ORDER" "$DOC"
+has "doctrine: deploy hooks are dropped past the cap" "drops the trigger rather than queueing" "$DOC"
+has "doctrine: webhooks alone are non-conformant"   "delivery is not" "$DOC"
+has "doctrine: listing topics are required"         "PRODUCT_LISTINGS_ADD" "$DOC"
+has "doctrine: HMAC over the raw bytes"             "RAW bytes, before any parse" "$DOC"
+has "doctrine: a GraphQL error arrives in a 200"    "inside a 200" "$DOC"
+has "doctrine: version pinning defers, not freezes" "defers behaviour" "$DOC"
+has "doctrine: the complexity cap is real and tokenless-only" "TOKENLESS-ONLY" "$DOC"
+has "doctrine: the earlier cap claim is corrected"  "never tested the cap at all" "$DOC"
+
 # --- it must stay OPTIONAL ----------------------------------------------------
 has "commerce is an optional track" "OPTIONAL track" "$SKILL"
 if grep -q "commerce-doctrine\|shopify-runbook" "$DIR/../../references/core-doctrine.md" 2>/dev/null; then

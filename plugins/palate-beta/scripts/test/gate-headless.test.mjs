@@ -37,6 +37,22 @@ const w = (dir, rel, body) => {
 };
 
 /** A storefront that gets everything right. Every mutation below starts from this. */
+/** A webhook handler built the way the runbook now says to build one. */
+const WEBHOOK_OK =
+`export const prerender = false;
+import { createHmac, timingSafeEqual } from "node:crypto";
+export const POST = async ({ request }) => {
+  const raw = await request.text();                       // RAW bytes, before any parse
+  const sent = Buffer.from(request.headers.get("x-shopify-hmac-sha256") ?? "", "base64");
+  const mine = createHmac("sha256", import.meta.env.SHOPIFY_WEBHOOK_SECRET).update(raw).digest();
+  if (sent.length !== mine.length || !timingSafeEqual(sent, mine)) return new Response("no", { status: 401 });
+  const id = request.headers.get("x-shopify-webhook-id");  // at-least-once delivery
+  // reconcile runs on a schedule too: delivery is not guaranteed
+  // coalesced; returns immediately
+  await enqueue(id, raw);
+  return new Response("ok");
+};`;
+
 function correct() {
   const dir = mkdtempSync(join(tmpdir(), "headless-"));
 
@@ -79,8 +95,13 @@ export async function getStaticPaths(){ return [{params:{handle:'alpha'}}]; }
     `---
 const v = import.meta.env.SHOPIFY_API_VERSION;
 let failed = false;
-try { const r = await fetch(\`https://\${import.meta.env.SHOPIFY_STORE_DOMAIN}/api/\${v}/graphql.json\`); }
-catch { failed = true; }
+try {
+  const r = await fetch(\`https://\${import.meta.env.SHOPIFY_STORE_DOMAIN}/api/\${v}/graphql.json\`);
+  const j = await r.json();
+  // A GraphQL error arrives inside a 200. Without this the island renders a blank price
+  // instead of failing closed.
+  if (!r.ok || j.errors) throw new Error("storefront");
+} catch { failed = true; }
 ---
 {failed ? <p>Check price in cart</p> : <p>price</p>}
 `);
@@ -119,6 +140,12 @@ export const onRequest = defineMiddleware((ctx, next) => {
   const t = map.get(ctx.url.pathname);
   return t ? ctx.redirect(t, 301) : next();
 });`);
+
+  w(dir, "src/pages/api/webhooks/products.ts", WEBHOOK_OK);
+  w(dir, "src/lib/webhooks/topics.ts",
+    `export const TOPICS = ["PRODUCTS_UPDATE", "PRODUCT_LISTINGS_ADD", "PRODUCT_LISTINGS_REMOVE"];`);
+  writeFileSync(join(dir, "vercel.json"),
+    JSON.stringify({ crons: [{ path: "/api/cron/reconcile", schedule: "0 * * * *" }] }));
 
   w(dir, "src/pages/agents.md.ts", `export const GET = () => new Response('# Agent instructions');`);
   w(dir, "src/pages/llms.txt.ts", `export const GET = () => new Response('# llms');`);
@@ -364,6 +391,61 @@ export const POST = async ({ cookies }) => {
   ["Y4-retired-shopify-cookies", "Shopify stopped setting these, so the identity join silently degrades", (d) =>
     w(d, "src/lib/ids.ts",
       `const uid = document.cookie.match(/_shopify_y=([^;]+)/)?.[1];\nexport default uid;`)],
+
+  // --- O. operations, the month-three failures on a store that is succeeding
+  ["O1-webhook-hmac", "an unverified webhook endpoint is a public unauthenticated trigger", (d) =>
+    w(d, "src/pages/api/webhooks/products.ts",
+      `export const prerender = false;\n` +
+      `export const POST = async ({ request }) => {\n` +
+      `  const body = await request.json();\n` +
+      `  await rebuild(body);\n  return new Response("ok");\n};`)],
+
+  ["O2-webhook-timing-unsafe", "response timing leaks the signature one byte at a time", (d) =>
+    w(d, "src/pages/api/webhooks/products.ts",
+      `export const prerender = false;\n` +
+      `import { createHmac } from "node:crypto";\n` +
+      `export const POST = async ({ request }) => {\n` +
+      `  const raw = await request.text();\n` +
+      `  const hmac = createHmac("sha256", import.meta.env.SHOPIFY_WEBHOOK_SECRET).update(raw).digest("base64");\n` +
+      `  if (hmac !== request.headers.get("x-shopify-hmac-sha256")) return new Response("no", { status: 401 });\n` +
+      `  const id = request.headers.get("x-shopify-webhook-id");\n` +
+      `  await enqueue(id, raw);\n  return new Response("ok");\n};`)],
+
+  ["O3-webhook-no-dedup", "a legitimate retry re-runs the work every time", (d) =>
+    w(d, "src/pages/api/webhooks/products.ts", WEBHOOK_OK.replace(/const id = .*\n/, "").replace(/enqueue\(id, raw\)/, "enqueue(raw)"))],
+
+  ["O4-deploy-hook-uncoalesced", "60 orders an hour and the site silently stops updating", (d) =>
+    w(d, "src/pages/api/webhooks/products.ts",
+      WEBHOOK_OK.replace("await enqueue(id, raw);",
+        `await fetch(import.meta.env.DEPLOY_HOOK_URL, { method: "POST" });`))],
+
+  ["O5-no-listing-topics", "the storefront keeps serving products the merchant took down", (d) =>
+    w(d, "src/lib/webhooks/topics.ts", `export const TOPICS = ["PRODUCTS_UPDATE", "PRODUCTS_DELETE"];`)],
+
+  ["O6-no-reconcile", "webhook-only is non-conformant by Shopify's own guidance", (d) => {
+    rmSync(join(d, "vercel.json"), { force: true });
+    w(d, "src/pages/api/webhooks/products.ts", WEBHOOK_OK.replace(/\/\/ reconcile.*\n/, ""));
+  }],
+
+  ["O7-graphql-errors-ignored", "a failed query renders as a successful empty page", (d) =>
+    w(d, "src/lib/shopify/client.ts",
+      `export async function sf(q) {\n` +
+      `  const r = await fetch(\`https://x.myshopify.com/api/2026-07/graphql.json\`, {\n` +
+      `    method: "POST", headers: { "Shopify-Storefront-Buyer-IP": ip }, body: JSON.stringify({ query: q }) });\n` +
+      `  if (!r.ok) throw new Error("http " + r.status);\n` +
+      `  const j = await r.json();\n  return j.data;\n}`)],
+
+  ["O8-complexity-error-unhandled", "retrying a query that can never succeed", (d) =>
+    w(d, "src/lib/shopify/retry.ts",
+      `export const shouldRetry = (e) => e?.extensions?.code === "THROTTLED";`)],
+
+  ["O9-version-literal-repeated", "one call site upgrades and the rest do not", (d) =>
+    w(d, "src/lib/shopify/other.ts",
+      `export const u = "https://x.myshopify.com/api/2026-07/graphql.json";\n` +
+      `export const v = "https://x.myshopify.com/api/2025-01/graphql.json";`)],
+
+  ["O10-api-version-near-expiry", "Shopify falls forward to a version you never tested, silently", (d) =>
+    w(d, "src/lib/shopify/version.ts", `export const API_VERSION = "2019-04";`)],
 
   // --- K. the write path --------------------------------------------------
   ["K1-write-guard", "a write script pointable at a real merchant by a typo eventually is", (d) =>
