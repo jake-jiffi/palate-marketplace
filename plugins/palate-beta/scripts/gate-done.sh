@@ -316,6 +316,22 @@ if [ -f "$SEO_GATE" ]; then
   esac
 fi
 
+# HEADLESS: is this Shopify storefront actually constructed correctly?
+#
+# Silent on every non-commerce build: without .palate/catalogue.json it exits 2 having checked
+# nothing, so a brochure site is never judged against a commerce contract. --no-cli because the
+# done gate must not shell out to npx on every build; the CLI checks belong to the setup step.
+HEADLESS_GATE="$HERE/gate-headless.mjs"
+headless_note="headless=skipped(not a commerce build)"
+if [ -f "$HEADLESS_GATE" ]; then
+  if hl_err="$(node "$HEADLESS_GATE" "$PROJ" --no-cli 2>&1)"; then hl_rc=0; else hl_rc=$?; fi
+  case "$hl_rc" in
+    0) headless_note="headless=pass" ;;
+    2) headless_note="headless=skipped(not a commerce build)" ;;
+    *) fail "Headless storefront is not correctly constructed. ${hl_err}" ;;
+  esac
+fi
+
 # UNIQUENESS: the variants must be genuinely different, not ritually varied.
 #
 # THIS GATE HAD NO DETERMINISTIC CALLER, alone in the suite. The verifier agent was told to run
@@ -358,5 +374,5 @@ fi
 
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

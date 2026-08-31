@@ -225,3 +225,29 @@ test("static routes are never touched", () => {
     assert.equal(r.resolved, 0);
   } finally { cleanup(); }
 });
+
+// ---------------------------------------------------------------- the token path
+
+test("a token survey is marked production-safe and says so differently", async () => {
+  const { server, origin } = await serve("ok", 3);
+  try {
+    const anon = await survey(origin);
+    const withTok = await survey(origin, { token: "shpat_test" });
+    assert.equal(anon.productionSafe, false, "tokenless dies on the apex at cutover");
+    assert.equal(withTok.productionSafe, true, "a token survives the cutover");
+    assert.equal(anon.source, "tokenless-storefront-api");
+    assert.equal(withTok.source, "storefront-api-token");
+    assert.match(anon.warning, /BUILD-TIME ONLY/);
+    assert.match(withTok.warning, /production read path/);
+    // Both remain build-time artefacts: neither is a runtime price source.
+    assert.match(withTok.warning, /never from this file/);
+  } finally { server.close(); }
+});
+
+test("a dev store's locked channel is still reported, token or not", async () => {
+  const { server, origin } = await serve("locked");
+  try {
+    const r = await survey(origin, { token: "shpat_test" });
+    assert.equal(r.reason, "channel-locked");
+  } finally { server.close(); }
+});

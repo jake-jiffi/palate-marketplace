@@ -243,6 +243,40 @@ puts price, availability or specs behind JavaScript is LESS legible to an agent,
 
 ---
 
+## 6b. When the conversation creates the items
+
+The common shape is not "build a site for this store". It is: someone describes what they want,
+Palate CREATES the items in Shopify, builds the site, and most of the site is not Shopify content
+at all. A video hero, an editorial block, a lookbook, all hand-authored, all POINTING AT catalogue
+items.
+
+**That pointer is the fragile part**, and nothing about it fails at build time. A handle that was
+renamed, never created, or created but not published leaves a 404 behind a link on the page a
+campaign is driving traffic to. The page renders. The build is green.
+
+`scripts/gate-headless.mjs` resolves every reference in both directions:
+
+| Check | What it catches |
+|---|---|
+| `J1-dangling-product-ref` | content links to a handle not in the catalogue |
+| `J2-dangling-collection-ref` | same for collections, usually a campaign destination |
+| `J3-featured-unavailable` | a hero featuring something sold out, worse than featuring nothing |
+| `J4-hardcoded-price` | a price typed into content, which no island can ever correct |
+| `J5-unrouted-products` | catalogue items with no built page, so part of the store is unreachable |
+| `K1-write-guard` | a script that mutates Shopify with no development-store guard |
+
+**Publication is the usual cause of a dangling reference and it is silent.** A product not
+published to the channel is indistinguishable from one that never existed, so the item can be
+created correctly, appear in admin, and still be a 404 on the site. Create, publish, then verify by
+reading the catalogue back. Never assume the create succeeded because it returned an id.
+
+**Writes need a guard, always.** A metaobject type identifier cannot be renamed after creation, so
+a mistake on a live store is permanent. Require `shop.plan.partnerDevelopment`, or a dry run plus
+explicit approval, before any mutation. `scripts/seed-shopify-dev-store.mjs` is the worked example:
+it refuses outright unless the store is a development store.
+
+---
+
 ## 7. Commerce anti-patterns
 
 The general anti-pattern list still applies. These are additional, and the first two are the ones

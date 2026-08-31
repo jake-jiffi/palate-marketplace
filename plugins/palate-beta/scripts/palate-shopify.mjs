@@ -67,6 +67,11 @@ const TIMEOUT_MS = 25_000;
  * Stamped into every file this writes, because the file OUTLIVES the knowledge of how it was made.
  * Someone will find catalogue.json in six months, see live prices in it, and wire it to a page.
  */
+const TOKEN_NOTE =
+  'Surveyed with a Storefront access token, so this is the production read path and it keeps ' +
+  'working after a domain cutover. Still a BUILD-TIME artefact: read prices from the API at ' +
+  'request time, never from this file.';
+
 const PRODUCTION_WARNING =
   'BUILD-TIME ONLY. Read tokenless from a Shopify-served host. This stops working on the apex the ' +
   'moment the domain cuts over to another host, and it carries no per-buyer rate allowance. Never ' +
@@ -128,11 +133,12 @@ const isBackoff = (json, status) =>
  * Is this host one Shopify serves, and does tokenless work on it?
  * Returns { ok, reason, endpoint, version } and never throws.
  */
-export async function probe(origin, version = DEFAULT_VERSION) {
+export async function probe(origin, version = DEFAULT_VERSION, token = null) {
   const endpoint = `${origin}/api/${version}/graphql.json`;
+  const auth = token ? { 'X-Shopify-Storefront-Access-Token': token } : {};
   let r;
   try {
-    r = await post(endpoint, { query: '{ shop { name } }' });
+    r = await post(endpoint, { query: '{ shop { name } }' }, auth);
   } catch (e) {
     return { ok: false, reason: 'network', detail: String(e?.name || e).slice(0, 80), endpoint, version };
   }
@@ -151,12 +157,12 @@ export async function probe(origin, version = DEFAULT_VERSION) {
 }
 
 /** Pull the catalogue, adapting page size downward on a complexity or throttle refusal. */
-async function fetchProducts(endpoint) {
+async function fetchProducts(endpoint, auth = {}) {
   const out = [];
   let cursor = null, sizeIdx = 0, guard = 0;
   while (out.length < MAX_PRODUCTS && guard++ < 40) {
     const n = Math.min(PAGE_SIZES[sizeIdx], MAX_PRODUCTS - out.length);
-    const r = await post(endpoint, { query: query(n, cursor) });
+    const r = await post(endpoint, { query: query(n, cursor) }, auth);
     if (isBackoff(r.json, r.status)) {
       if (sizeIdx < PAGE_SIZES.length - 1) { sizeIdx++; continue; }
       break;                                  // already at the smallest page: stop with what we have
@@ -174,20 +180,21 @@ async function fetchProducts(endpoint) {
  * Survey a store. Returns the catalogue object; the caller decides whether to write it.
  * Never throws: a failed survey is a reported outcome, not an exception.
  */
-export async function survey(input, { version = DEFAULT_VERSION } = {}) {
+export async function survey(input, { version = DEFAULT_VERSION, token = null } = {}) {
   const origin = norm(input);
   if (!origin) return { ok: false, reason: 'bad-url', detail: `Could not read a URL from ${JSON.stringify(input)}` };
 
-  const p = await probe(origin, version);
+  const p = await probe(origin, version, token);
   if (!p.ok) return { ok: false, ...p, store: origin };
 
-  const products = await fetchProducts(p.endpoint);
-  const cr = await post(p.endpoint, { query: COLLECTIONS_QUERY });
+  const auth = token ? { 'X-Shopify-Storefront-Access-Token': token } : {};
+  const products = await fetchProducts(p.endpoint, auth);
+  const cr = await post(p.endpoint, { query: COLLECTIONS_QUERY }, auth);
   const collections = cr.json?.data?.collections?.nodes ?? [];
 
   // The shop record comes from the same call as page one, so re-read it cheaply rather than
   // trusting the probe's minimal query.
-  const sr = await post(p.endpoint, { query: '{ shop { name primaryDomain { url } paymentSettings { currencyCode countryCode } } }' });
+  const sr = await post(p.endpoint, { query: '{ shop { name primaryDomain { url } paymentSettings { currencyCode countryCode } } }' }, auth);
   const shop = sr.json?.data?.shop ?? { name: p.shopName ?? null };
 
   const routes = [
@@ -198,11 +205,11 @@ export async function survey(input, { version = DEFAULT_VERSION } = {}) {
 
   return {
     ok: true,
-    warning: PRODUCTION_WARNING,
-    productionSafe: false,
+    warning: token ? TOKEN_NOTE : PRODUCTION_WARNING,
+    productionSafe: Boolean(token),
     surveyedAt: new Date().toISOString(),
     store: origin,
-    source: 'tokenless-storefront-api',
+    source: token ? 'storefront-api-token' : 'tokenless-storefront-api',
     endpoint: p.endpoint,
     apiVersion: version,
     shop: {
@@ -289,16 +296,18 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   const url = args.find((a) => !a.startsWith('-'));
   const outIdx = args.indexOf('--out');
   const out = outIdx > -1 ? args[outIdx + 1] : '.palate/catalogue.json';
+  const tIdx = args.indexOf('--token');
+  const token = tIdx > -1 ? args[tIdx + 1] : (process.env.SHOPIFY_STOREFRONT_TOKEN ?? null);
   const vIdx = args.indexOf('--api-version');
   const version = vIdx > -1 ? args[vIdx + 1] : DEFAULT_VERSION;
   const quiet = args.includes('--quiet');
 
   if (!url) {
-    console.error('usage: palate-shopify.mjs <store-url> [--out .palate/catalogue.json] [--api-version 2026-07]');
+    console.error('usage: palate-shopify.mjs <store-url> [--out .palate/catalogue.json] [--token <storefront-token>] [--api-version 2026-07]');
     process.exit(64);
   }
 
-  const r = await survey(url, { version });
+  const r = await survey(url, { version, token });
 
   if (!r.ok) {
     const code = r.reason === 'not-shopify-served' ? 2 : 3;
@@ -317,9 +326,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   if (!quiet) {
     console.log(`[palate-shopify] ${r.shop.name ?? r.store}`);
     console.log(`  products ${r.counts.products}${r.truncated ? ` (capped at ${MAX_PRODUCTS})` : ''}   collections ${r.counts.collections}   routes ${r.counts.routes}`);
-    console.log(`  currency ${r.shop.currency ?? '?'}   no credential was used`);
+    console.log(`  currency ${r.shop.currency ?? '?'}   ${token ? 'via a Storefront token' : 'no credential was used'}`);
     console.log(`  -> ${abs}`);
-    console.log(`  NOTE ${PRODUCTION_WARNING}`);
+    console.log(`  NOTE ${r.warning}`);
   }
   process.exit(0);
 }
