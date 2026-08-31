@@ -123,6 +123,15 @@ const query = (n, cursor) => `{
 
 const COLLECTIONS_QUERY = `{ collections(first: 100) { nodes { handle title } } }`;
 
+/**
+ * REDIRECTS ARE MERCHANT DATA AND THEY ARE THE FIRST THING A CUTOVER LOSES.
+ *
+ * Every redirect the merchant ever configured lives in Shopify and is served by their Liquid
+ * storefront. The moment the apex points somewhere else, all of them 404 at once, on exactly the
+ * URLs those redirects existed to save. Nothing errors; rankings just go.
+ */
+const REDIRECTS_QUERY = `{ urlRedirects(first: 250) { nodes { path target } } }`;
+
 /** A complexity or throttle refusal, which we answer by asking for less rather than giving up. */
 const isBackoff = (json, status) =>
   status === 429 ||
@@ -192,6 +201,11 @@ export async function survey(input, { version = DEFAULT_VERSION, token = null } 
   const cr = await post(p.endpoint, { query: COLLECTIONS_QUERY }, auth);
   const collections = cr.json?.data?.collections?.nodes ?? [];
 
+  const rr = await post(p.endpoint, { query: REDIRECTS_QUERY }, auth);
+  const redirects = (rr.json?.data?.urlRedirects?.nodes ?? [])
+    .filter((r) => r?.path && r?.target)
+    .map((r) => ({ from: r.path, to: r.target }));
+
   // The shop record comes from the same call as page one, so re-read it cheaply rather than
   // trusting the probe's minimal query.
   const sr = await post(p.endpoint, { query: '{ shop { name primaryDomain { url } paymentSettings { currencyCode countryCode } } }' }, auth);
@@ -218,9 +232,10 @@ export async function survey(input, { version = DEFAULT_VERSION, token = null } 
       currency: shop?.paymentSettings?.currencyCode ?? null,
       country: shop?.paymentSettings?.countryCode ?? null,
     },
-    counts: { products: products.length, collections: collections.length, routes: routes.length },
+    counts: { products: products.length, collections: collections.length, routes: routes.length, redirects: redirects.length },
     truncated: products.length >= MAX_PRODUCTS,
     routes,
+    redirects,
     collections: collections.map((c) => ({ handle: c.handle, title: c.title })),
     products: products.map((x) => ({
       handle: x.handle,
@@ -325,7 +340,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   const abs = write(r, out);
   if (!quiet) {
     console.log(`[palate-shopify] ${r.shop.name ?? r.store}`);
-    console.log(`  products ${r.counts.products}${r.truncated ? ` (capped at ${MAX_PRODUCTS})` : ''}   collections ${r.counts.collections}   routes ${r.counts.routes}`);
+    console.log(`  products ${r.counts.products}${r.truncated ? ` (capped at ${MAX_PRODUCTS})` : ''}   collections ${r.counts.collections}   routes ${r.counts.routes}   redirects ${r.counts.redirects}`);
     console.log(`  currency ${r.shop.currency ?? '?'}   ${token ? 'via a Storefront token' : 'no credential was used'}`);
     console.log(`  -> ${abs}`);
     console.log(`  NOTE ${r.warning}`);

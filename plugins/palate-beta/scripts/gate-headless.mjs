@@ -44,6 +44,7 @@ const argv = process.argv.slice(2);
 const dir = resolve(argv.find((a) => !a.startsWith("--")) ?? ".");
 const JSON_OUT = argv.includes("--json");
 const SKIP_CLI = argv.includes("--no-cli");
+const RUNTIME = (() => { const i = argv.indexOf("--runtime"); return i > -1 ? argv[i + 1] : null; })();
 
 const findings = [];
 const unknowns = [];
@@ -319,6 +320,127 @@ if (/checkoutCreate\b/.test(allText)) {
     "The Checkout API is superseded by Cart, and no plan buys a self-hosted checkout: it is a terms-of-service boundary requiring written authorisation from Shopify, including on Plus. Hand off via the cart's checkoutUrl.");
 } else ok("G3-custom-checkout");
 
+/* ============================================================ X. the Storefront API contract
+ *
+ * Four ways to call this API correctly-looking and be wrong, none of which raises an error.
+ * Every one was found by auditing the API surface against a build that already passed 50 checks.
+ */
+
+// X1: @inContext DOES NOT REACH THE CART. Cart context comes only from cartCreate or
+// cartBuyerIdentityUpdate with buyerIdentity.countryCode. A build that sets country on its
+// product queries and not on its cart shows one currency and charges another, silently.
+if (/@inContext\s*\(\s*[^)]*country/i.test(allText)) {
+  const mutatesCart = /cartCreate|cartLinesAdd/.test(allText);
+  const setsBuyer = /cartBuyerIdentityUpdate|buyerIdentity/.test(allText) && /countryCode/.test(allText);
+  if (mutatesCart && !setsBuyer) {
+    add("X1-cart-context-missing",
+      "Queries use @inContext(country:) but no cart call passes buyerIdentity.countryCode.",
+      "@inContext is IGNORED by cart queries and mutations. Cart context comes only from cartCreate or cartBuyerIdentityUpdate. The page shows one currency and the buyer is charged another, with no error anywhere. Pass buyerIdentity { countryCode } when the cart is created.");
+  } else ok("X1-cart-context-missing");
+} else ok("X1-cart-context-missing");
+
+// X2: cartDiscountCodesUpdate RETURNS SUCCESS FOR A CODE THAT DOES NOT APPLY, with empty
+// userErrors and applicable:false. A call that never selects `applicable` cannot be handling it.
+if (/cartDiscountCodesUpdate/.test(allText)) {
+  const checksApplicable = srcText.some(({ t }) => /cartDiscountCodesUpdate/.test(t) && /applicable/.test(t));
+  if (!checksApplicable) {
+    add("X2-discount-applicable-unchecked",
+      "cartDiscountCodesUpdate is called without selecting `applicable`.",
+      "The mutation succeeds with EMPTY userErrors for a code that does not apply, and returns applicable:false instead. A call site that does not read it cannot show the buyer that their code was rejected, so they discover it at the payment step. Select discountCodes { code applicable } and render the failure.");
+  } else ok("X2-discount-applicable-unchecked");
+} else ok("X2-discount-applicable-unchecked");
+
+// X3: FILTERS ARE THE MERCHANT'S MERCHANDISING, NOT OURS. Only `available` and `price` exist by
+// default; everything else depends on their Search & Discovery config, and FilterValue.input is
+// meant to be echoed back rather than reconstructed by hand.
+const handRolledFilter = srcText.some(({ t }) =>
+  /filters\s*:\s*[[{]/.test(t) && /(productType|variantOption|productMetafield)\s*:/.test(t) && !/values\s*{[^}]*input/.test(t));
+if (handRolledFilter) {
+  add("X3-handrolled-filters",
+    "A ProductFilter is constructed by hand without round-tripping `filters { values { input } }`.",
+    "Only available and price filters exist by default; the rest come from the merchant's Search & Discovery configuration. FilterValue.input is designed to be echoed back. Hand-writing the shape mis-serialises price ranges and ignores the merchandising they configured.");
+} else ok("X3-handrolled-filters");
+
+// X4: REDIRECTS ARE MERCHANT DATA AND DROPPING THEM COSTS RANKINGS AT LAUNCH. A migration is
+// exactly when old URLs are still being linked and indexed.
+// Two correct shapes: query urlRedirects directly, or consume the redirects the SURVEY captured.
+// Requiring the literal query string would false-fail a build that reads them from the catalogue,
+// which is the shape this repo actually recommends.
+const handlesRedirects =
+  /urlRedirects/.test(allText) ||
+  (/redirects/.test(allText) && /(ctx|Astro)\.redirect|defineMiddleware|Response\.redirect/.test(allText)) ||
+  (Array.isArray(cat.redirects) && /redirects/.test(allText));
+if (!handlesRedirects) {
+  add("X4-redirects-dropped",
+    "Nothing in this build reads urlRedirects.",
+    "Every redirect the merchant has ever configured is live data in Shopify, and a headless build that ignores it 404s the URLs those redirects existed to save, at exactly the moment the domain cuts over. Read urlRedirects at build time and emit them, or handle them in middleware.");
+} else ok("X4-redirects-dropped");
+
+// X5: POLICIES ARE LEGAL TEXT THE MERCHANT MAINTAINS. A local copy goes stale the first time
+// they edit it in admin, and nobody notices because the page still renders.
+const policyRoute = srcText.filter(({ f }) => /polic|terms|refund|shipping/i.test(f) && /\/pages\//.test(f));
+if (policyRoute.length) {
+  const queried = policyRoute.some(({ t }) => /(privacyPolicy|refundPolicy|shippingPolicy|termsOfService|shop\s*{)/i.test(t));
+  if (!queried) {
+    add("X5-policy-hardcoded",
+      `A policy page renders local content rather than querying the shop: ${policyRoute.map((x) => relative(dir, x.f))[0]}.`,
+      "Policies are legal text the merchant edits in admin. A local copy is stale from their next edit onward and the page still renders perfectly, so nobody finds out. Query Shop.privacyPolicy and its siblings.");
+  } else ok("X5-policy-hardcoded");
+} else ok("X5-policy-hardcoded");
+
+/* ============================================================ Y. the measurement layer
+ *
+ * GOING HEADLESS SPLITS A MERCHANT'S ANALYTICS IN HALF, and only one half reports the loss.
+ * Checkout stays on Shopify, so checkout_started / checkout_completed keep firing and the
+ * revenue dashboard looks normal. The storefront no longer does, and a headless front end is
+ * not even on the list of surfaces permitted to publish standard events, so page_viewed,
+ * product_viewed and product_added_to_cart simply stop. The merchant keeps their conversions
+ * and loses their funnel, with nothing anywhere reporting a fault.
+ */
+
+// Y1. The buyer's IP on server-side calls. Shopify: without it "Shopify can't differentiate
+// requests from different buyers", costing throttling headroom, bot protection, and
+// "the buyer's logged-in checkout experience" (they land on checkout signed out).
+// Keyed on the CART MUTATIONS, not on where the endpoint URL is written. Keying it on the URL
+// would switch this check off for exactly the builds that took Y2's advice and consolidated
+// onto one client, since the URL then lives in a lib file that is neither /api/ nor on-demand.
+const serverSideCalls = srcText.filter(({ t }) =>
+  /cartCreate|cartLinesAdd|cartLinesUpdate|cartLinesRemove|cartBuyerIdentityUpdate/.test(t));
+if (serverSideCalls.length) {
+  if (!/Shopify-Storefront-Buyer-IP/i.test(allText)) {
+    add("Y1-buyer-ip-missing",
+      `Server-side Storefront calls send no Shopify-Storefront-Buyer-IP header (${serverSideCalls.map((x) => relative(dir, x.f))[0]}).`,
+      "Every cart call runs on your server, so Shopify sees ONE client making every buyer's requests. Shopify's own words: this 'can result in throttled API requests, limited bot protection, and unauthenticated flows at checkout'. Send the buyer's IP (the first entry of x-forwarded-for) on buyer-driven calls, and nothing at build time.");
+  } else ok("Y1-buyer-ip-missing");
+} else ok("Y1-buyer-ip-missing");
+
+// Y2. TWO copies of the wire client. This is not tidiness: it is the shape that let Y1 be
+// correct on one path and absent on another in our own storefront.
+const clients = srcText.filter(({ t }) => /\/api\/\$\{[^}]*\}\/graphql\.json|\/api\/[\d-]+\/graphql\.json/.test(t));
+if (clients.length > 1) {
+  add("Y2-duplicate-wire-client",
+    `${clients.length} files build the Storefront endpoint URL themselves: ${clients.map((x) => relative(dir, x.f)).join(", ")}.`,
+    "A required header added to one copy and forgotten in the other fails silently, which is exactly how the buyer-IP header went missing here. One client, imported everywhere.");
+} else ok("Y2-duplicate-wire-client");
+
+// Y3. Consent that cannot reach checkout. The four headless parameters are not optional.
+if (/setTrackingConsent/.test(allText)) {
+  const missing = ["headlessStorefront", "checkoutRootDomain", "storefrontRootDomain", "storefrontAccessToken"]
+    .filter((k) => !new RegExp(k).test(allText));
+  if (missing.length) {
+    add("Y3-consent-not-headless",
+      `setTrackingConsent is called without the headless parameters: ${missing.join(", ")}.`,
+      "On a custom storefront the consent call must carry all four, and checkout must sit on the SAME ROOT DOMAIN as the storefront or it cannot read the cookies your banner set. Consent then silently fails to travel and checkout-side pixels are gated by a consent state the buyer never gave.");
+  } else ok("Y3-consent-not-headless");
+} else ok("Y3-consent-not-headless");
+
+// Y4. Cookies Shopify stopped setting.
+if (/_shopify_[ys]\b/.test(allText)) {
+  add("Y4-retired-shopify-cookies",
+    "Source reads the _shopify_y / _shopify_s cookies.",
+    "Shopify stopped setting these on merchant storefronts (changelog says from 1 January 2026; the Hydrogen migration guide says 30 April 2026 — plan for the earlier). Reading them yields undefined and every downstream identity join quietly degrades. clientId on a Web Pixels event replaces _y; _s has no replacement, so mint your own session value.");
+} else ok("Y4-retired-shopify-cookies");
+
 /* ============================================================ H. the agent surface */
 
 const agentRoutes = [
@@ -461,6 +583,249 @@ if (distProduct) {
       "The built product page carries no price in its HTML.",
       "The fallback is what curl, most LLM scrapers and the first-pass crawl read. 39% of retailer homepages are already not machine-readable to LLMs, and putting price behind JavaScript is exactly how that happens.");
   } else ok("I2-price-not-in-html");
+}
+
+/* ============================================================ R. RUNTIME
+ *
+ * EVERYTHING ABOVE IS STATIC ANALYSIS, and static analysis of a storefront is a proxy. It reads
+ * that `httpOnly: true` appears in a file; it cannot tell you the cookie that actually reaches a
+ * browser carries it. Cookie flags set in one file and cookies.set() called in another pass a
+ * regex and fail a buyer.
+ *
+ * With --runtime <base-url> the gate stops reading and starts asking. Every check below is a real
+ * request against a served storefront, and each one is the runtime twin of a static check above.
+ * Skipped entirely without the flag, so nothing here slows an ordinary build.
+ */
+
+if (RUNTIME) {
+  const base = RUNTIME.replace(/\/+$/, "");
+  /**
+   * GET follows redirects; POST does not, because the cart's Set-Cookie is on the 303 itself and
+   * following it would discard the header this gate exists to inspect.
+   *
+   * AN AUTH WALL IS NOT A MISSING ROUTE. A preview deployment behind Vercel's deployment
+   * protection answers 302 to an SSO page for every path, and reporting that as "this product has
+   * no page" is a false failure on a storefront that is fine. It is reported as UNKNOWN instead,
+   * once, with the reason.
+   */
+  let authWalled = false;
+  const get = async (path, opts = {}) => {
+    const isPost = (opts.method ?? "GET").toUpperCase() === "POST";
+    try {
+      const r = await fetch(base + path, {
+        redirect: isPost ? "manual" : "follow",
+        signal: AbortSignal.timeout(20000),
+        ...opts,
+      });
+      const body = await r.text().catch(() => "");
+      if (!isPost && /vercel\.com\/sso|_vercel\/sso|Authentication Required|sso-api/i.test(`${r.url}\n${body.slice(0, 2000)}`)) {
+        authWalled = true;
+      }
+      return { status: r.status, headers: r.headers, body, url: r.url };
+    } catch (e) { return { status: 0, headers: new Headers(), body: "", err: String(e?.name ?? e) }; }
+  };
+
+  const firstProduct = products[0]?.handle;
+  const pdpPath = firstProduct ? `/products/${firstProduct}` : null;
+
+  // R1: the storefront answers at all.
+  const home = await get("/");
+  if (authWalled) {
+    unknown("R0-reachable",
+      `${base} is behind deployment protection (an SSO wall answers every path), so no runtime check could run. Disable protection for this deployment, or point --runtime at a local server.`);
+  } else if (home.status === 0) {
+    unknown("R0-reachable", `nothing answered at ${base} (${home.err}). No runtime check could run.`);
+  } else {
+    ok("R0-reachable");
+
+    // R1: a product page serves, and carries a price a non-JS consumer can read.
+    if (!pdpPath) unknown("R1-pdp-serves", "the catalogue has no product to request");
+    else {
+      const pdp = await get(pdpPath);
+      if (pdp.status !== 200) {
+        add("R1-pdp-serves", `${pdpPath} answered ${pdp.status}.`,
+          "A catalogue route that does not serve is a product with no page. Check getStaticPaths and channel publication.");
+      } else if (!/(A?\$|£|€)\s?\d|data-price-fallback|"price"/.test(pdp.body)) {
+        add("R1-pdp-serves", `${pdpPath} serves but its HTML carries no price.`,
+          "The served HTML is what curl, LLM scrapers and the first-pass crawl read. A price only present after JavaScript is a price those consumers never see.");
+      } else ok("R1-pdp-serves");
+
+      // R2: canonical, on the wire rather than on disk.
+      const pdp2 = await get(pdpPath);
+      if (/<link[^>]+rel=["']canonical["']/i.test(pdp2.body)) ok("R2-canonical-served");
+      else add("R2-canonical-served", `${pdpPath} serves no canonical link.`,
+        "Shopify emits ?variant= deep links for agents and ads, so every product URL has duplicate spellings competing with it.");
+    }
+
+    // R3: THE CART COOKIE, READ OFF THE WIRE. This is the check static analysis cannot make.
+    // Send Origin and Referer, because a real browser form post does and Astro's CSRF check
+    // rejects a POST without them with a 403. Without this the check reports "no cookie" on a
+    // storefront whose cart is working perfectly, which is a false alarm on the one check that
+    // exists to catch a real security defect.
+    const addRes = await get("/api/cart/add", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: base,
+        referer: `${base}${pdpPath ?? "/"}`,
+      },
+      body: `handle=${encodeURIComponent(firstProduct ?? "")}`,
+    });
+    const setCookie = addRes.headers.getSetCookie?.() ?? [addRes.headers.get("set-cookie")].filter(Boolean);
+    const cartCookie = setCookie.find((c) => /cart/i.test(c));
+    if (addRes.status === 0) {
+      unknown("R3-cart-cookie", "the cart endpoint did not answer");
+    } else if (!cartCookie) {
+      // A 4xx/5xx with no cookie is a legitimate refusal (out of stock, unconfigured), not a
+      // security failure. Report it as unknown rather than inventing a finding.
+      unknown("R3-cart-cookie", `no cart cookie was set (endpoint answered ${addRes.status}); the cookie could not be inspected`);
+    } else {
+      const miss = [];
+      if (!/;\s*HttpOnly/i.test(cartCookie)) miss.push("HttpOnly");
+      if (!/;\s*Secure/i.test(cartCookie)) miss.push("Secure");
+      if (!/;\s*SameSite=Lax/i.test(cartCookie)) miss.push("SameSite=Lax");
+      if (miss.length) {
+        add("R3-cart-cookie", `The cart cookie ACTUALLY SENT is missing ${miss.join(", ")}.`,
+          "This is the wire, not the source. The cart id is a capability secret and the cart carries buyer email, address and phone. SameSite must be Lax specifically: Strict is not sent when the buyer returns from Shopify's checkout domain.");
+      } else ok("R3-cart-cookie");
+
+      // R4: the capability secret must never reach the client.
+      //
+      // Look in a PAGE, not in the redirect body. A 303's body is not exposed by fetch and is not
+      // where a leak would appear anyway: the realistic vector is the id rendered into HTML or
+      // inlined into client JavaScript so a drawer can read it.
+      const pages = [addRes.body];
+      for (const path of [pdpPath, "/"].filter(Boolean)) {
+        const pg = await get(path, { headers: { cookie: cartCookie.split(";")[0] } });
+        pages.push(pg.body);
+      }
+      const idInBody = pages.some((b) => /gid:\/\/shopify\/Cart\/|[?&]key=[A-Za-z0-9]/.test(b || ""));
+      if (idInBody) {
+        add("R4-cart-id-leaked", "The cart id or its ?key= secret appears in the response body.",
+          "Anyone who reads it can read and modify that cart. It belongs only in the HttpOnly cookie.");
+      } else ok("R4-cart-id-leaked");
+    }
+
+    /* W. WALK THE FUNNEL.
+     *
+     * THIS SECTION EXISTS BECAUSE THE GATE PASSED 43 CHECKS ON A STORE NOBODY COULD SHOP.
+     * The survey was clean, the routes were static, the cart cookie was correct, the price island
+     * failed closed, the checkout URL was Shopify's. And a visitor landing on the home page had
+     * no navigation, no footer, no link to a bag, no /cart page at all, and a product page with
+     * ZERO outbound links. Every part passed; the journey was impossible.
+     *
+     * Checking parts is not checking the path. These checks walk it.
+     */
+    const walkPages = [["home", "/"], ["product", pdpPath]].filter(([, p]) => p);
+
+    // W1: a visitor must be able to leave any page they land on.
+    for (const [label, path] of walkPages) {
+      const pg = await get(path);
+      const links = [...(pg.body.matchAll(/<a\s[^>]*href=["']([^"'#]+)["']/gi))].map((m) => m[1]);
+      const internal = links.filter((h) => h.startsWith("/") || h.includes(base));
+      if (internal.length < 3) {
+        add(`W1-${label}-is-a-dead-end`,
+          `The ${label} page offers ${internal.length} internal link(s).`,
+          "A page a visitor cannot leave is a dead end. A product page in particular needs the bag, the collection it belongs to, and a way home.");
+      } else ok(`W1-${label}-is-a-dead-end`);
+    }
+
+    // W2: the bag must be reachable from every page, or adding to it is a trap.
+    for (const [label, path] of walkPages) {
+      const pg = await get(path);
+      if (/href=["'][^"']*\/cart/i.test(pg.body)) ok(`W2-${label}-bag-reachable`);
+      else add(`W2-${label}-bag-reachable`,
+        `The ${label} page has no link to the bag.`,
+        "A storefront that can add to a cart and never show it is a funnel with no exit. Put the bag in the header, on every page.");
+    }
+
+    // W3: the cart page itself must exist and offer a way to pay.
+    const cartPage = await get("/cart");
+    if (cartPage.status !== 200) {
+      add("W3-cart-page", `/cart answered ${cartPage.status}.`,
+        "The cart page is the second half of every add-to-cart. Without it the buyer has nowhere to go.");
+    } else if (!/checkout/i.test(cartPage.body)) {
+      add("W3-cart-page", "/cart serves but offers no route to checkout.",
+        "Even an empty bag should say what to do next; a full one must link to the cart's own checkoutUrl.");
+    } else ok("W3-cart-page");
+
+    // W4: a header and a footer on every page. Absent from all of them once, which is how the
+    // bag link, the collections nav and the contact route all went missing at the same time.
+    for (const [label, path] of walkPages) {
+      const pg = await get(path);
+      const hasChrome = /<header[\s>]|<nav[\s>]/i.test(pg.body) && /<footer[\s>]/i.test(pg.body);
+      if (hasChrome) ok(`W4-${label}-chrome`);
+      else add(`W4-${label}-chrome`,
+        `The ${label} page has no header/nav and footer.`,
+        "Site chrome is where navigation, the bag and the legal footer live. A page without it reads as unfinished and strands the visitor.");
+    }
+
+    // R9: UNRESOLVED SCAFFOLD TOKENS ON A SERVED PAGE.
+    //
+    // THIS CHECK EXISTS BECAUSE THE GATE REPORTED 42 CHECKS CLEAN ON A HOME PAGE THAT RENDERED
+    // "{{HEADING}}" IN 60px TYPE. Every other check passed: the catalogue was surveyed, the
+    // product routes were static, the cart cookie was correct, the price island failed closed.
+    // None of them looks at the one thing a visitor sees first. gate-shipready catches tokens in
+    // SOURCE, but nothing was reading the SERVED page, and a storefront can be perfectly
+    // constructed and still be obviously unfinished.
+    const HOME_AND_PDP = ["/", pdpPath].filter(Boolean);
+    const tokenHits = [];
+    for (const path of HOME_AND_PDP) {
+      const pg = await get(path);
+      const toks = [...new Set((pg.body.match(/\{\{[A-Z0-9_]{2,}\}\}/g) ?? []))];
+      if (toks.length) tokenHits.push(`${path}: ${toks.slice(0, 5).join(" ")}`);
+    }
+    if (tokenHits.length) {
+      add("R9-unresolved-tokens",
+        `Scaffold placeholders are being SERVED to visitors: ${tokenHits.join("; ")}.`,
+        "A page rendering {{HEADING}} is not a storefront, whatever else passes. Resolve every scaffold token before this reaches anyone. This is the first thing a visitor sees and the last thing a check suite notices.");
+    } else ok("R9-unresolved-tokens");
+
+    // R8: THE CHECKOUT HANDOFF MUST BE SHOPIFY'S. No plan buys a self-hosted checkout; it is a
+    // terms-of-service boundary requiring written authorisation, including on Plus. This resolves
+    // the cart that was just created and reads where it actually sends the buyer.
+    const cartId = cartCookie ? decodeURIComponent((cartCookie.split(";")[0] || "").split("=").slice(1).join("=")) : null;
+    if (!cartId || !/^gid:\/\/shopify\/Cart\//.test(cartId)) {
+      unknown("R8-checkout-handoff", "no cart id was available to resolve a checkout URL");
+    } else {
+      const domain = cat.store?.replace(/^https?:\/\//, "");
+      const ver = cat.apiVersion ?? "2026-07";
+      let url = null;
+      try {
+        const q = { query: "query($id:ID!){ cart(id:$id){ checkoutUrl totalQuantity } }", variables: { id: cartId } };
+        const r = await fetch(`https://${domain}/api/${ver}/graphql.json`, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...(process.env.SHOPIFY_STOREFRONT_TOKEN ? { "X-Shopify-Storefront-Access-Token": process.env.SHOPIFY_STOREFRONT_TOKEN } : {}) },
+          body: JSON.stringify(q), signal: AbortSignal.timeout(15000),
+        });
+        const j = await r.json();
+        url = j?.data?.cart?.checkoutUrl ?? null;
+      } catch { /* reported below */ }
+      // Name the commonest cause. An unknown that does not say WHY sends the next person
+      // hunting the storefront for a fault that is in their shell.
+      if (!url) unknown("R8-checkout-handoff",
+        process.env.SHOPIFY_STOREFRONT_TOKEN
+          ? "the cart could not be resolved to a checkout URL"
+          : "no SHOPIFY_STOREFRONT_TOKEN in the environment, so the cart could not be read back (this is a harness gap, not a storefront fault)");
+      else if (!/(^https:\/\/[^/]*\.myshopify\.com\/|shopify\.com\/)/.test(url)) {
+        add("R8-checkout-handoff", `The cart's checkoutUrl is not Shopify-hosted: ${url.slice(0, 80)}`,
+          "The API Terms forbid an alternative to Shopify Checkout for checkout or payment processing, and no plan lifts that, including Plus. Hand off via the cart's own checkoutUrl.");
+      } else ok("R8-checkout-handoff");
+    }
+
+    // R5: the agent surface headless deletes, served rather than merely present in src.
+    for (const [id, path] of [["R5-agents-md", "/agents.md"], ["R6-llms-txt", "/llms.txt"]]) {
+      const r = await get(path);
+      if (r.status === 200 && r.body.trim().length > 20) ok(id);
+      else add(id, `${path} answered ${r.status || "nothing"}.`,
+        "Shopify writes this for every Liquid merchant and going headless deletes it. If it is not served here, an agent has no plain-language instructions for buying from this store.");
+    }
+
+    // R7: no self-hosted checkout. The handoff must be Shopify's.
+    const sitemapish = await get("/sitemap-index.xml");
+    if (sitemapish.status === 200) ok("R7-sitemap-served");
+    else unknown("R7-sitemap-served", `no sitemap served (${sitemapish.status})`);
+  }
 }
 
 /* ============================================================ report */

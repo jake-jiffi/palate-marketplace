@@ -1,6 +1,6 @@
 # Commerce doctrine: building a Shopify storefront
 
-**Read this only when the target is a Shopify store.** Everything here is additive to the normal
+**Read this only when the target is a Shopify store.** For the ORDERED PATH from zero to a live storefront, read `shopify-runbook.md` first; this file is the reasoning behind each step. Everything here is additive to the normal
 build doctrine, never a replacement. A brochure site never loads this file and nothing in it
 applies.
 
@@ -33,7 +33,11 @@ their own catalogue in eight directions is a categorically better pitch than lor
 - **Live stores only.** A dev store answers 400 "Online Store channel is locked".
 - **It dies on the apex at cutover.** Tokenless works only on a host Shopify serves. The moment the
   domain points at Vercel, `theirdomain.com/api/...` becomes our own 404.
-- **Complexity capped at 1,000**, no per-buyer allowance, and the buyer-IP header cannot be sent.
+- **No per-buyer allowance, and the buyer-IP header cannot be sent.** A widely repeated "complexity
+  cap of 1,000" did NOT hold when tested: a tokenless query for 250 products x 100 variants x 20
+  media returned all 250 with `requestedQueryCost: 188` and no error. The Storefront API reports
+  `requestedQueryCost` but NO `throttleStatus`, unlike the Admin API, so you cannot read your own
+  headroom. Do not design against a number nobody can verify.
 
 **Never let a build reach production on tokenless.** It is a pitch-and-build capability. Production
 needs a Storefront token from the Headless channel.
@@ -170,8 +174,53 @@ confirmed case in Shopify's own feedback repo. So "no errors" is not "it worked"
 bag while the bag stays empty. Identify lines by `id`: `view_key` (API 2026-07) is ADDITIVE, and
 `id`/`lineIds` keep working.
 
+**`Cart.discountAllocations` IS ALSO DEPRECATED.** A build rendering "you saved $X" off it is
+reading a field on the way out.
+
+**`checkoutUrl` IS NOT ONE OPTION AMONG SEVERAL, IT IS THE ONLY ONE.** The Checkout APIs were
+deprecated in 2024-04 and **sunset on 1 April 2025**; they no longer function. Any tutorial, blog
+post or model output referencing `checkoutCreate`, `checkoutLineItemsAdd` or the `Checkout` object
+is dead code, which is why `gate-headless.mjs` fails a build that calls them.
+
 **Never read `CartCost.totalTaxAmount`** or its sibling tax and duty fields: deprecated since
 2025-01, and on a taxes-included store the cart can never show a tax line anyway.
+
+---
+
+## 3b. Add to bag must SHOW something, without leaving the page
+
+**The most persistent complaint on the first real build was "I still cannot add to cart", and the
+item was in the bag every single time.**
+
+Add-to-bag was a plain form POST: full page reload, then a small confirmation line above the
+button. Every mechanical check passed. `curl` returned 303, the API reported `totalQuantity: 1`,
+the cookie carried the right flags. And to the person clicking, the page flickered and looked
+identical. Nobody buys from an API response.
+
+**A confirmation the visitor has to go looking for is not a confirmation.** The bar is: after
+add-to-bag, something they can see changes, and they did not navigate anywhere.
+
+**THE PATTERN: a cart drawer, server-rendered, progressively enhanced.**
+
+1. `/api/cart/drawer` returns the cart as an **HTML fragment**, not JSON. The cart id is a
+   capability secret in an HttpOnly cookie, so the browser asks for MARKUP rather than for data it
+   would have to hold. The id never reaches client JavaScript.
+2. A document-level `submit` listener intercepts `form[data-add-to-cart]`, POSTs with `fetch`,
+   refreshes the fragment, and slides the drawer in.
+3. **The form still posts normally without JavaScript.** The listener only engages when `fetch`
+   exists, and falls back to `form.submit()` if the request throws, so the no-JS path is the
+   redirect that already worked. This is enhancement, not a dependency.
+4. The header bag link opens the drawer instead of navigating. `/cart` still exists as a real page
+   for deep links, no-JS and anyone who wants a full view.
+5. Escape closes it, focus moves in and is restored, `role="dialog"` and `aria-modal="true"`.
+
+**No framework.** About 2KB of vanilla script and one server endpoint. A React island for a cart
+drawer spends the entire framework budget on the one thing a form and a fetch already do.
+
+**And a free product is a real product.** A$0.00 renders as a price, adds to the bag, shows a
+subtotal and checks out (verified: Shopify accepts a zero-total checkout with a 200). Samples,
+digital downloads and gift-with-purchase are legitimate. **Never gate on a price being non-zero.**
+The defect worth catching is a price that renders BLANK, which is a different thing entirely.
 
 ---
 
@@ -219,6 +268,31 @@ empty catalogue as a build-time assertion failure, never as an empty state to re
 **Shopify's own docs contradict each other.** Seven direct contradictions were found live on the
 same day, including metaobject field limits given as both 40 and 64. Design against the lower
 number and never ground a build on a single doc page.
+
+---
+
+## 5b. Four build-time traps that cost an evening each
+
+Every one of these was hit on the first real storefront, and none produced an error message.
+
+**A STATIC PAGE CANNOT READ `Astro.url.searchParams`.** It is evaluated at BUILD time and is
+always empty, so a server-rendered `?added=1` banner silently never appears. This is not a
+commerce rule, it is a general Astro trap worth knowing on any build. Read the query client-side,
+or make the route on-demand and know that you did.
+
+**`productCreate` WITH `productOptions` CREATES A DEFAULT VARIANT PRICED AT ZERO.** Setting
+options is not setting prices. Fifty-six of seventy-three seeded products shipped at A$0.00 and
+the storefront rendered them correctly, which is exactly why nobody noticed. Follow every
+`productCreate` with `productVariantsBulkUpdate`, then read the price back.
+
+**A DEPENDENCY THAT ONLY EXISTS IN `node_modules` BUILDS LOCALLY AND FAILS ON THE PLATFORM.** A
+brand package written straight into `node_modules` works on the machine that wrote it and cannot
+survive a clean clone. The only signal was a deploy-failure email. Vendor it as a real local
+package with a `file:` dependency.
+
+**A PLAIN POST WITHOUT `Origin` AND `Referer` IS REJECTED BY ASTRO'S CSRF CHECK WITH A 403.** A
+real browser form sends both. Any script that exercises a cart endpoint must too, or it reports a
+broken cart on a storefront whose cart is perfect.
 
 ---
 
@@ -276,6 +350,141 @@ explicit approval, before any mutation. `scripts/seed-shopify-dev-store.mjs` is 
 it refuses outright unless the store is a development store.
 
 ---
+
+## 6c. Verify it at RUNTIME, not just in the source
+
+Static analysis of a storefront is a proxy. It can read that `httpOnly: true` appears in a file;
+it cannot tell you the cookie that actually reaches a browser carries it. Flags set in one file
+and `cookies.set()` called in another satisfy a regex and fail a buyer.
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-headless.mjs" . --runtime https://the-deployed-url
+```
+
+Nine checks that ask the storefront instead of reading it: the product page serves and carries a
+price a non-JS consumer can read, the canonical is on the wire, **the cart cookie ACTUALLY SENT
+carries HttpOnly, Secure and SameSite=Lax**, the capability secret never appears in a page, the
+cart resolves to a **Shopify-hosted** checkout URL, and `/agents.md` and `/llms.txt` genuinely
+serve rather than merely existing in `src`.
+
+Three things this taught us, each of which had produced a wrong answer first:
+
+- **A 303's body is not exposed by `fetch`**, and a leaked cart id would not be there anyway. Look
+  for it in a PAGE, which is where a drawer would inline it.
+- **A real browser form post sends `Origin` and `Referer`.** Without them Astro's CSRF check
+  answers 403, and the gate reported "no cart cookie" on a storefront whose cart was perfect.
+- **An auth wall is not a missing route.** A deployment behind Vercel's protection answers 302 for
+  every path, and calling that "this product has no page" is a false failure on a healthy site. It
+  is reported UNKNOWN, once, with the reason.
+
+**Run it against the deployed URL, not only localhost.** Deployment protection, edge redirects and
+env-var differences are all invisible locally.
+
+---
+
+## 6d. Walk the funnel. Checking parts is not checking the path.
+
+**The single most expensive lesson from building a real storefront**: the gate reported 43 checks
+clean on a store nobody could shop.
+
+The survey was clean. Routes were static. The cart cookie carried the right flags on the wire. The
+price island failed closed. The checkout URL was Shopify's. Every part passed.
+
+And a visitor landing on the home page had **no navigation, no footer, no link to a bag, no
+`/cart` page at all, and a product page with ZERO outbound links.** They could add to a cart and
+then were stranded, permanently, with no way to see it or pay.
+
+Nothing was broken. Everything was missing. Those fail differently and only a walk finds the second.
+
+So `gate-headless.mjs --runtime` now walks it:
+
+| Check | The question |
+|---|---|
+| `W1-*-is-a-dead-end` | can a visitor LEAVE this page? |
+| `W2-*-bag-reachable` | is the bag linked from every page, or is add-to-cart a trap? |
+| `W3-cart-page` | does `/cart` exist and offer a route to pay? |
+| `W4-*-chrome` | is there a header and a footer, where nav and the bag live? |
+| `R9-unresolved-tokens` | is a scaffold `{{TOKEN}}` being SERVED to a visitor? |
+
+**A storefront needs these before it needs anything clever.** Header with collections and a bag
+count, footer, `/cart` with quantity edit, remove and a checkout button, `/search`, a collections
+index, and a product page that links back to its collection and to the bag. If a build has the
+plumbing and not these, it is not a store yet.
+
+**And take the walk yourself.** Open the deployed URL, click from the home page to a product, add
+it, find the bag, reach checkout. Whatever you cannot do is the defect list. That walk found every
+item above in about ninety seconds, and no amount of check-writing had found any of them.
+
+---
+
+## 6e. Going headless SPLITS their analytics, and only one half reports the loss
+
+Checkout stays on Shopify. So `checkout_started`, `checkout_completed` and every checkout-side
+pixel keep firing exactly as before, and the revenue dashboard looks untouched. The storefront
+does not: a custom front end is **not on the list of surfaces permitted to publish standard
+events** (Liquid theme files, theme app extensions, checkout UI extensions and customer account
+UI extensions are the whole list), so `page_viewed`, `product_viewed`, `collection_viewed`,
+`search_submitted` and `product_added_to_cart` stop arriving.
+
+**The merchant keeps their conversions and loses their funnel, and nothing reports a fault.**
+They find out weeks later when someone asks why traffic fell off a cliff while sales did not.
+Say this out loud during qualification, not after launch. Restoring measurement is a cost of
+headless, in the same column as `/agents.md`.
+
+Four rules that follow:
+
+- **Send `Shopify-Storefront-Buyer-IP` on every buyer-driven server-side call.** Case-sensitive.
+  Without it, in Shopify's words, "Shopify can't differentiate requests from different buyers",
+  which costs throttling headroom, bot protection, **and the buyer's logged-in checkout
+  experience**. Build-time calls have no buyer and must send nothing. Use the first entry of
+  `x-forwarded-for`, never the socket address, which is your server.
+- **One wire client.** Two copies is how a required header lands on the cart path and is
+  forgotten on the price path. This exact fault shipped here and the gate now blocks it.
+- **Consent must be able to reach checkout.** On a custom storefront `setTrackingConsent` takes
+  four extra parameters (`headlessStorefront`, `checkoutRootDomain`, `storefrontRootDomain`,
+  `storefrontAccessToken`), and Shopify is verbatim that **checkout must sit on the same root
+  domain as the storefront** or it cannot read the cookies your banner set. That is a domain
+  decision made before launch and expensive after. Consent also rides to checkout through
+  `@inContext(visitorConsent:)` from API 2025-10.
+- **`_shopify_y` and `_shopify_s` are gone.** Shopify's changelog says it stopped setting them
+  from 1 January 2026; the Hydrogen migration guide says 30 April 2026. The two disagree, so plan
+  for the earlier. `clientId` on a Web Pixels event replaces `_y`; `_s` has no replacement, so
+  mint your own session value.
+
+**UNRESOLVED, and say so rather than guessing:** no Shopify page states in either direction
+whether admin-installed pixels execute on a merchant's own headless pages. The indirect evidence
+says no (a headless front end is absent from the publishing-surfaces list, and Shopify has no
+injection point on a page it does not render), but it is inference. Do not promise a merchant
+their existing pixels will follow them.
+
+## 6f. Selling internationally, and the CMS underneath
+
+**`@inContext(country:)` SILENTLY SHRINKS THE CATALOGUE.** It does not only convert prices: it
+"automatically filters out products that aren't published for the country specified". Add the
+directive and a product count can drop with no error, no warning and a page that renders
+perfectly. If the count moves when you add a country, that is the cause.
+
+**The cart ignores it.** Verbatim: "In Cart queries and mutations the `buyer` and `country`
+arguments for `@inContext` are ignored." Set cart context with `cartCreate` or
+`cartBuyerIdentityUpdate({ countryCode })` instead, or the page quotes one currency and the
+charge lands in another. `language` and `visitorConsent` DO still apply to cart operations.
+
+**Detecting the buyer's market is your job, and Shopify says do it gently.** No automatic help
+exists off the Online Store. Signals are `accept-language`, cookies and URL params, all of which
+Shopify calls fragile for two stated reasons: page caching ignores them, and SEO bots crawl from
+the US without cookies. Shopify's recommendation is **a banner offering to switch, explicitly not
+an automatic redirect**. Give each locale its own URL (`/fr` paths or per-market domains); you
+implement that routing, admin's market settings only drive the Online Store.
+
+**Metafields are the biggest headless-only gotcha.** "This setting doesn't affect Liquid
+templates — metafields are always accessible in Liquid regardless of this setting." Storefront
+API access is opt-in per definition. So a merchant migrating off Liquid finds the fields their
+theme has always shown returning null, and the fix is in admin, not in the code being debugged.
+
+Hard limits worth knowing before promising a CMS: **20 enabled locales**, metaobject definitions
+capped at **128** per shop (256 on Plus/Enterprise), **40 fields per definition**, 1,000,000
+entries. Product tags are not translatable. `Market` is deprecated on the Storefront API's
+`Localization` and `Country`, so build on country/language/catalog context instead.
 
 ## 7. Commerce anti-patterns
 
