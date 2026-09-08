@@ -53,8 +53,10 @@ plugin: `/plugin install palate-beta@palate`.
    `build-manifest.json` and double-count MCP calls, corrupting the depth gate's
    own numbers. Install one, uninstall the other.
 7. **Run `./scripts/check-tracks.sh` before every push to this repo.** It is
-   thirteen invariants and it exits non-zero. Every failure it guards against is
-   silent, which is why it is a script and not this paragraph.
+   fifteen invariants and it exits non-zero. Every failure it guards against is
+   silent, which is why it is a script and not this paragraph. The last one reads
+   the MCP's `lib/plugin-version.ts` from `~/dev/palate/mcp-server`, or from
+   `PALATE_MCP_DIR`, and skips with the path printed when that clone is absent.
 
 ### Promoting beta to prod
 
@@ -64,8 +66,12 @@ Only when the beta track has been used in earnest and you are satisfied.
    `.claude-plugin/plugin.json` to the release version (drop `-beta.N`), push.
 2. Here: `./scripts/sync-plugin.sh` to re-vendor prod from `main`.
 3. Bump `metadata.version` and the `palate-website-builder` entry to match.
-4. `./scripts/check-tracks.sh`, then commit and push.
-5. Customers get it with `/plugin marketplace update palate`. **No reinstall,
+4. In `mcp-server`: bump `PLUGIN_VERSION` in `lib/plugin-version.ts` to the same
+   release version, and deploy it. That constant is what `palate_setup` reads back
+   to a customer asking what they are running, and it has drifted four times.
+   Step 5 fails if you skip this, which is the point of it existing.
+5. `./scripts/check-tracks.sh`, then commit and push.
+6. Customers get it with `/plugin marketplace update palate`. **No reinstall,
    and no change to any documented command**, which is the whole reason beta is
    a separate plugin rather than a rename.
 
