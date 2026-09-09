@@ -95,7 +95,7 @@ const askedRung = (() => {
 })();
 ---
 
-{show && (
+{show ? (
   <BaseLayout title="Directions to choose from" description="Explore preview" noindex={true}>
     <main class="ex">
       <header class="ex-head">
@@ -255,6 +255,29 @@ const askedRung = (() => {
         </p>
       </section>
     </main>
+  </BaseLayout>
+) : (
+  <BaseLayout
+    title="Preview closed"
+    description="This preview is no longer open."
+    noindex={true}
+  >
+    {/* WHY THIS BRANCH EXISTS: with PUBLIC_EXPLORE_MODE unset the page rendered NOTHING and
+        Astro still wrote the route, so /explore shipped as a ZERO-BYTE 200 on every build that
+        did not turn the picker on. An empty 200 is worse than a 404: a crawler indexes it, a
+        client opening the link they were sent sees a blank tab, and no gate can fail a page
+        with no <head> to read. Measured on a real build by listing dist pages by size. */}
+    <section class="ex-closed">
+      <h1>This preview is closed</h1>
+      <p>The directions that were here have been chosen. The live site is at <a href="/">the home page</a>.</p>
+    </section>
+    <style is:global>
+      .ex-closed { max-width: 40rem; margin: 0 auto; padding: 6rem 1.5rem;
+        font: 400 1rem/1.6 var(--brand-font-body, system-ui, sans-serif);
+        color: var(--brand-text, #111); background: var(--brand-bg, #fff); }
+      .ex-closed h1 { font-size: 1.75rem; font-weight: 400; margin: 0 0 0.75rem; }
+      .ex-closed a { color: var(--brand-accent, currentColor); }
+    </style>
   </BaseLayout>
 )}
 

@@ -161,7 +161,11 @@ list_files() {
     else
       find "$proj" -type f -name "$g" 2>/dev/null
     fi
-  done | grep -v -E '/(node_modules|\.git|\.claude|dist|\.astro|\.vercel|\.wrangler|\.output|_explore-archive)/' | sort -u
+  # .palate holds GENERATED artefacts: the flattened canvas seed, the archived board renders,
+  # the crawl. They are machine output, not this build's source, and the flattened seed inlines
+  # a whole Tailwind reset, so linting it reported thousands of findings about somebody else's
+  # stylesheet and buried the real ones. Same reason dist and .astro are here.
+  done | grep -v -E '/(node_modules|\.git|\.claude|\.palate|dist|\.astro|\.vercel|\.wrangler|\.output|_explore-archive)/' | sort -u
 }
 
 # Run one rule against one file via perl PCRE. Emits TSV: file\tline\tseverity\trule\ttext

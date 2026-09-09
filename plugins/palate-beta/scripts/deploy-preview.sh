@@ -34,11 +34,24 @@ echo "linking Vercel project '${PROJECT}'..."
 vercel link --yes --project "$PROJECT" >/dev/null
 
 # Idempotent env upsert (vercel env add errors if the key exists).
+#
+# THE VALUE GOES IN --value, NEVER ON STDIN. The CLI used to read the value from stdin; from
+# v54 it answers `{"status":"action_required","reason":"git_branch_required"}` and exits
+# non-zero instead, so under `set -e` the whole deploy died BEFORE printing a URL, on a line
+# that looked like it had worked. Measured on vercel 54.4.1 against a real project.
+#
+# It can still refuse: a project with no linked Git repository has no branch to attach a
+# preview variable to, and the CLI asks for one it cannot infer. That is not fatal here, so
+# the failure is REPORTED and the build-time value is passed on the deploy instead
+# (see BUILD_ENV below). A preview that deploys with the right values beats a preview that
+# does not deploy at all.
 upsert_env() {
   local key="$1" value="$2" target="$3"
   [ -n "$value" ] || return 0
   vercel env rm "$key" "$target" --yes >/dev/null 2>&1 || true
-  printf '%s' "$value" | vercel env add "$key" "$target" >/dev/null
+  if ! vercel env add "$key" "$target" --value "$value" --yes >/dev/null 2>&1; then
+    echo "note: could not store $key on the project (no linked Git branch?); passing it at build time instead" >&2
+  fi
 }
 
 # Build-time vars for the PREVIEW environment. No Sanity project yet, so the
@@ -48,7 +61,15 @@ upsert_env PUBLIC_SANITY_VISUAL_EDITING_ENABLED "false"       preview
 upsert_env PUBLIC_EXPLORE_MODE "$EXPLORE"                      preview
 
 echo "deploying preview (explore=${EXPLORE})..."
-URL=$(vercel deploy --yes | tail -1)
+# --build-env is what actually binds these for THIS deployment, whether or not the project
+# env store accepted them above. PUBLIC_SITE_ENV is stated explicitly so the contact
+# endpoint's smoke guard knows this build is not production: an unknown environment is
+# closed, and a closed guard on a preview makes the post-deploy form check unrunnable.
+URL=$(vercel deploy --yes \
+  --build-env PUBLIC_EXPLORE_MODE="$EXPLORE" \
+  --build-env PUBLIC_SANITY_VISUAL_EDITING_ENABLED=false \
+  --build-env PUBLIC_SITE_ENV=preview \
+  | grep -oE 'https://[a-z0-9.-]+\.vercel\.app' | tail -1)
 [ -n "$URL" ] || { echo "DEPLOY_FAIL: no URL returned by vercel deploy" >&2; exit 1; }
 
 # Make the link open for ANYONE (a client not on the Vercel team) - fully

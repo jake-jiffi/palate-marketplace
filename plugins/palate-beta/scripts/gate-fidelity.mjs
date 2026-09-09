@@ -146,7 +146,46 @@ if (!heroIds.length) {
 }
 const heroSectionId = heroIds[0];
 const sectionIdsOfPick = existsSync(sectionRenderPath) ? sectionIds(readFileSync(sectionRenderPath, "utf8")) : heroIds;
-const innerSectionId = sectionIdsOfPick.length > 1 ? sectionIdsOfPick[sectionIdsOfPick.length - 1] : null;
+
+/**
+ * WHICH SECTION THE BOARD IS OFFERING.
+ *
+ * The registry names it. `Variant.section` is a required field precisely so a board can say
+ * which inner section is its argument, and `<slot name="section">` is where BoardFrame puts it.
+ *
+ * This used to take the LAST data-section-id in the render, on the reasoning that the render is
+ * what exists and a convention is only a promise about what somebody typed. That reasoning is
+ * right about the ids and wrong about WHICH id: a board renders hero, its section, and a proof
+ * block, so "last" is the proof every time. Measured on a real build: b3 registers
+ * `section: "process"`, the composed home lifted `b3-process`, and the gate reported the pick
+ * "quietly overruled" because the last mark on b3's board is `b3-proof`. A false failure on an
+ * honest build teaches people to stop reading the gate.
+ *
+ * So: read the registry, then CONFIRM the id it names is actually in the render. The registry
+ * decides which section; the render still decides whether it exists. A registry that names a
+ * section the board never rendered falls back to positional, which is the old behaviour and is
+ * better than nothing.
+ */
+function registeredSectionId(variantId) {
+  const src = ["src/lib/variants.ts", "src/lib/variants.js"]
+    .map((f) => join(dir, f))
+    .find((f) => existsSync(f));
+  if (!src) return null;
+  let text = "";
+  try { text = readFileSync(src, "utf8"); } catch { return null; }
+  // The variant's own object literal, from its id to the next id (or the end).
+  const at = text.indexOf(`id: "${variantId}"`);
+  if (at < 0) return null;
+  const nextId = text.indexOf('id: "', at + 6);
+  const block = text.slice(at, nextId > at ? nextId : text.length);
+  const m = block.match(/\bsection:\s*["'`]([^"'`]+)["'`]/);
+  if (!m) return null;
+  const named = `${variantId}-${m[1]}`;
+  return sectionIdsOfPick.includes(named) ? named : null;
+}
+const innerSectionId =
+  registeredSectionId(sectionPick.variant_id) ??
+  (sectionIdsOfPick.length > 1 ? sectionIdsOfPick[sectionIdsOfPick.length - 1] : null);
 
 /**
  * The tag-and-first-class skeleton of a chunk of markup.
