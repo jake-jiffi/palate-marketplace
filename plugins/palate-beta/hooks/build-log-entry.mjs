@@ -31,5 +31,9 @@ export function buildLogEntry(m, faces) {
   // diversification reader. The per-surface REJECT signal is the shown-minus-pick
   // complement, derived later, not stored redundantly.
   if (m.explore && typeof m.explore === "object") entry.explore = m.explore;
+  // A build whose gates were switched off must not sit in cross-build memory looking like one
+  // that cleared them: gate-novelty reads these entries to judge later builds. Present only
+  // when it is true, so an ordinary entry keeps its lean shape and the field means something.
+  if (m.gates && m.gates.state === "off") entry.gates_off = true;
   return entry;
 }

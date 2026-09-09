@@ -37,6 +37,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { buildIndex } from './palate-index.mjs';
 import { writeBaseline, readBaseline } from './palate-contract.mjs';
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 const HERE = resolve(fileURLToPath(import.meta.url), '..');
 const mod = (rel) => import(pathToFileURL(join(HERE, rel)).href);
@@ -199,4 +200,4 @@ async function main() {
   console.log(`\npalate-baseline: ${routes.length} route(s) baselined into .palate/baselines/`);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();

@@ -1,0 +1,22 @@
+---
+// EXAMPLE board section: the one INNER section board b1 shows beneath its hero.
+//
+// One section, chosen because it is the one this business is judged on (a menu for a
+// restaurant, proof for a clinic, services for a trade). Showing all of them would make the
+// board a home page again, and the point of a board is that the direction is legible from the
+// entrance plus the section that carries the work.
+//
+// The id it registers (`section: "services"` in src/lib/variants.ts) is what the fidelity gate
+// looks for in the composed home page, so the two must agree.
+import SectionMark from "../SectionMark.astro";
+---
+<section class="bg-brand-bg relative px-6 py-20">
+  <SectionMark id="b1-services" />
+  <div class="mx-auto max-w-5xl">
+    <h2 class="font-display text-brand-text text-3xl">What we do</h2>
+    <p class="text-brand-muted mt-3 max-w-2xl">
+      Replace with the real services, in this direction's structure. Three to six blocks is the
+      usual shape; the density and the rhythm are part of what the client is choosing.
+    </p>
+  </div>
+</section>

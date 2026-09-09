@@ -27,7 +27,9 @@ list below says where each piece lives so it is never hand-rebuilt.
   `public/` during Phase F provisioning, and the publish workflow pings search
   engines. Not templated because the key is per-project.
 - **Performance** - SSR on Cloudflare Workers; published responses are
-  edge-cached, preview responses are `no-store`. Lighthouse 100 is the baseline.
+  edge-cached, preview responses are `no-store`. What is MEASURED is a local
+  throttled lab run of Core Web Vitals on the home route
+  (`references/testing.md`); nothing here runs Lighthouse.
 
 The AI-crawler readiness (robots + llms.txt + clean JSON-LD) is deliberate:
 clients increasingly get discovered via AI answers, not just search.

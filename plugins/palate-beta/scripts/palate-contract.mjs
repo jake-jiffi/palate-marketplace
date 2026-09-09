@@ -54,8 +54,8 @@
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { buildIndex, blastRadius } from './palate-index.mjs';
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 export const VERDICT = { MERGE: 'merge', REVIEW: 'review', BLOCK: 'block', HEAL: 'heal' };
 
@@ -297,4 +297,4 @@ function main() {
   console.log(`blocking           : ${p.blocking.join(', ')}`);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();

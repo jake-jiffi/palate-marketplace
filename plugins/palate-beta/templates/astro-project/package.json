@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "astro dev",
+    "dev": "PUBLIC_SITE_ENV=preview astro dev",
     "build": "astro build",
     "preview": "vercel dev",
     "deploy": "vercel deploy --prod",
@@ -38,7 +38,8 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vite": "^8"
   },
   "overrides": {
     "vite": "^8"

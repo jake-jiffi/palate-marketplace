@@ -37,6 +37,82 @@ so an embedded Sanity Studio preview iframe still works if a CMS is added),
 Vercel env conventions, and `.github/workflows/ci.yml` only. A default build
 does NOT run any host switch.
 
+### The Content-Security-Policy
+
+**What this policy is worth, plainly: it is a host allowlist, not protection against injected
+script.** `script-src` carries `'unsafe-inline'` because a static Astro build ships inline
+script it does not control and cannot nonce, and Vercel reads `vercel.json` from the repository
+rather than from build output, so a hash would be hand-committed and go stale. So the policy
+stops a script, a frame or a form reaching a host that is not on the list, and it does not stop
+inline script that reaches the page. Do not describe it to a client as XSS protection.
+
+`vercel.json` and `templates/host-cloudflare/_headers` serve the SAME policy, and they are
+edited together: two hosts disagreeing about what one site may load is a bug that only shows
+up after a host switch. It is built from the hosts the template actually loads in a browser,
+which is Humblytics (the analytics script, with its own subdomains allowed to connect because
+the beacon endpoint is not knowable from the template) and Cloudflare Turnstile, which also
+needs `frame-src` because the widget renders in an iframe. Resend is a server-side fetch from
+`src/pages/api/contact.ts` and is deliberately absent: widening the policy for a request the
+browser never makes is how a CSP stops describing anything. Both `style-src` and `script-src`
+carry `'unsafe-inline'`: `style-src` because Astro inlines small stylesheets, `script-src` for
+the measured reason above.
+
+**The Vercel Toolbar sources are on the Vercel policy and not on the Cloudflare one.** Vercel
+injects the Toolbar into preview HTML, and its Comments are the headline win for client review
+below, so a policy without it would ship a document promising a feature the same repository
+blocks. The list is Vercel's own, from the "Using a Content Security Policy" section of
+`vercel.com/docs/vercel-toolbar/managing-toolbar` (read 2026-09-09), and it is SIX sources
+rather than the obvious one: `https://vercel.live` on `script-src`, `connect-src`, `frame-src`,
+`style-src` and `font-src`, `wss://ws-us3.pusher.com` on `connect-src` for Comments,
+`https://assets.vercel.com` on `font-src`, and `blob:` on `img-src`. The first pass allowed the
+script, the frame and the connection and forgot the rest, which loads an unstyled toolbar with
+dead Comments: half an allowlist reads as a working feature until a client opens it. The
+Toolbar's image hosts need no entry of their own because `img-src` already allows every
+`https:` source.
+
+**AND ALL SIX ARE ON THE CLIENT'S LIVE SITE TOO, for a feature that only exists on previews.**
+`vercel.json` is one static file with one `Content-Security-Policy` header, so there is no
+production variant of it to narrow: production allows `https://vercel.live` and
+`wss://ws-us3.pusher.com` and always will, unless the header is moved to middleware and varied
+on `VERCEL_ENV`. The widening is deliberate and it is not temporary. It costs one origin the
+client does not control on script-src, which is worth saying out loud to anybody whose security
+review reads this file.
+
+None of it is on the Cloudflare overlay: there is no Vercel Toolbar on a Workers deployment.
+And none of it is derivable from the template source, which is why the derived-host test cannot
+catch a mistake here; the host comes from the platform, not from the build, so the test pins
+each source by name instead. STILL NOT MEASURED against a real preview deployment, which is
+the one place the Toolbar exists. Open the console on the first preview after this ships.
+
+**Add a third-party script or a client-side fetch and you add its host here.**
+`scripts/test/template-headers.test.sh` derives the host list from the template source and
+fails naming the host, so the failure arrives at the build rather than as a blank widget on the
+client's live site. `scripts/test/template-csp-live.test.sh` serves the built template with the
+policy enforced and fails on a single console error.
+
+**A CMS BUILD NEEDS MORE, and `scripts/add-sanity.sh` adds it.** The Studio mounts at
+`/studio` and the visual-editing overlay runs in the browser, so the overlay step extends
+whichever policy the project carries (`vercel.json` on Vercel, `public/_headers` on Cloudflare,
+since the Cloudflare switch deletes `vercel.json`) with `https://*.api.sanity.io`,
+`https://*.apicdn.sanity.io`, `https://api.sanity.io` and `https://cdn.sanity.io` on
+`connect-src`, plus `https://design-system-static.sanity.io` on `font-src`. It is idempotent,
+and it says so out loud when a project carries no policy to extend rather than passing over it.
+
+**Those hosts were measured, not reasoned about.** A real build of the overlay served under the
+base policy raised `connect-src` violations for `https://<projectId>.api.sanity.io`
+(`users/me`, `check/cors`) and `font-src` violations for the Studio's own Inter webfont on
+`design-system-static.sanity.io`, which nobody would have listed from reading the code. The base
+policy still lists only what the base template loads, because widening it for a service most
+builds never call is how a policy stops describing anything.
+
+`frame-src` names `'self'` for the same reason: an explicitly set `frame-src` does NOT fall
+back to `default-src`, so a policy listing only Turnstile would stop the site framing its own
+pages, which is exactly how Sanity's Presentation tool shows a live preview.
+
+HSTS is on the Cloudflare overlay only: Vercel sends it itself on a custom domain, Workers does
+not. Two years with subdomains, and deliberately without `preload`, which is a one-way door for
+a client's apex domain.
+
 `provision-vercel.sh` makes the whole loop hands-off:
 
 - Pushes `GITHUB_PACKAGES_TOKEN` to all environments so the Vercel build can
@@ -90,6 +166,15 @@ to both the build step AND the runtime serverless functions, so there is no
 | `PUBLIC_SANITY_VISUAL_EDITING_ENABLED` | `false` | **`true`** | `false` |
 | `SANITY_API_WRITE_TOKEN` (used by `/api/contact` + seed scripts) | yes | yes | optional |
 | `RESEND_API_KEY`, `TURNSTILE_SECRET` | yes | yes | optional |
+| `PALATE_SMOKE_SECRET` (the post-deploy form round trip) | yes | no | no |
+
+`PALATE_SMOKE_SECRET` is read at RUNTIME on both hosts, and it was not always: the endpoint used
+to fall back to `import.meta.env`, which Vite bakes at build, so on Vercel a value set in the
+dashboard after the deploy did nothing and a rotation silently did not take. The handler layers
+`process.env` over the baked object on the node runtime, so setting or rotating it takes effect
+on the next invocation with no redeploy. On Cloudflare it arrives as a Worker secret through
+`locals.runtime.env`. The PUBLIC_ vars above are a different matter and are genuinely baked:
+`PUBLIC_SITE_ENV` is read from the build and changing it DOES need a redeploy.
 
 `scripts/provision-vercel.sh` pushes all of these via `vercel env add`,
 idempotently (it removes any existing value first).

@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "astro dev",
+    "dev": "PUBLIC_SITE_ENV=preview astro dev",
     "build": "astro build",
     "preview": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "PUBLIC_SITE_ENV=production npm run build && wrangler deploy",
     "typecheck": "astro check"
   },
   "dependencies": {

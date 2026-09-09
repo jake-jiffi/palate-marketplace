@@ -9,6 +9,12 @@
 //   </section>
 //
 // The parent section needs `position: relative` for the label to anchor.
+//
+// `data-palate-mark` DECLARES THIS AS SCAFFOLDING. The badge sets a monospace face nothing in
+// the design chose, and it sits INSIDE the hero, so gate-fidelity comparing the board's hero
+// against the composed home's found "missing ui-monospace" on an honest build: the board has
+// the badge and the composed page never does. An attribute that says what the element IS beats
+// a selector guessing from its tag or its position.
 interface Props {
   id: string;
 }
@@ -19,6 +25,7 @@ const show = import.meta.env.PUBLIC_EXPLORE_MODE === "true";
   <span
     class="pointer-events-none absolute left-2 top-2 z-40 rounded bg-black/80 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white"
     data-section-id={id}
+    data-palate-mark
   >
     {id}
   </span>

@@ -131,7 +131,58 @@ grep -rn --exclude-dir=node_modules -F "<each value>" "$SITE/src" | grep -v "src
 Any hit outside the record is a finding: that surface will go stale the next time the fact changes,
 and it will be the surface a customer acts on.
 
-## 6. Orphans and dead internal links
+## 6. Facts the site argues with itself about
+
+Section 5 asks whether a fact was FORKED out of the record. This asks the other half: whether
+the site states two different values for the same thing. A number typed straight into two
+hand-written pages was never in the record, so the fork check cannot see it, and a real build
+of about 3,400 pages said "42 reviews" in some places and "41 reviews" in others for exactly
+that reason.
+
+```bash
+node "$PALATE/scripts/gate-facts.mjs" "$SITE"; echo "exit=$?"
+```
+
+Advisory, and it stays advisory here: it exits 0 whatever it finds, because two values can be
+right at once (a second location, a franchise page, a figure that is genuinely per branch).
+Read the wording, not the exit code:
+
+- **clean** no label carries two values. The line says how many pages and how many labelled
+  values it read; quote both, because clean over twenty values and clean over none are
+  different claims and the second one is a skip wearing a pass.
+- **N disagreement(s)** each one names the label, both values, and a page carrying each. Put
+  them under REVIEW, never under BLOCKING: the answer is a question for the owner, not a fix.
+- **2** it could not check, which covers three things: there is no built output, the output
+  holds no indexable page, or the path given was the Palate plugin rather than a site. It says
+  which. Nothing was compared either way, so do not record it as clean.
+
+Dated content is excluded by design, so a 2019 post quoting the review count of the day is
+never quoted back at the owner. So is anything inside a code block. Structured data is not
+read either: `businessJsonLd()` builds it from the record, so it cannot disagree with the
+record, and section 5 owns that question.
+
+A label carrying more than three values is a LIST, not a claim: a rating on every product card,
+say. Phone numbers are ALWAYS a list, whatever the count, because a business can legitimately
+have a landline, a mobile, a fax and a depot and every one of them is right. Those labels are
+named on the same line and set aside rather than reported. If a label you expected to see is in
+that clause, that is the reason, and a genuine clash can hide under one, so look:
+
+```bash
+node "$PALATE/scripts/gate-facts.mjs" "$SITE" --all
+```
+
+That prints the set-aside labels with every value and the pages carrying each. Read it whenever
+the clean line names one, and put anything real under REVIEW with the rest. The phone list is
+worth reading every sweep: an old number left behind on one page is a real fault and this is the
+only place it now shows, beside section 9's question about whether the number is still current.
+
+Two other things it will not tell you. Trading hours are read only where the page says they are
+the trading hours, so a timetable, an inspection schedule or a market stall is passed over, and
+so is an hours line that carries no opening word at all. And Explore scaffolding (`/explore`,
+`/boards/*`, `/vN`) is not inspected: the rungs differ in their copy on purpose and are deleted
+before hand-over.
+
+## 7. Orphans and dead internal links
 
 Both come straight out of the index, no extra work:
 
@@ -145,7 +196,7 @@ node -e 'const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
   each one and ask whether it is deliberate. A published page nothing links to is usually a page
   someone forgot, and a page nothing links to is a page nothing ranks.
 
-## 7. Stale content
+## 8. Stale content
 
 Read `entries` out of the index:
 
@@ -156,7 +207,7 @@ Read `entries` out of the index:
 - **Future-dated entries.** The content config guards against these, so one that exists is a
   YAML rollover, not an intention.
 
-## 8. Expiring facts
+## 9. Expiring facts
 
 Everything in `src/lib/business.ts` that decays on its own:
 
@@ -172,7 +223,7 @@ node -e 'const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
 - `telephone` and `email`: check the format is still E.164 and the address' domain still resolves.
 - `serviceAreas` and `services`: list them and ask whether the business still does all of it.
 
-## 9. Report
+## 10. Report
 
 Rank by what it costs, not by how easy it is to fix. Crawler parity and dead links first,
 because those cost traffic; opening hours next, because those cost a customer.
@@ -189,6 +240,7 @@ BLOCKING
   dead link        /services/plumbing linked from /, no route serves it
 
 REVIEW
+  fact clash       reviews: / says 42, /about says 41. One of them is stale
   orphan           /v1 is published and nothing links to it (Explore leftover?)
   sameAs           https://facebook.com/example 404s; the schema claims it exists
   stale draft      "Winter service reminder" draft since 2026-04-02

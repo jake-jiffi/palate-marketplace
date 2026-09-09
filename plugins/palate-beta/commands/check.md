@@ -10,6 +10,13 @@ every contribution, so it is scoped to the diff and nothing else.
 checkout, so use the checkout root. `$SITE` is the project directory (the first argument if it
 is a directory, else the current directory).
 
+**`$SITE` must be a site, and the plugin is not one.** If no directory was given and the working
+directory holds no `package.json` plus `src/pages`, and no `build-manifest.json` whose `project`
+is this directory, stop and ask for the site path. Do not run the gates against the current
+directory to see what happens: run from a plugin checkout they measure the plugin, whose doctrine
+QUOTES the tells the lint hunts and whose templates carry `{{PLACEHOLDER}}` tokens on purpose.
+The gates refuse it themselves now (`refused:`, exit 2); this is so you never ask them to.
+
 ## 1. Work out what changed
 
 Use `$ARGUMENTS` if it names files. Otherwise take the working tree:
@@ -202,5 +209,15 @@ can say what was caught rather than only what shipped:
 ```json
 {"at":"<iso>","verdict":"review","grounding":"grounded","class":"content","routes":["/blog"],"caught":[{"lane":"a11y","route":"/blog/welcome","what":"contrast 4.1:1"}],"healed":["voice/em-dash"]}
 ```
+
+**Say when the gates were off.** If `build-manifest.json` carries `gates.state == "off"`, print
+this line above the verdict, every time:
+
+```
+Gates were OFF for this build at <gates.at>. Nothing below was enforced.
+```
+
+`PALATE_GATE_OFF=1` is a legitimate bypass and the hooks record it when they take it. A verdict
+computed with the gates disabled must never read like one computed with them on.
 
 Never print a taste percentile here. This command did not compute one.

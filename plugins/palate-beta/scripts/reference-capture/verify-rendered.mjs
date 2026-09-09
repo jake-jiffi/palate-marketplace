@@ -30,17 +30,26 @@
  *   node verify-rendered.mjs --url <base> [--routes /,/contact,/blog] [--out <dir>]
  *
  * Exit codes:
- *   0  clean (no finding at or above High)
+ *   0  clean (no finding at or above High), on a run that rendered at least one route
  *   1  findings at or above High
- *   2  bad arguments
+ *   2  bad arguments, OR every selected route was unchanged and no route was rendered: the run
+ *      is SKIPPED, not passed, and says so
  *   3  a browser could not be launched - the gate is BLOCKED, never a pass
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'fs';
+import { createHash } from 'crypto';
+import { dirname, isAbsolute, join, relative, resolve } from 'path';
 // Commerce route resolution lives with the survey that produces the catalogue.
 // It is a NO-OP without one, so a brochure build is untouched.
 import { resolveDynamic } from '../palate-shopify.mjs';
+// The content graph already knows which routes a changed file can reach, and it fails wide
+// when it cannot tell. Imported rather than reimplemented: two answers to "what does this
+// change affect" is how a narrowed gate ends up narrower than the change.
+import { blastRadius } from '../palate-index.mjs';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { execFileSync } from 'child_process';
 import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
 import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
 import { score as scoreRubric } from './rubric.mjs';
@@ -93,7 +102,8 @@ function routesFromIndex(indexPath) {
     const reps = [...bySource.values()];
     const picked = [...reps, ...statics];
     return {
-      routes: picked.map((r) => r.path),
+      index: idx,
+      picked,
       reps: reps.length,
       collapsed: dynamic.length - reps.length,
       statics: statics.length,
@@ -102,29 +112,408 @@ function routesFromIndex(indexPath) {
   } catch { return null; }
 }
 
+/**
+ * Rebuild the content index in place. NEVER FATAL: a build with no src/pages, a missing script
+ * or a parse failure leaves whatever index is already there and says what happened, because a
+ * stale index is worse than none only when nobody is told.
+ */
+function rebuildIndex(projectRoot, indexPath) {
+  const script = fileURLToPath(new URL('../palate-index.mjs', import.meta.url));
+  try {
+    execFileSync(process.execPath, [script, projectRoot, '--out', resolve(indexPath)], { stdio: 'pipe' });
+    console.error(`verify-rendered: --changed rebuilt ${indexPath} first, so the blast radius and the route hashes read current source.`);
+  } catch (e) {
+    console.error(
+      `verify-rendered: could not rebuild ${indexPath} (${(e?.message ?? e).toString().split('\n')[0]}). ` +
+      'The blast radius and the route hashes are read from the index ALREADY on disk, which may be stale. ' +
+      'Run palate-index.mjs yourself, or use --full.',
+    );
+  }
+}
+
+/**
+ * WHICH OF THE SELECTED ROUTES A SET OF CHANGED FILES CAN REACH.
+ *
+ * The gate had no memory, so every re-run after every fix paid for the whole site again: one
+ * pass ran past thirty minutes, a check failed at minute twenty-five, and the next pass
+ * re-shot all of it because one file had changed. `--changed` is the answer, and the only way
+ * it can be worse than no narrowing at all is by narrowing WRONG.
+ *
+ * So it fails wide three times over. A file the index has never heard of takes every route
+ * and SAYS which file did it, because silence would read as a clean narrow. A change that
+ * reaches nothing takes every route rather than rendering none, because a gate that inspected
+ * nothing must never look like one that passed. And the blast radius itself comes from
+ * palate-index.mjs, which already falls wide on a config file and on a dynamic import its
+ * parser cannot see.
+ *
+ * A WIDE FALL ALSO SETS THE RECORDS ASIDE, and that is the half the first version missed. It
+ * printed "falling wide", took every route, and then the unchanged-route skip threw nine of
+ * eleven of them away: an unknown file is precisely one whose effect on the hashes is unknown
+ * too, so the routes it touches hash as unchanged and are skipped. The run said it had widened
+ * and rendered the two routes with no record, neither of them one the operator had edited.
+ */
+function narrowToChanged(index, picked, files) {
+  const known = (f) => index.routes.some((r) => r.source === f || (r.dependsOn || []).includes(f))
+    || (index.entries || []).some((e) => e.file === f);
+  const unknown = files.filter((f) => !known(f));
+  for (const f of unknown) console.error(`verify-rendered: ${f} is not in the index, falling wide`);
+  const wide = (why) => {
+    console.error(`verify-rendered: the unchanged-route records are set aside for this run, because ${why}.`);
+    return { picked, concrete: new Map(), wide: true };
+  };
+  if (unknown.length) return wide('a changed file could not be placed in the index, so its effect on any route hash is unknown');
+
+  const blast = blastRadius(index, files);
+  // A dynamic template is selected by its own path (`/blog/[slug]`) while the blast radius names
+  // the PAGE (`/blog/winter-pipes`). Keeping the template alone meant the gate fetched the
+  // literal bracket path, got the site's 404, and recorded a pass for a page it never opened.
+  const concrete = new Map();
+  const hit = picked.filter((r) => {
+    if (blast.includes(r.path)) return true;
+    if (r.kind !== 'dynamic') return false;
+    const stem = r.path.replace(/\/\[[^\]]+\]$/, '') + '/';
+    const page = blast.find((b) => b.startsWith(stem));
+    if (!page) return false;
+    concrete.set(r.path, page);
+    return true;
+  });
+  if (!hit.length) return wide('the change reaches no route in the index, and rendering nothing must never look like a pass');
+  console.error(`verify-rendered: --changed ${files.join(', ')} is a blast radius of ${hit.length} of ${picked.length} route(s).`);
+  return { picked: hit, concrete, wide: false };
+}
+
+/**
+ * A changed file as the INDEX spells it. An editor hands over an absolute path and the index
+ * stores paths relative to the project, so `/Users/.../src/components/ServiceCard.astro` read
+ * as a file the index had never heard of, fell wide, and then skipped the very routes that
+ * import it. Anything outside the project is left alone: it is genuinely unknown.
+ */
+function toProjectRelative(root, f) {
+  const raw = f.replace(/^\.\//, '');
+  if (!isAbsolute(raw)) return raw;
+  const rel = relative(root, raw);
+  return rel && !rel.startsWith('..') ? rel : raw;
+}
+
+/**
+ * The page a dynamic template actually serves, from the index's own entries.
+ *
+ * `resolveDynamic` maps a template to a real handle from a Shopify catalogue and does nothing
+ * on a brochure build, so `/blog/[slug]` was fetched literally, returned the site's 404, and
+ * was recorded as a pass. The entries carry the ids palate-index wrote, so a blog can answer
+ * the same question a catalogue answers for a store. Only a single trailing `[param]` is
+ * substituted, and only when the route names one collection: anything less certain keeps the
+ * literal path rather than inventing a URL.
+ *
+ * PUBLISHED ONLY, and the first version had a draft fallback that a sweep of the shipped
+ * template caught immediately. The scaffold's one post ships as a draft, so nothing is built
+ * for it, and substituting it swapped a literal path that 404s for an invented path that
+ * 404s: three Highs on a route that does not exist. A template with no published entry has no
+ * page, and the caller drops it and says so.
+ */
+function publishedPageFor(route, entries, root, fromBlast) {
+  if (route.kind !== 'dynamic' || !/\/\[[^\]]+\]$/.test(route.path)) return null;
+  const names = collectionsFor(route, root).filter((n) => n !== '*');
+  const live = entries.filter((e) => e.draft !== true && (names.length !== 1 || e.collection === names[0]));
+  if (fromBlast) {
+    // The blast radius names the page for a CHANGED entry. A changed draft still has no page.
+    const id = fromBlast.split('/').filter(Boolean).pop();
+    return live.some((e) => e.id === id) ? fromBlast : null;
+  }
+  if (names.length !== 1) return null;
+  const entry = live.find((e) => e.collection === names[0]);
+  return entry ? route.path.replace(/\[[^\]]+\]$/, entry.id) : null;
+}
+
+/**
+ * THE GLOBAL INPUTS: the shared files that change what EVERY route renders and that no
+ * route's import closure necessarily names.
+ *
+ * The closure alone was not enough, and the gap was the dangerous kind. Edit the brand
+ * tokens, globals.css, the shared layout, astro.config or a dependency and every route's
+ * own source is byte-identical, so every passing record stays valid and a plain re-run
+ * skips the whole site while the rendered output has moved underneath it. Relying on
+ * somebody remembering --full is not a safeguard, it is the shape of every silent skip
+ * this product has shipped.
+ *
+ * So the digest below is folded into every route's hash: one shared byte changes and no
+ * record survives. It reads the config and the lockfile, everything under src/styles and
+ * src/layouts, and the CSS those layouts import from anywhere, which is how the brand
+ * package's tokens.css and fonts.css are reached without hardcoding a package name.
+ *
+ * A file that is absent contributes nothing, so DELETING one changes the digest as surely
+ * as editing it does.
+ */
+const GLOBAL_FILES = [
+  'astro.config.mjs', 'astro.config.ts', 'astro.config.js', 'astro.config.cjs',
+  'package.json', 'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb',
+];
+// `src/pages/api` IS A GLOBAL INPUT, and it is the one entry here that is not shared styling.
+// A page that carries the contact form does not import the endpoint: it posts to a URL. So the
+// endpoint sits in no route's import closure, every page hashes the same after it is edited,
+// and the form round trip below would be skipped on precisely the run where the endpoint is
+// what moved. Over-reading costs a render; under-reading costs the whole point of the probe.
+const GLOBAL_DIRS = ['src/styles', 'src/layouts', 'src/pages/api'];
+
+function walkFiles(dir, out = []) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) walkFiles(p, out); else out.push(p);
+  }
+  return out;
+}
+
+/**
+ * The CSS a layout imports, resolved to real files.
+ *
+ * NODE'S RESOLVER, NOT A PATH JOIN, and the difference was a whole silent hole. A bare
+ * specifier used to become `node_modules/<spec>` and was kept only if that path existed. The
+ * brand package publishes `tokens/tokens.css` and `fonts/fonts.css` and exposes the short
+ * names through an `exports` map, so `@palate-projects/<slug>-brand/tokens.css` is never on
+ * disk: both files dropped out of the digest on every real build while the docs promised that
+ * editing the brand tokens re-renders the site. `createRequire().resolve()` honours `exports`
+ * for any subpath, `.css` included.
+ *
+ * AND AN IMPORT THAT CANNOT BE RESOLVED IS NAMED. That is the whole lesson of the defect: the
+ * exclusion was correct-looking code doing nothing, with nothing printed.
+ */
+function importedCss(root, layoutFiles) {
+  const out = new Set();
+  const unresolved = [];
+  const req = createRequire(resolve(root, 'package.json'));
+  for (const f of layoutFiles) {
+    let src;
+    try { src = readFileSync(f, 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(/import\s+["']([^"']+\.css)["']/g)) {
+      const spec = m[1];
+      let cand = null;
+      if (spec.startsWith('.')) cand = resolve(dirname(f), spec);
+      else if (spec.startsWith('@/')) cand = resolve(root, 'src', spec.slice(2));
+      else {
+        try { cand = req.resolve(spec); }
+        catch { const p = resolve(root, 'node_modules', spec); cand = existsSync(p) ? p : null; }
+      }
+      if (cand && existsSync(cand)) out.add(cand);
+      else unresolved.push(`${spec} (in ${relative(root, f)})`);
+    }
+  }
+  if (unresolved.length) {
+    console.error(
+      `verify-rendered: ${unresolved.length} layout CSS import(s) could not be resolved and are NOT in the ` +
+      `global digest, so editing them will not invalidate any record: ${unresolved.join(', ')}.`,
+    );
+  }
+  return [...out];
+}
+
+function globalInputsHash(root) {
+  const layouts = walkFiles(resolve(root, 'src/layouts'));
+  const files = [
+    ...GLOBAL_FILES.map((f) => resolve(root, f)).filter((p) => existsSync(p)),
+    ...GLOBAL_DIRS.flatMap((d) => walkFiles(resolve(root, d))),
+    ...importedCss(root, layouts),
+  ];
+  const uniq = [...new Set(files)].sort();
+  const h = createHash('sha256');
+  for (const p of uniq) {
+    let body;
+    try { body = readFileSync(p); } catch { continue; }
+    h.update(relative(root, p)); h.update('\0'); h.update(body); h.update('\0');
+  }
+  return { hash: h.digest('hex'), count: uniq.length };
+}
+
+/**
+ * THE CONTENT A ROUTE RENDERS, which its import closure never names.
+ *
+ * `closure()` follows imports, and a page does not import the markdown it renders: it asks
+ * for it by collection name. So blastRadius mapped `src/content/blog/x.md` to the post's
+ * route and its listing exactly as its own comment promises, and then the skip compared a
+ * hash that had never read the post, found it unchanged, and printed "unchanged, skipped"
+ * for the very routes the operator had just named. Exit 0, nothing rendered, on any build
+ * with a blog.
+ *
+ * The collection is read the way gate-seo reads it, from a literal getCollection call, and
+ * across the closure rather than the route file alone, because a listing is often rendered by
+ * a component. A route that reaches `content.config.ts` without naming a collection folds in
+ * EVERY entry: that is the third case blastRadius selects, and over-reading there costs a
+ * render while under-reading costs the whole point of the gate.
+ *
+ * Digests are memoised per collection, so a 200-post blog is read once and not once per route.
+ */
+const COLLECTION_CALL = /\bget(?:Collection|Entry|EntryBySlug)\s*\(\s*["'`]([\w-]+)["'`]/g;
+const collectionDigests = new Map();
+
+function collectionsFor(route, root) {
+  const names = new Set();
+  let reachesConfig = false;
+  for (const f of [route.source, ...(route.dependsOn || [])].filter(Boolean)) {
+    if (/content\.config\.(ts|js|mjs)$/.test(f)) reachesConfig = true;
+    let src;
+    try { src = readFileSync(resolve(root, f), 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(COLLECTION_CALL)) names.add(m[1]);
+  }
+  if (!names.size && reachesConfig) names.add('*'); // every entry: see above
+  return [...names].sort();
+}
+
+function collectionDigest(root, entries, name) {
+  if (!collectionDigests.has(name)) {
+    const h = createHash('sha256');
+    const mine = entries.filter((e) => name === '*' || e.collection === name);
+    for (const e of mine.sort((a, b) => a.file.localeCompare(b.file))) {
+      let body;
+      try { body = readFileSync(resolve(root, e.file)); } catch { body = Buffer.from('<unreadable>'); }
+      h.update(e.file); h.update('\0'); h.update(body); h.update('\0');
+    }
+    collectionDigests.set(name, h.digest('hex'));
+  }
+  return collectionDigests.get(name);
+}
+
+/**
+ * The identity of a route's SOURCE: the global inputs above, its own file, its whole import
+ * closure (which the index has already computed) and the content entries it renders. Two runs
+ * over the same bytes get the same hash, so "has this route changed since it last passed" is
+ * answered by a comparison rather than by a clock. An unreadable file hashes as its own
+ * marker, so DELETING an import changes the hash.
+ */
+function sourcesHashFor(route, root, globalHash, entries = []) {
+  const h = createHash('sha256');
+  h.update('global'); h.update('\0'); h.update(globalHash); h.update('\0');
+  for (const f of [route.source, ...(route.dependsOn || [])].filter(Boolean).sort()) {
+    let body;
+    try { body = readFileSync(resolve(root, f)); } catch { body = Buffer.from('<unreadable>'); }
+    h.update(f); h.update('\0'); h.update(body); h.update('\0');
+  }
+  for (const name of collectionsFor(route, root)) {
+    h.update('collection:' + name); h.update('\0');
+    h.update(collectionDigest(root, entries, name)); h.update('\0');
+  }
+  return h.digest('hex');
+}
+// Whitespace is collapsed first: a reflow is not a content change, and a hash that moves on
+// every render is a hash nobody can compare.
+const textHash = (s) => createHash('sha256').update(String(s).replace(/\s+/g, ' ').trim()).digest('hex');
+
 const MAX_ROUTES = Number(args['max-routes'] && args['max-routes'] !== 'true' ? args['max-routes'] : 14);
+// --changed narrows BEFORE the cap applies. The other order would make a two-file fix compete
+// with the route budget, which is the opposite of what an incremental pass is for.
+let changed = args.changed && args.changed !== 'true'
+  ? String(args.changed).split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean)
+  : null;
+// The full sweep. The unchanged-route skip below is what makes a fix loop cheap, and the sweep
+// before hand-over is where it must not apply: a record is only as good as the source list it
+// was taken over, and a config or a dependency change is outside that list.
+const FULL = args.full === 'true';
+// `--changed` with nothing after it parses as the string "true", which would silently mean
+// "no narrowing" on a command the operator wrote precisely to narrow.
+if (args.changed === 'true') {
+  console.error('verify-rendered: --changed was given with no file list, so nothing was narrowed. Pass --changed <file,...>.');
+}
 let routes;
+// A rendered path back to the index record that produced it, which is the only place the
+// route's source and its import closure are known. Empty under --routes: a hand-named route
+// cannot be hashed, so it is never skipped and never recorded.
+const routeOf = new Map();
+let projectRoot = '.';
+// The index's content entries, for the collection digest a dynamic route's hash folds in.
+let indexEntries = [];
+// Set by a wide fall: the records cannot be trusted for a change that could not be placed.
+let setAside = false;
+/**
+ * THE KEY A ROUTE'S RECORD IS FILED UNDER, which is not always the path that was fetched.
+ *
+ * A dynamic template is rendered as a real page, and which page that is moves: with no
+ * --changed the representative is the first entry of the collection in index order, so adding
+ * a post that sorts earlier renamed the key from /blog/winter-pipes to /blog/<new>, orphaned
+ * the old record and rendered the page again for nothing. The TEMPLATE is what the record is
+ * about, and the template path does not move.
+ */
+const recordKeyOf = new Map();
+const keyOf = (p) => recordKeyOf.get(p) ?? p;
+// WHY THE SELECTION IS NOT THE WHOLE SITE, recorded rather than inferred. `routes.length` is
+// the number this run looked at, and on its own it cannot say whether that WAS the site: a
+// --changed blast radius, an explicit --routes list, a fall back to three guessed paths and a
+// site capped by --max-routes all produce a short list for different reasons, and only one of
+// them is "this site is small". The sweep record below reads these.
+let narrowedBy = null;   // 'routes' | 'changed' | 'fallback' | null
+let overCap = 0;         // route(s) dropped by --max-routes
 if (args.routes) {
   routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
+  narrowedBy = 'routes';
+  if (changed) console.error('verify-rendered: --routes names the routes explicitly, so --changed is ignored on this run.');
 } else {
   const indexPath = args.index && args.index !== 'true' ? args.index : '.palate/index.json';
+  // The index lives at <project>/.palate/index.json and its paths are relative to <project>.
+  projectRoot = resolve(dirname(indexPath), '..');
+  // --changed READS THE INDEX TWICE OVER, for the blast radius and for every route's import
+  // closure, so a stale index narrows to the wrong routes AND leaves their records valid. The
+  // failure needs two fixes to land: add an import to a page (the page renders, its own source
+  // changed), then edit the newly imported file, and the page is neither selected nor
+  // invalidated because dependsOn predates the import. palate-index.mjs is a static parse
+  // costing well under a second, so it is rebuilt rather than trusted.
+  if (changed) {
+    // Spelled the way the INDEX spells it, before anything looks it up.
+    changed = changed.map((f) => toProjectRelative(projectRoot, f));
+    rebuildIndex(projectRoot, indexPath);
+  }
   const found = routesFromIndex(indexPath);
   if (found) {
+    const narrowed = changed
+      ? narrowToChanged(found.index, found.picked, changed)
+      : { picked: found.picked, concrete: new Map(), wide: false };
+    const picked = narrowed.picked;
+    setAside = narrowed.wide;
+    indexEntries = Array.isArray(found.index.entries) ? found.index.entries : [];
     const catPath = args.catalogue && args.catalogue !== 'true' ? args.catalogue : '.palate/catalogue.json';
-    const res = resolveDynamic(found.routes, catPath);
+    const res = resolveDynamic(picked.map((r) => r.path), catPath);
     if (res.resolved > 0) {
       console.error(`verify-rendered: ${res.resolved} dynamic route(s) resolved to real handles from ${catPath}`);
     }
-    routes = res.paths.slice(0, MAX_ROUTES);
-    const dropped = found.routes.length - routes.length;
-    console.error(
-      `verify-rendered: ${routes.length} route(s) from ${indexPath} ` +
-      `(${found.reps} dynamic template representative(s) standing in for ${found.reps + found.collapsed} page(s), ` +
-      `${found.statics} static, ${found.endpoints} endpoint(s) not rendered)` +
-      (dropped > 0 ? ` — ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : ''),
-    );
+    // A dynamic template is fetched as a real page or not at all. The blast radius names the
+    // page when a post changed; otherwise the index's entries name a representative, the way
+    // the catalogue names one for a store. Either beats fetching `/blog/[slug]` and recording
+    // the 404 it returns as a pass.
+    const substituted = [];
+    const unrenderable = [];
+    const pairs = [];
+    res.paths.forEach((p, i) => {
+      if (!p.includes('[')) { pairs.push([p, picked[i]]); return; }
+      const page = publishedPageFor(picked[i], indexEntries, projectRoot, narrowed.concrete.get(p));
+      if (!page) { unrenderable.push(p); return; }
+      substituted.push(`${p} -> ${page}`);
+      recordKeyOf.set(page, p); // the record is about the template, not about today's post
+      pairs.push([page, picked[i]]);
+    });
+    if (substituted.length) {
+      console.error(`verify-rendered: ${substituted.length} dynamic template(s) rendered as a real page from the index entries: ${substituted.join(', ')}`);
+    }
+    if (unrenderable.length) {
+      console.error(
+        `verify-rendered: ${unrenderable.length} dynamic template(s) NOT rendered, because no published entry ` +
+        `exists to render them as a real page: ${unrenderable.join(', ')}. Fetching the literal path returns the ` +
+        'site\'s 404 and would be reported as a build fault. Publish an entry, or pass --routes to name a page.',
+      );
+    }
+    routes = pairs.slice(0, MAX_ROUTES).map(([path]) => path);
+    routes.forEach((p, i) => routeOf.set(p, pairs[i][1]));
+    const dropped = pairs.length - routes.length;
+    overCap = dropped;
+    if (changed) narrowedBy = 'changed';
+    const over = dropped > 0 ? `, ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : '';
+    // A narrowed run gets its own sentence. The index-wide tallies below describe the whole
+    // site, and printed against a blast-radius count they read as a contradiction.
+    console.error(changed
+      ? `verify-rendered: ${routes.length} route(s) from ${indexPath}, narrowed by --changed${over}`
+      : `verify-rendered: ${routes.length} route(s) from ${indexPath} ` +
+        `(${found.reps} dynamic template representative(s) standing in for ${found.reps + found.collapsed} page(s), ` +
+        `${found.statics} static, ${found.endpoints} endpoint(s) not rendered)${over}`);
   } else {
     routes = ['/', '/contact', '/blog'];
+    narrowedBy = 'fallback';
     console.error(
       `verify-rendered: no readable ${indexPath}, so falling back to ${routes.join(', ')}. ` +
       'THESE ARE GUESSES AND MAY NOT EXIST. Run palate-index.mjs first, or pass --routes, ' +
@@ -135,14 +524,153 @@ if (args.routes) {
 const outDir = args.out && args.out !== 'true' ? args.out : '';
 if (outDir) mkdirSync(outDir, { recursive: true });
 
+/**
+ * THE UNCHANGED-ROUTE SKIP.
+ *
+ * The shots manifest carries a `{ sourcesHash, renderedHash, passed_at }` per route, written
+ * only for a route that rendered clean. A route whose sources hash to the same value has
+ * nothing new to say, so it is not rendered again and the run says so per route.
+ *
+ * The record is the ONLY thing trusted here. It is dropped the moment a route fails, so the
+ * next run cannot skip the route that broke, and it is ignored entirely under --full.
+ *
+ * WHAT IT DOES NOT COVER, said plainly because the skip is only safe while this is understood:
+ * the hash is taken over the route's own source, its import closure and the global inputs
+ * (see globalInputsHash above). Remote content, public/ assets and environment values are
+ * outside all three, so an unchanged source can still render differently. That is why the
+ * sweep before hand-over runs --full, and why any file the index does not know falls wide
+ * rather than narrow.
+ */
+const shotsManifest = outDir ? `${outDir}/manifest.json` : '';
+let priorRoutes = {};
+let priorGlobal = '';
+if (shotsManifest) {
+  try {
+    const m = JSON.parse(readFileSync(shotsManifest, 'utf8'));
+    if (m && typeof m.routes === 'object' && m.routes && !Array.isArray(m.routes)) priorRoutes = m.routes;
+    if (typeof m?.globalInputs === 'string') priorGlobal = m.globalInputs;
+  } catch { /* no manifest yet, or an unreadable one: nothing is skipped, which is the safe way to be wrong */ }
+}
+// Recorded alongside the routes purely so the run can SAY why every record went. Folding the
+// digest into each hash is what invalidates them; without this the operator would see thirty
+// routes re-render and no reason given.
+const globalInputs = globalInputsHash(projectRoot);
+if (priorGlobal && priorGlobal !== globalInputs.hash) {
+  console.error(
+    `verify-rendered: global inputs changed, all routes re-rendered (${globalInputs.count} shared file(s): ` +
+    'the config and lockfile, src/styles, src/layouts, src/pages/api and the CSS those layouts import).',
+  );
+}
+const sourcesHashes = new Map();
+const skipped = [];
+for (const p of routes) {
+  const r = routeOf.get(p);
+  if (!r) continue; // no index record behind this route, so it cannot be hashed and always renders
+  const sh = sourcesHashFor(r, projectRoot, globalInputs.hash, indexEntries);
+  sourcesHashes.set(p, sh);
+  const prior = priorRoutes[keyOf(p)];
+  if (!FULL && !setAside && prior && prior.sourcesHash === sh && prior.passed_at) skipped.push(p);
+}
+for (const p of skipped) console.error(`verify-rendered: ${p} unchanged, skipped`);
+const rendering = routes.filter((p) => !skipped.includes(p));
+if (skipped.length) {
+  console.error(
+    `verify-rendered: ${skipped.length} of ${routes.length} route(s) unchanged since their last passing render. ` +
+    'Pass --full to render every one; the sweep before hand-over should.',
+  );
+}
+if (skipped.includes('/')) {
+  console.error(
+    'verify-rendered: the home route was skipped, so build hygiene, the design measurement and the ' +
+    'accessibility pass on / are UNMEASURED this run. --full measures them.',
+  );
+}
+
+/**
+ * WHAT THIS RUN ACTUALLY COVERED, written down where a gate can read it.
+ *
+ * Two accepted rulings met here and neither could see the other. The first: `public/**` stays
+ * out of the per-route digest, because an asset swap sits with remote content and the full
+ * sweep before hand-over is what covers it. The second: nothing recorded whether the last run
+ * WAS a full sweep, so that mitigation was a sentence of doctrine and nothing more.
+ *
+ * The narrow case was already honoured, and still is: if EVERY selected route is unchanged,
+ * `rendering` is empty and the run exits 2 saying SKIPPED, not passed. The case that was
+ * invisible is the ordinary one. Change an image in `public/` and anything else at the same
+ * time, the other thing renders, the run exits 0, and the routes whose only change was the
+ * image are skipped. A pass from a run that rendered one route of twelve then looked exactly
+ * like a pass from one that rendered all twelve.
+ *
+ * So the run records its own coverage. It does NOT fail a partial sweep: a partial sweep is
+ * the whole point of the incremental path and blocking on it would delete the optimisation.
+ * It makes the coverage LEGIBLE, so gate-done can say which it was rather than imply the
+ * larger one.
+ *
+ * `full` is the derived answer to "did this cover the site", not the flag: --full over a
+ * --changed blast radius, or over a site capped by --max-routes, is not a full sweep and
+ * saying it was would be the same silence one layer down.
+ */
+const sweep = {
+  full: FULL && !narrowedBy && overCap === 0,
+  requested_full: FULL,
+  narrowed: narrowedBy,
+  selected: routes.length,
+  rendered: rendering.length,
+  skipped: skipped.length,
+  over_cap: overCap,
+  at: new Date().toISOString(),
+};
+if (!rendering.length) {
+  console.error(
+    'verify-rendered: every selected route was unchanged since its last passing render, so NO route was ' +
+    'rendered this run. The home-route and 404 probes below still ran. Pass --full for a complete sweep.',
+  );
+}
+// The rendered text of each route at desktop, for the record's renderedHash.
+const renderedText = new Map();
+
 const VIEWPORTS = {
   mobile:  { width: 390,  height: 844  },
   tablet:  { width: 834,  height: 1112 },
   desktop: { width: 1440, height: 900  },
 };
+// The values the form round trip types in. Deliberately readable as a test if one ever does
+// escape to a real inbox, and example.com because it is the reserved domain for exactly this.
+const SAMPLE_FORM = {
+  name: 'Palate verify',
+  email: 'verify@example.com',
+  message: 'Automated round-trip check from the Palate site verifier. Nothing to action.',
+  tel: '0400000000',
+  url: 'https://example.com',
+  date: '2030-01-01',
+};
 // Console / request noise that is not the build's fault (third-party, favicon).
 const IGNORE = [/turnstile/i, /challenges\.cloudflare/i, /humblytics/i, /plausible/i, /google-analytics/i, /googletagmanager/i, /favicon/i];
 const ignored = (s) => IGNORE.some((re) => re.test(s || ''));
+
+/**
+ * ROUTES WHOSE OWN HTTP STATUS IS NOT 200 BY DESIGN, and the one console error that follows.
+ *
+ * A 404 page answers 404. That is the whole point of it, and the browser logs the document's
+ * own load as a console error, which the console rule filed as a High at all three viewports.
+ * On the shipped template every plain run and every certify sweep therefore exited 1 on a
+ * finding no operator can fix, which makes the sweep's exit code useless: the one number the
+ * hand-over rests on could not distinguish a clean site from a broken one.
+ *
+ * SCOPED AS NARROWLY AS IT CAN BE. It is dropped only when all four hold: the route is one
+ * whose status is expected to be non-200, the navigation actually returned THAT status, the
+ * error is a console entry whose location is the navigation URL itself (a subresource that
+ * 404s on the same page has its own URL and still fires), and its text is the resource-load
+ * failure carrying that status. A real script error on /404 has the same location and
+ * different text, so it is still a High. Verified both directions in the suite.
+ */
+const EXPECTED_STATUS = new Map([['/404', 404], ['/500', 500]]);
+function expectedStatusNoise(route, status, e) {
+  const want = EXPECTED_STATUS.get(route);
+  if (!want || status !== want) return false;
+  if (!e || e.kind !== 'console' || e.loc !== base + route) return false;
+  return /failed to load resource/i.test(e.raw || '') && new RegExp(`status of ${want}\\b`).test(e.raw || '');
+}
 
 const findings = [];
 const add = (sev, route, vp, msg) => findings.push({ sev, route, vp, msg });
@@ -157,6 +685,44 @@ const interactionFailures = [];
 // palette, the type scale and the mobile control sizes are properties of the design system,
 // not of a route, and measuring every route would multiply the cost for the same answer.
 const designFacts = {};
+// Routes that carry a contact form, found at desktop and submitted once each after the loop.
+// Collected rather than probed in place, because a submit belongs in its own context: the
+// smoke header goes on every request a page makes, and the audit pass must not carry it.
+const formRoutes = [];
+// Routes carrying a VISIBLE form the probe could not classify, and routes whose only contact
+// form is hidden at desktop. Both are reported rather than filed as findings: neither is a
+// fault in the site, and a build blocked by one is a build whose whole interaction pass gets
+// switched off.
+const unrecognisedForms = [];
+const hiddenOnlyFormRoutes = [];
+// One nav is usually one shared header, so the same fault would otherwise be filed once per
+// route. Keyed on the check and the control's label, and the route named is the first it was
+// seen on.
+const navSeen = new Set();
+// Spelled out rather than composed, so every check name this gate can emit is greppable. The
+// docs guard and hooks/palate-stop.mjs both key on these strings, and a name assembled at
+// runtime is a name no static check can find.
+//
+// THE TWO SEVERITIES ARE THE WHOLE JUDGEMENT HERE.
+//
+//   open           HIGH, and it blocks. A burger or a dialog trigger that opens nothing is a
+//                  dead control. There is no design in which that is deliberate.
+//   escape-dismiss MEDIUM, and it does NOT block. A nav that closes only from its own button
+//                  is a real accessibility fault and a common, deliberate implementation; the
+//                  disclosure pattern does not require Escape, only the dialog and menu-button
+//                  patterns do. Blocking a client's build on it would get the whole
+//                  interaction pass switched off, which costs more than the finding is worth.
+//                  It is reported, and the operator decides.
+const DISCLOSURE_CHECKS = {
+  dialog: {
+    open: { check: 'dialog-open', sev: 'High' },
+    'escape-dismiss': { check: 'dialog-escape-dismiss', sev: 'Medium' },
+  },
+  'mobile nav': {
+    open: { check: 'mobile-nav-open', sev: 'High' },
+    'escape-dismiss': { check: 'mobile-nav-escape-dismiss', sev: 'Medium' },
+  },
+};
 
 // ------------------------------------------------------------------ axe ----
 // The accessibility checks the GRADER scores, run locally against the same
@@ -297,8 +863,11 @@ if (!axeSource) {
 // --------------------------------------------------------------- audit -----
 for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   const context = await browser.newContext({ viewport: vp });
-  for (const route of routes) {
+  for (const route of rendering) {
     const page = await context.newPage();
+    // Kept as { text, loc, kind } rather than a formatted string, because whether the
+    // document's own load error is a finding depends on the status the navigation returned,
+    // and that is not known until goto resolves. See expectedStatusNoise below.
     const errors = [];
     const webglChunkError = { hit: false };
     page.on('console', (m) => {
@@ -307,12 +876,12 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       // so check both before deciding it is the build's fault.
       const loc = (m.location && m.location().url) || '';
       if (ignored(m.text()) || ignored(loc)) return;
-      errors.push('console error: ' + m.text());
+      errors.push({ kind: 'console', loc, text: 'console error: ' + m.text(), raw: m.text() });
     });
-    page.on('pageerror', (e) => errors.push('page error: ' + (e && e.message ? e.message : e)));
+    page.on('pageerror', (e) => errors.push({ kind: 'page', loc: '', text: 'page error: ' + (e && e.message ? e.message : e) }));
     page.on('requestfailed', (r) => {
       if (ignored(r.url())) return;
-      errors.push('request failed: ' + r.url());
+      errors.push({ kind: 'request', loc: r.url(), text: 'request failed: ' + r.url() });
       if (/three|webgl|r3f|fiber|drei/i.test(r.url())) webglChunkError.hit = true;
     });
 
@@ -716,7 +1285,10 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       }
     }
 
-    for (const e of errors) add('High', route, vpName, e);
+    for (const e of errors) {
+      if (expectedStatusNoise(route, status, e)) continue;
+      add('High', route, vpName, e.text);
+    }
 
     // Focus ring: one real keyboard Tab should land on an element with a visible
     // outline (globals.css ships :focus-visible). Desktop only, heuristic -> Medium.
@@ -733,11 +1305,437 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       if (ring.focused && !ring.visible) add('Medium', route, vpName, 'first tab-focused element has no visible focus ring');
     }
 
+    /**
+     * DOES THIS PAGE CARRY THE CONTACT FORM? Found here, submitted after the loop.
+     *
+     * THREE ARMS, AND EVERY ONE OF THEM EXISTS BECAUSE THE PREVIOUS ONE MISSED A REAL SITE.
+     *
+     *   the action      `form[action="/api/contact"]`, which the brief asked for and which the
+     *                   shipped ContactForm.astro does not set: it is `<form id="contact-form"
+     *                   novalidate>` with a bundled script that fetches the endpoint. Keyed on
+     *                   this alone the probe would never once fire on its own template.
+     *   the field names name + email + message, which is the template's shape and nothing else.
+     *                   A form the agent wrote with `full-name`, `your-name` or `enquiry` was
+     *                   invisible, and the run said "no contact form": the same
+     *                   exists-but-never-fires defect, moved rather than closed.
+     *   the field SHAPE an email-ish control and a textarea in the same form. That is what a
+     *                   contact form IS, whatever its fields are called.
+     *
+     * AND ANYTHING VISIBLE THAT MATCHES NONE OF THEM IS STILL REPORTED. "No contact form" is a
+     * statement about the site; "a form I did not recognise" is a statement about the probe, and
+     * only the second one is ever honest when a form is sitting there on the page.
+     */
+    if (vpName === 'desktop') {
+      const forms = await page.evaluate(() => {
+        const vis = (n) => {
+          if (!n) return false;
+          const r = n.getBoundingClientRect(), st = getComputedStyle(n);
+          return r.width > 0 && r.height > 0 && st.display !== 'none' && st.visibility !== 'hidden';
+        };
+        const out = { contact: 0, visibleContact: 0, unrecognised: [] };
+        for (const f of document.querySelectorAll('form')) {
+          const action = f.getAttribute('action') || '';
+          let byAction = false;
+          try { byAction = new URL(action, location.href).pathname === '/api/contact'; } catch { /* not a URL */ }
+          const has = (n) => !!f.querySelector('[name="' + n + '"]');
+          const byName = has('name') && has('email') && has('message');
+          const emailish = f.querySelector('input[type="email"]') ||
+            [...f.querySelectorAll('input,textarea')].some((el) =>
+              /e-?mail/i.test((el.getAttribute('name') || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '')));
+          const byShape = !!emailish && !!f.querySelector('textarea');
+          if (byAction || byName || byShape) {
+            out.contact++;
+            if (vis(f)) out.visibleContact++;
+            continue;
+          }
+          // A search box or a newsletter signup is not a miss, so only a form with more than one
+          // real field is worth naming: the point is to catch a CONTACT form we failed to read.
+          const fields = [...f.querySelectorAll('input,textarea,select')].filter((el) => {
+            const t = (el.getAttribute('type') || el.tagName).toLowerCase();
+            return !['hidden', 'submit', 'button', 'image', 'reset'].includes(t);
+          });
+          if (vis(f) && fields.length > 1) {
+            out.unrecognised.push(
+              (f.id ? '#' + f.id : f.getAttribute('name') ? '[name=' + f.getAttribute('name') + ']' : '<form>') +
+              ' with ' + fields.length + ' fields (' +
+              fields.slice(0, 4).map((el) => el.getAttribute('name') || el.id || (el.getAttribute('type') || el.tagName.toLowerCase())).join(', ') + ')');
+          }
+        }
+        return out;
+      }).catch(() => ({ contact: 0, visibleContact: 0, unrecognised: [] }));
+
+      if (forms.contact) formRoutes.push(route);
+      // NAMED, NOT COUNTED. A route with a visible form the probe could not classify is the one
+      // case where silence would be a lie about the site rather than about the probe.
+      if (forms.unrecognised.length) {
+        unrecognisedForms.push(route + ': ' + forms.unrecognised.join('; '));
+      }
+      if (forms.contact && !forms.visibleContact) hiddenOnlyFormRoutes.push(route);
+    }
+
+    /**
+     * THE MOBILE NAV AND ANY DIALOG, opened and closed for real.
+     *
+     * Every other check in this file reads a settled page. A burger that opens nothing, or a
+     * full-screen overlay a keyboard user cannot dismiss, looks identical to a working one in
+     * a screenshot and in the DOM, and is only found by pressing it. See disclosureProbe for
+     * what is in scope and what it cannot see.
+     */
+    if (vpName === 'mobile' || vpName === 'desktop') {
+      await disclosureProbe(page, route, vpName);
+    }
+
+    // The rendered DOM text, for the route record. Desktop only: one reading per route is
+    // what the record holds, and the desktop pass is the one every route gets.
+    if (vpName === 'desktop') {
+      try { renderedText.set(route, await page.evaluate(() => (document.body && document.body.innerText) || '')); }
+      catch { /* a page that will not yield its text simply earns no record and renders again */ }
+    }
+
     if (outDir) {
       const name = vpName + (route === '/' ? '_home' : route.replace(/[^a-z0-9]+/gi, '_')) + '.png';
       await page.screenshot({ path: outDir + '/' + name, fullPage: true }).catch(() => {});
     }
     await page.close();
+  }
+  await context.close();
+}
+
+// ------------------------------------------------- form round trip -----
+/**
+ * FILL THE CONTACT FORM AND PRESS SEND.
+ *
+ * `references/testing.md` described this test for months and nothing ran it, so a submit
+ * handler that never bound, an endpoint returning 500 and a wrong Turnstile key all shipped
+ * looking exactly like a working form. Reading the markup cannot tell them apart. Pressing
+ * the button can.
+ *
+ * THE SMOKE HEADER IS WHAT MAKES IT SAFE TO RUN. `x-palate-smoke: 1` on every request this
+ * page makes tells `src/pages/api/contact.ts` to validate the body and answer
+ * `{ ok: true, smoke: true }` having sent nothing. In production the endpoint ignores the
+ * header unless `x-palate-smoke-secret` matches `PALATE_SMOKE_SECRET`, so this is passed
+ * through from the environment when it is set.
+ *
+ * A 200 WITHOUT THE FLAG IS A FAILURE, NOT A PASS. It means the header was ignored and the
+ * submission took the real path, which against a deployed site is a fake enquiry in the
+ * client's inbox. That is the one outcome worth shouting about.
+ *
+ * ITS OWN CONTEXT. `setExtraHTTPHeaders` applies to every request the page makes, and the
+ * audit pass above must not carry a header that changes what the site does.
+ */
+// A skipped route is not inspected, so a form on one of them was not submitted either. Said
+// in the same breath as "nothing submitted", because the two together are the difference
+// between a site with no form and a site whose form nobody looked at this run.
+const formSkipNote = skipped.length
+  ? ` ${skipped.length} unchanged route(s) were skipped, so a contact form on one of those was NOT submitted this run; --full covers them.`
+  : '';
+if (!rendering.length) {
+  console.error('verify-rendered: form round trip: no route was rendered this run, so nothing was submitted.' + formSkipNote);
+} else if (!formRoutes.length) {
+  console.error(`verify-rendered: form round trip: no contact form on ${rendering.length} route(s), nothing submitted.` + formSkipNote);
+  if (unrecognisedForms.length) {
+    console.error(
+      `verify-rendered: form round trip: but ${unrecognisedForms.length} route(s) DO carry a visible form this probe did not ` +
+      `recognise as a contact form, so "no contact form" is about the probe and not about the site: ` +
+      unrecognisedForms.join(' | ') + '. A contact form is recognised by action="/api/contact", by name/email/message ' +
+      'fields, or by an email field beside a textarea.',
+    );
+  }
+} else {
+  const context = await browser.newContext({ viewport: VIEWPORTS.desktop });
+  const page = await context.newPage();
+  await page.setExtraHTTPHeaders({ 'x-palate-smoke': '1' });
+  const smokeSecret = process.env.PALATE_SMOKE_SECRET || '';
+  if (!smokeSecret) console.error('verify-rendered: form round trip: PALATE_SMOKE_SECRET is not set, which is right for a preview and will make a PRODUCTION deployment take the real path.');
+  const siteOrigin = new URL(base).origin;
+
+  /**
+   * WHAT THIS ROUTE HANDLER STOPS, and the one that was measured rather than reasoned about.
+   *
+   * THE SECRET GOES ON EXACTLY ONE REQUEST. setExtraHTTPHeaders is per PAGE, not per origin, so
+   * a header set there rides Google Fonts, the analytics beacon, Turnstile and any CDN the
+   * client's site uses. `x-palate-smoke: 1` is a flag and harmless there; the SECRET is a
+   * production credential. Narrowing it to same-origin was not enough either: ANY same-origin
+   * path that redirects to a CDN or an image host handed it over, because a request produced by
+   * a redirect never reaches this handler and the browser carries the injected header across.
+   * Measured on two real servers: a same-origin GET that 302s and a same-origin POST that 307s
+   * both delivered `x-palate-smoke-secret` to the second origin, and the POST delivered its body
+   * as well. So the secret is attached to the ONE request that needs it, the POST to
+   * /api/contact, and to nothing else.
+   *
+   * AND THIS HANDLER FOLLOWS THAT REQUEST ITSELF. `route.fetch({ maxRedirects: 0 })` means a
+   * cross-origin `Location` is refused here rather than followed by the browser, which is the
+   * only place the decision can be made: once the browser follows it, the request is invisible
+   * to us and the secret and the body have already gone.
+   *
+   * A CROSS-ORIGIN POST IS ABORTED AT THE WIRE. A form wired to Formspree, HubSpot or a client
+   * CRM is not our endpoint and the smoke header means nothing to it, so submitting one puts a
+   * fake enquiry in the client's actual inbox, once per verify run. The attempt still fires
+   * `requestfailed`, so the probe still sees where the form went and still files the Medium
+   * naming the destination: the report does not change, only the delivery.
+   *
+   * WHAT IT CANNOT STOP, said plainly rather than fixed: a same-origin path that proxies onward
+   * server-side receives the secret legitimately and could forward it. Narrowing to the contact
+   * endpoint shrinks that to one route, and the secret only ever authorises a no-op smoke answer
+   * on that one site.
+   */
+  let refusedRedirect = '';
+  await context.route('**/*', async (route) => {
+    const req = route.request();
+    let url = null;
+    try { url = new URL(req.url()); } catch { /* an opaque URL is not our origin */ }
+    const sameOrigin = !!url && url.origin === siteOrigin;
+
+    if (!sameOrigin) {
+      if (req.method() === 'POST') { await route.abort('blockedbyclient'); return; }
+      await route.continue();
+      return;
+    }
+    // EVERY same-origin POST is followed here, not just the contact endpoint, because the
+    // delivery this stops is the redirect and a form can post to any path. Only the contact
+    // endpoint gets the secret.
+    if (req.method() !== 'POST') { await route.continue(); return; }
+    const isEndpoint = url.pathname === '/api/contact';
+
+    let res;
+    try {
+      res = await route.fetch({
+        maxRedirects: 0,
+        headers: (smokeSecret && isEndpoint) ? { ...req.headers(), 'x-palate-smoke-secret': smokeSecret } : req.headers(),
+      });
+    } catch (e) {
+      await route.abort('failed');
+      return;
+    }
+    const status = res.status();
+    const loc = res.headers().location;
+    if (status >= 300 && status < 400 && loc) {
+      let target = null;
+      try { target = new URL(loc, req.url()); } catch { /* an unparseable Location is not ours */ }
+      if (!target || target.origin !== siteOrigin) {
+        refusedRedirect = target ? target.origin : String(loc);
+        await route.fulfill({
+          status: 599,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'cross-origin redirect refused', to: refusedRedirect }),
+        });
+        return;
+      }
+    }
+    await route.fulfill({ response: res });
+  });
+
+  // Every POST the page makes, in order, ANSWERED OR NOT. A predicate on waitForResponse
+  // would race an analytics beacon and lose on any site that has one, and a POST to a host
+  // that does not resolve never produces a response at all: without requestfailed here, a
+  // form wired to a dead third party looks identical to a form that never submitted.
+  let posts = [];
+  page.on('response', (r) => { if (r.request().method() === 'POST') posts.push({ url: r.url(), resp: r }); });
+  page.on('requestfailed', (r) => { if (r.method() === 'POST') posts.push({ url: r.url(), resp: null }); });
+
+  // CAPPED, like the disclosure probe's candidates. An Explore build carries a contact section
+  // in every variant, so an uncapped probe submits once per rung: the same form, the same
+  // endpoint, the same answer, at a page load and up to eight seconds of polling each. Three is
+  // enough to catch a route where the form differs; the rest are named as not submitted, never
+  // silently dropped.
+  if (hiddenOnlyFormRoutes.length) {
+    console.error(
+      `verify-rendered: form round trip: ${hiddenOnlyFormRoutes.length} route(s) carry a contact form with nothing ` +
+      `visible to submit at desktop (${hiddenOnlyFormRoutes.join(', ')}), which is ordinary for a modal or a ` +
+      'breakpoint duplicate. Those routes are UNMEASURED, not clean.',
+    );
+  }
+  const FORM_ROUTE_CAP = 3;
+  const probing = formRoutes.slice(0, FORM_ROUTE_CAP);
+  if (formRoutes.length > probing.length) {
+    console.error(
+      `verify-rendered: form round trip: ${formRoutes.length} route(s) carry a contact form; submitting the first ` +
+      `${probing.length} (${probing.join(', ')}) and NOT ${formRoutes.slice(probing.length).join(', ')}. ` +
+      'They post to the same endpoint, so the extra submissions buy the same answer.',
+    );
+  }
+  if (unrecognisedForms.length) {
+    console.error(
+      `verify-rendered: form round trip: ${unrecognisedForms.length} route(s) carry a visible form this probe did not ` +
+      `recognise as a contact form and did not submit: ` + unrecognisedForms.join(' | ') + '.',
+    );
+  }
+  for (const route of probing) {
+    posts = [];
+    refusedRedirect = '';
+    try {
+      await page.goto(base + route, { waitUntil: 'load', timeout: 20000 });
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 400)));
+    } catch (e) {
+      add('High', route, 'desktop', 'form round trip: the page carrying the contact form would not load (' + (e && e.message ? e.message : e) + ').');
+      continue;
+    }
+
+    const filled = await page.evaluate((sample) => {
+      const vis = (n) => {
+        const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+        return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+      };
+      // THE FIRST form whose SUBMIT CONTROL IS VISIBLE, not the first in DOM order. A
+      // `display: none` duplicate kept for a breakpoint, or a form inside a dialog this run's
+      // own disclosure probe just opened and closed, both sat first in the document and both
+      // ended the probe on a five-second `page.click` timeout reported as a High about a
+      // pointer, on a site with nothing wrong with it.
+      let form = null;
+      let candidates = 0;
+      for (const f of document.querySelectorAll('form')) {
+        const action = f.getAttribute('action') || '';
+        let byAction = false;
+        try { byAction = new URL(action, location.href).pathname === '/api/contact'; } catch { /* not a URL */ }
+        const has = (n) => !!f.querySelector('[name="' + n + '"]');
+        const byName = has('name') && has('email') && has('message');
+        const emailish = f.querySelector('input[type="email"]') ||
+          [...f.querySelectorAll('input,textarea')].some((el) =>
+            /e-?mail/i.test((el.getAttribute('name') || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '')));
+        const byShape = !!emailish && !!f.querySelector('textarea');
+        if (!(byAction || byName || byShape)) continue;
+        candidates++;
+        const sub = f.querySelector('button[type="submit"], input[type="submit"], button:not([type])') || f.querySelector('button');
+        if (!sub) continue;
+        const r = sub.getBoundingClientRect(), st = getComputedStyle(sub);
+        if (r.width > 0 && r.height > 0 && st.display !== 'none' && st.visibility !== 'hidden') { form = f; break; }
+      }
+      if (!form) {
+        return candidates
+          ? { ok: false, hidden: true, why: candidates + ' contact form(s) on this route have no submit control visible at desktop' }
+          : { ok: false, why: 'the form found at desktop was not on the page this pass' };
+      }
+      form.setAttribute('data-palate-form', '1');
+
+      // VISIBLE fields only. A hidden input is either machinery or a honeypot, and filling a
+      // honeypot is how an automated submission gets classified as spam by the thing it is
+      // meant to be testing.
+      const names = [];
+      const groups = new Set();
+      for (const el of form.querySelectorAll('input, textarea, select')) {
+        const type = (el.getAttribute('type') || el.tagName.toLowerCase()).toLowerCase();
+        if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'image' || type === 'file' || type === 'reset') continue;
+        if (el.disabled || el.readOnly || !vis(el)) continue;
+        const key = ((el.getAttribute('name') || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '')).toLowerCase();
+        const set = (v) => {
+          el.value = v;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        if (type === 'checkbox' || type === 'radio') {
+          if (!el.required && type === 'checkbox') continue;
+          if (type === 'radio') { if (groups.has(el.name)) continue; groups.add(el.name); }
+          el.checked = true;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (el.tagName.toLowerCase() === 'select') {
+          const pick = Array.from(el.options).find((o) => o.value);
+          if (!pick) continue;
+          el.value = pick.value;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (type === 'email' || /email/.test(key)) set(sample.email);
+        else if (el.tagName.toLowerCase() === 'textarea' || /message|comment|enquir|inquir|detail/.test(key)) set(sample.message);
+        else if (type === 'tel' || /phone|mobile|tel/.test(key)) set(sample.tel);
+        else if (type === 'url') set(sample.url);
+        else if (type === 'number' || type === 'range') set('1');
+        else if (type === 'date') set(sample.date);
+        else if (type === 'time') set('09:00');
+        else set(sample.name);
+        names.push(el.getAttribute('name') || el.id || type);
+      }
+      const submit = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])')
+        || form.querySelector('button');
+      if (!submit) return { ok: false, why: 'the contact form has no submit control, so it cannot be sent at all' };
+      form.setAttribute('data-palate-form', '1');
+      submit.setAttribute('data-palate-submit', '1');
+      return { ok: true, fields: names };
+    }, SAMPLE_FORM).catch((e) => ({ ok: false, why: 'the form could not be filled (' + (e && e.message ? e.message : e) + ')' }));
+
+    if (!filled.ok && filled.hidden) {
+      // NOT a finding. A form behind a modal or duplicated for a breakpoint is ordinary work,
+      // and the gate that certified the dialog a moment ago must not then fail the form in it.
+      console.error('verify-rendered: form round trip: ' + route + ' SKIPPED, ' + filled.why +
+        '. Nothing was submitted for this route, so its form is UNMEASURED rather than clean.');
+      continue;
+    }
+    if (!filled.ok) { add('High', route, 'desktop', 'form round trip: ' + filled.why + '.'); continue; }
+
+    try {
+      await page.click('[data-palate-submit="1"]', { timeout: 5000 });
+    } catch (e) {
+      add('High', route, 'desktop', 'form round trip: the submit control could not be clicked (' +
+        (e && e.message ? String(e.message).split(String.fromCharCode(10))[0] : e) + ').');
+      continue;
+    }
+
+    // Poll rather than wait on a predicate: the endpoint answer is the one we want and it may
+    // not be the first POST the page makes.
+    let hit = null;
+    for (let i = 0; i < 40 && !hit; i++) {
+      hit = posts.find((p) => { try { const u = new URL(p.url); return u.origin === new URL(base).origin && u.pathname === '/api/contact'; } catch { return false; } });
+      if (!hit) await page.evaluate(() => new Promise((r) => setTimeout(r, 200)));
+    }
+
+    if (!hit) {
+      const elsewhere = posts[0];
+      if (elsewhere) {
+        add('Medium', route, 'desktop', 'form round trip: the contact form posted to ' + elsewhere.url +
+          ' rather than /api/contact, so the round trip is UNMEASURED, not clean. Point the form at the ' +
+          'template endpoint, or accept that no gate here proves the enquiry arrives.');
+        continue;
+      }
+      const complaint = await page.evaluate(() => {
+        const a = Array.from(document.querySelectorAll('[role="alert"],[aria-invalid="true"]'))
+          .filter((n) => { const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
+          .map((n) => (n.textContent || n.getAttribute('name') || n.id || '').trim()).filter(Boolean);
+        return a.slice(0, 3).join('; ');
+      }).catch(() => '');
+      add('High', route, 'desktop', 'form round trip: pressing send made no request at all, so nothing was submitted. ' +
+        (complaint
+          ? 'The form rejected the sample values: "' + complaint + '". Valid values were entered in every visible field, so the validation is refusing something it should accept.'
+          : 'The submit handler never bound, or it swallows the submit. Fields filled: ' + filled.fields.join(', ') + '.'));
+      continue;
+    }
+
+    if (!hit.resp) {
+      add('High', route, 'desktop', 'form round trip: the submission to /api/contact never got a response ' +
+        '(the request failed at the network level). The endpoint is not being served at that path.');
+      continue;
+    }
+    const status = hit.resp.status();
+    let body = null;
+    try { body = JSON.parse(await hit.resp.text()); } catch { /* a non-JSON answer is itself the finding */ }
+    if (refusedRedirect) {
+      add('High', route, 'desktop', 'form round trip: /api/contact redirected the submission to ' + refusedRedirect +
+        ', a different origin, and the redirect was REFUSED rather than followed. Nothing was delivered there and the ' +
+        'smoke secret did not leave this site. A contact endpoint that hands the submission to another host is not the ' +
+        'endpoint this gate can measure: point the form at the vendor directly, or keep the handoff server-side.');
+    } else if (status === 404 || status === 405) {
+      add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status + ', so the endpoint is not being ' +
+        'served at that path. Either the route is missing from the build, or this preview is a plain static server ' +
+        'and not `npm run preview`, which runs the adapter and serves the endpoint. Nothing about the form is proven either way.');
+    } else if (status < 200 || status >= 300) {
+      // A 400 or 403 is what the endpoint's OWN validation answers once the smoke header has
+      // been refused, and on a local preview the commonest cause by a distance is a build that
+      // never had PUBLIC_SITE_ENV set: an unknown environment requires the secret, so the
+      // header is ignored and the real path runs. `serve-preview.sh` bakes it in both modes,
+      // but its built mode REUSES an existing dist/, so a dist left behind by a bare
+      // `npm run build` is served unbaked and refuses. Without naming that, this message sends
+      // the reader off to debug Turnstile on a form with nothing wrong with it.
+      const refused = status === 400 || status === 403;
+      add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status +
+        (body && body.error ? ' (' + body.error + ')' : '') + '. The form reaches the endpoint and the endpoint refuses it.' +
+        (refused ? ' On a local preview, check PUBLIC_SITE_ENV was set at BUILD time first: an unbaked build requires ' +
+          'PALATE_SMOKE_SECRET, so the smoke header is ignored and the real validation runs. serve-preview.sh sets it, ' +
+          'a bare `npm run build` does not, and serve-preview.sh reuses an existing dist/ rather than rebuilding it.' : ''));
+    } else if (!body || body.smoke !== true) {
+      add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status + ' without `smoke: true`, so the ' +
+        'smoke header was ignored and the submission took the real path. Against a deployed site that is a fake enquiry ' +
+        'in the inbox and, with a CMS wired, a document in the client\'s content. Either the endpoint predates the smoke ' +
+        'contract, or PUBLIC_SITE_ENV says production and PALATE_SMOKE_SECRET is unset or does not match.');
+    } else {
+      console.error('verify-rendered: form round trip: ' + route + ' answered ' + status + ' with smoke: true (' +
+        filled.fields.length + ' field(s) filled, nothing sent).');
+    }
   }
   await context.close();
 }
@@ -1168,7 +2166,7 @@ const STALL_ITERS = Math.max(1, Math.round(numEnv('PALATE_HYGIENE_STALL_ITERS', 
 // The exact command to re-run, reconstructed from this invocation so the agent can copy it
 // rather than reconstruct it. A "re-run the gate" instruction with no command is an instruction
 // to guess.
-const RERUN = ['node', process.argv[1], '--url', base, '--routes', routes.join(','),
+const RERUN = ['node', process.argv[1], '--url', base, '--routes', (rendering.length ? rendering : routes).join(','),
   ...(outDir ? ['--out', outDir] : []), ...(args['no-vitals'] === 'true' ? ['--no-vitals'] : [])].join(' ');
 
 if (projected) {
@@ -1186,7 +2184,9 @@ if (projected) {
 
   // The measurement CONFIGURATION, not the outcome: see basisOf() for why keying it on the
   // scored checks made a successful fix read as NO COMPARISON.
-  const measuredWith = { routes, vitals: args['no-vitals'] !== 'true', axe: !!axeSource };
+  // The routes actually RENDERED, never the ones selected: a run that skipped half the site
+  // measured a different set, and hygiene-loop.mjs refuses to compare across a changed basis.
+  const measuredWith = { routes: rendering, vitals: args['no-vitals'] !== 'true', axe: !!axeSource };
   const basis = basisOf(measuredWith);
   const tailBefore = comparableTail(hist.entries, basis);
   const entry = entryFor(projected, {
@@ -1221,6 +2221,20 @@ if (projected) {
   for (const n of notes) console.error('verify-rendered: ' + n);
   hygieneLoop = { basis, trend: cmp.verdict, delta: cmp.delta, previous: cmp.previous?.overall ?? null,
     iteration: stall.iterations, stalled: stall.stalled, blockers: stall.blockers, rerun: RERUN, notes };
+} else {
+  // A RUN WITH NO SCORE SAYS SO. The design checks and the vitals are both measured on the home
+  // route, so `--changed --no-vitals` over a blast radius that excludes `/` computes neither and
+  // the whole block above is skipped: three of the loop's own runs printed no hygiene line and
+  // no trend line at all, while the doctrine told the agent to read the trend on every one of
+  // them. A plain run at least said the home route was skipped; these said nothing, which reads
+  // as a run with nothing to report rather than a run that measured nothing.
+  const why = rendering.includes('/')
+    ? 'the home route rendered but yielded no design or vitals measurement'
+    : 'the home route was not rendered this run, and both the design checks and the vitals are measured on it';
+  console.error(
+    `verify-rendered: build hygiene was NOT measured (${why}), so there is no score and no trend ` +
+    'for this run. The sweep before hand-over (--full, vitals on) measures it.',
+  );
 }
 
 if (outDir) {
@@ -1262,6 +2276,238 @@ if (outDir) {
     // block. Still said out loud: a missing artefact should never be discovered by its absence.
     console.error(`verify-rendered: FAILED to write ${outDir}/design.json (${e?.message ?? e}). The scored evidence and the hygiene trend are LOST for this run.`);
   }
+
+  // THE PER-ROUTE RECORD, and why it is written here rather than inside the route loop.
+  //
+  // A route earns a record only when it rendered THIS run and nothing at or above High was
+  // filed against it, and the hygiene block above can file a High against `/` long after the
+  // loop finished. Banking a pass inside the loop would have recorded a verdict the gate had
+  // not yet reached.
+  //
+  // MERGED into the shots manifest, never written over it: screenshot-build.mjs owns status,
+  // shots and the console-error count in the same file, and this gate owns `routes`.
+  try {
+    // THE CLIENT-NAV PROBE FILES AGAINST "<path> (via client-nav)", not against the path, so a
+    // naive set never matched the route it was about.
+    const highRoutes = new Set(findings
+      .filter((f) => (RANK[f.sev] || 0) >= RANK.High)
+      .map((f) => String(f.route).replace(/ \(via client-nav\)$/, '')));
+    let m = {};
+    try { m = JSON.parse(readFileSync(shotsManifest, 'utf8')); } catch { m = {}; }
+    if (!m || typeof m !== 'object' || Array.isArray(m)) m = {};
+    const out = (m.routes && typeof m.routes === 'object' && !Array.isArray(m.routes)) ? { ...m.routes } : {};
+    for (const p of rendering) {
+      const sh = sourcesHashes.get(p);
+      const text = renderedText.get(p);
+      // A route this run could not HASH keeps whatever record it had. Deleting it threw away a
+      // real record every time a run-site command passed --routes, and every no-index fallback,
+      // so a /post between two build-loop passes emptied the loop's memory. A route that FAILED
+      // is a different case and is dropped below, whether it rendered or was skipped.
+      if (!sh || text === undefined) continue;
+      if (highRoutes.has(p)) { delete out[keyOf(p)]; continue; }
+      out[keyOf(p)] = { sourcesHash: sh, renderedHash: textHash(text), passed_at: new Date().toISOString() };
+    }
+    // A SKIPPED ROUTE IS NOT EXEMPT. The no-JS, focus, hover-nav, vitals and design probes all
+    // file against `/` and run whatever the selection is, so a skipped home route with a failing
+    // probe used to keep its passing record and be skipped again next run. The doc says a record
+    // is dropped the moment a route fails; this is what makes that true rather than nearly true.
+    for (const p of highRoutes) delete out[keyOf(p)];
+    m.routes = out;
+    m.globalInputs = globalInputs.hash;
+    m.sweep = sweep;
+    writeFileSync(shotsManifest, JSON.stringify(m, null, 2) + '\n');
+  } catch (e) {
+    console.error(
+      `verify-rendered: FAILED to write the per-route record to ${shotsManifest} (${e?.message ?? e}). ` +
+      'The next run will render every route, which is slow and never wrong.',
+    );
+  }
+
+  // THE SHOTS MANIFEST IS THE AUTHORITY AND THIS IS THE CONVENIENCE COPY, in that order.
+  // verify-report.json is written by the palate-verifier AGENT, so a copy of the sweep there
+  // is one an LLM can overwrite; gate-done reads the tool-written manifest first and only
+  // falls back to this. Merged into an existing report and never created, because creating
+  // one would turn "no renderable preview, skip" into a gate that runs on a stub.
+  try {
+    const reportPath = join(dirname(resolve(outDir)), 'verify-report.json');
+    if (existsSync(reportPath)) {
+      const rep = JSON.parse(readFileSync(reportPath, 'utf8'));
+      if (rep && typeof rep === 'object' && !Array.isArray(rep)) {
+        rep.sweep = sweep;
+        writeFileSync(reportPath, JSON.stringify(rep, null, 2) + '\n');
+      }
+    }
+  } catch { /* the manifest already carries it; a bad report is the verifier's own problem */ }
+}
+
+// ------------------------------------------------- disclosure probe -----
+/**
+ * Open the mobile nav and any dialog, assert the target appeared, press Escape, assert it went.
+ *
+ * WHY ESCAPE IS THE ASSERTION AND NOT A NICETY. A mobile nav is usually a full-screen overlay
+ * over the page it covers, and a dialog is one by definition. A visitor driving the keyboard
+ * who opens either and finds no Escape has to tab through the whole sheet to reach a close
+ * control, if there is one; the dialog and menu-button patterns both make Escape the way out.
+ * It is also the cheapest possible signal that the open state is actually managed rather than
+ * a class toggled on and forgotten. A native <dialog> gets this free, which is exactly why a
+ * hand-rolled one that does not is worth catching.
+ *
+ * SCOPED SO IT CANNOT FIRE ON A DESIGN CHOICE. The control must be a button (or role button),
+ * visible, currently CLOSED, outside a form so a click cannot submit something, and its target
+ * must be findable and currently hidden. A nav that is simply visible at 390 has nothing to
+ * open and is left alone.
+ *
+ * WHAT IT CANNOT SEE, said plainly: a <dialog> opened by a button whose handler is bound in a
+ * module, with no aria-controls, no commandfor and no data-dialog-target, is not discoverable
+ * from the DOM. Wire the trigger to the dialog with one of those and it is covered.
+ *
+ * At mobile both kinds are probed. At desktop only dialogs are, because a nav at desktop is
+ * normally already open and a third pass would cost a click per route for nothing.
+ *
+ * Findings are deduplicated on the check plus the control's label, because one nav or one
+ * dialog is normally one shared component and the alternative is the same fault filed
+ * fourteen times.
+ */
+async function disclosureProbe(page, route, vpName) {
+  let found = await detectDisclosures(page);
+  if (!found || !found.length) return;
+
+  /**
+   * ONE FAILURE LEAVES THE PAGE DIRTY, AND THE NEXT CANDIDATE PAYS FOR IT.
+   *
+   * A dialog that will not close on Escape is still open, in the top layer, over everything.
+   * The nav button underneath is then unclickable, and the run reported the nav as "did not
+   * open anything" when the nav was fine and the dialog was the fault. Two findings, one of
+   * them wrong, on a page with one real defect. So after anything that leaves state behind,
+   * the page is reloaded and the candidates re-detected before the next one is touched.
+   *
+   * Only when dirty. A page whose disclosures all opened and closed correctly costs no extra
+   * navigation, which is the common case and the one that must stay cheap.
+   */
+  let dirty = false;
+  for (let i = 0; i < found.length; i++) {
+    if (dirty) {
+      try {
+        await page.goto(base + route, { waitUntil: 'load', timeout: 20000 });
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 300)));
+        const again = await detectDisclosures(page);
+        if (!again || again.length <= i) break;
+        found = again;
+      } catch { break; }
+      dirty = false;
+    }
+    const c = found[i];
+    // A nav at desktop is normally already open; only dialogs earn a second pass.
+    if (vpName !== 'mobile' && c.kind !== 'dialog') continue;
+    const where = c.kind === 'dialog' ? '' : ' at 390';
+    const file = (suffix, msg) => {
+      const { check, sev } = DISCLOSURE_CHECKS[c.kind][suffix];
+      const key = check + ' ' + c.label;
+      if (navSeen.has(key)) return;
+      navSeen.add(key);
+      add(sev, route, vpName, c.kind + ': ' + msg);
+      // Only a High reaches interaction.json, which is the file hooks/palate-stop.mjs blocks
+      // on. A Medium that blocked would make "Medium" mean nothing.
+      if (sev === 'High') {
+        interactionFailures.push({ msg: route + ' @' + vpName + ': ' + c.kind + ': ' + msg, route, viewport: vpName, rule: check, check });
+      }
+    };
+
+    const state = () => page.evaluate((n) => {
+      const vis = (el) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect(), st = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && st.display !== 'none' && st.visibility !== 'hidden' && parseFloat(st.opacity || '1') > 0.05;
+      };
+      const el = document.querySelector('[data-ix-dis="' + n + '"]');
+      const t = document.querySelector('[data-ix-dis-t="' + n + '"]');
+      return { expanded: !!el && el.getAttribute('aria-expanded') === 'true', targetVisible: vis(t) };
+    }, c.i);
+
+    try {
+      await page.click('[data-ix-dis="' + c.i + '"]', { timeout: 4000 });
+    } catch (e) {
+      const why = e && e.message ? String(e.message).split(String.fromCharCode(10))[0] : String(e);
+      file('open', 'the control "' + c.label + '" could not be clicked' + where + ' (' + why +
+        '). A control a pointer cannot reach is one nobody can open.');
+      dirty = true;
+      continue;
+    }
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 400)));
+    const open = await state();
+    if (!open.expanded && !open.targetVisible) {
+      file('open', 'the control "' + c.label + '" did not open anything when clicked' + where + ': ' +
+        'aria-expanded stayed false and ' + (c.hasTarget ? 'the element it controls stayed hidden' : 'no panel appeared') +
+        (c.kind === 'dialog' ? '. A dialog nobody can open is a dead end in the flow it belongs to.'
+          : '. The burger is the only way into the navigation on a phone.'));
+      dirty = true;
+      continue;
+    }
+
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 350)));
+    const shut = await state();
+    if (shut.expanded || shut.targetVisible) {
+      file('escape-dismiss', 'what "' + c.label + '" opened cannot be dismissed with Escape' + where + '. ' +
+        'An overlay a keyboard visitor cannot close leaves them tabbing through the whole sheet to get out. ' +
+        'Close it on Escape as well as on the button (a native <dialog> does this for free unless the cancel ' +
+        'event is prevented). Advisory: this does not block the build.');
+      dirty = true;
+      continue;
+    }
+    console.error('verify-rendered: ' + c.kind + ': ' + route + ' @' + vpName + ' opened and dismissed "' + c.label + '" with Escape.');
+  }
+}
+
+/** The candidates on the page as it stands, marked so they can be found again after a click. */
+async function detectDisclosures(page) {
+  try {
+    return await page.evaluate(() => {
+      const vis = (n) => {
+        if (!n) return false;
+        const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+        return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.05;
+      };
+      const isDialog = (trigger, target) =>
+        trigger.getAttribute('aria-haspopup') === 'dialog' ||
+        (!!target && (target.tagName === 'DIALOG' || target.getAttribute('role') === 'dialog' || target.getAttribute('aria-modal') === 'true'));
+      const label = (el) => {
+        const cls = (el.className && typeof el.className === 'string') ? '.' + el.className.trim().split(/\s+/)[0] : '';
+        return (el.getAttribute('aria-label') || (el.innerText || '').trim() || el.id || cls || 'the control').slice(0, 40);
+      };
+      const out = [];
+      const taken = new Set();
+      const consider = (el, target) => {
+        if (out.length >= 3 || taken.has(el)) return;
+        if (!vis(el) || el.closest('form')) return;                // a click here could submit
+        if (el.getAttribute('aria-expanded') === 'true') return;   // already open
+        if (vis(target)) return;                                   // nothing to open
+        // With neither a target to watch nor an aria-expanded to read there is nothing to
+        // assert, so it is left alone rather than judged on a guess.
+        if (!target && !el.hasAttribute('aria-expanded')) return;
+        taken.add(el);
+        const i = String(out.length);
+        el.setAttribute('data-ix-dis', i);
+        if (target) target.setAttribute('data-ix-dis-t', i);
+        out.push({ i, label: label(el), hasTarget: !!target, kind: isDialog(el, target) ? 'dialog' : 'mobile nav' });
+      };
+      const sel = 'button[aria-expanded],[role="button"][aria-expanded],button[aria-controls],' +
+        '[role="button"][aria-controls],button[aria-haspopup="dialog"],[role="button"][aria-haspopup="dialog"]';
+      for (const el of document.querySelectorAll(sel)) {
+        const id = el.getAttribute('aria-controls');
+        consider(el, id ? document.getElementById(id) : null);
+      }
+      // A native <dialog> whose trigger names it some other way. Without this arm the commonest
+      // shape of all, `<button commandfor="dlg">` beside `<dialog id="dlg">`, is invisible here.
+      for (const d of document.querySelectorAll('dialog')) {
+        if (d.open || !d.id) continue;
+        const esc = (window.CSS && CSS.escape) ? CSS.escape(d.id) : d.id;
+        const t = document.querySelector(`[commandfor="${esc}"],[data-dialog-target="${esc}"],[aria-controls="${esc}"]`);
+        if (t) consider(t, d);
+      }
+      return out;
+    });
+  } catch { return null; }
 }
 
 // ------------------------------------------------------------- helpers -----
@@ -1306,5 +2552,22 @@ async function snapFrame(page, cap, i) {
 findings.sort((a, b) => (RANK[b.sev] || 0) - (RANK[a.sev] || 0));
 for (const f of findings) console.log(`${f.route} @${f.vp}  [${f.sev}]  ${f.msg}`);
 const highest = findings.reduce((m, f) => Math.max(m, RANK[f.sev] || 0), 0);
-console.error(`verify-rendered: ${findings.length} finding(s) across ${routes.length} route(s) x 3 viewports + the no-JS + 404 probes`);
-process.exit(highest >= RANK.High ? 1 : 0);
+console.error(
+  `verify-rendered: ${findings.length} finding(s) across ${rendering.length} rendered route(s)` +
+  (skipped.length ? ` (${skipped.length} unchanged, skipped)` : '') +
+  ' x 3 viewports + the no-JS + 404 probes',
+);
+// A FAILURE STILL WINS. Only once nothing is wrong does "nothing was inspected" become the
+// verdict: a run that rendered no route did not pass, it was SKIPPED, and exit 0 is the one
+// answer that reads as a clean site. The house rule is that a gate never exits 0 having
+// inspected nothing, and the unchanged-route skip is the one path in this file that can.
+if (highest >= RANK.High) process.exit(1);
+if (!rendering.length) {
+  console.error(
+    'verify-rendered: SKIPPED, not passed (exit 2). No route was rendered: every selected route was ' +
+    'unchanged since its last passing render, so this run establishes nothing about them. The ' +
+    'home-route and 404 probes did run. Pass --full to render every route.',
+  );
+  process.exit(2);
+}
+process.exit(0);

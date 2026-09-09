@@ -62,8 +62,9 @@ never held to the bold bar.
    registered and `src/pages/explore.astro` is missing, when a rung carries no
    `what` / `why` / `feeling`, when two rungs claim one position, when the ladder has
    gaps, when a name is "Option 2", or when a feeling would describe any website ever
-   built. It has NO opinion when no variants are registered, so it is silent on every
-   non-Explore build. Report its findings verbatim: they name the entry, and the fix is
+   built. It has no OPINION when no variants are registered, and it says so: a first
+   stderr line reading `gate-explore: skipped (<reason>)` with exit 2 is a SKIP, never a
+   block, and never a pass. Read that line before reporting anything. Report its findings verbatim: they name the entry, and the fix is
    always in `src/lib/variants.ts`.
 
 3. **Anti-default / slop lint** (no Claude-default shapes or AI-tell copy):
@@ -260,7 +261,14 @@ never held to the bold bar.
 7. **The rendered bug-class gate** (the BOLD-build defects that a still and the code
    cannot catch - `references/rendered-bug-classes.md`). Serve the build (reuse the
    `serve-preview.sh` URL from step 5) and run:
-   `bash scripts/verify-rendered.sh $SERVE_URL --routes /,<other key routes> --out .palate-shots`
+   `node scripts/palate-index.mjs <project-dir>` then
+   `bash scripts/verify-rendered.sh $SERVE_URL --out .palate-shots`
+   **BUILD THE INDEX FIRST.** With no `--routes` the gate reads `.palate/index.json` and
+   renders every static route plus one representative per dynamic template, capped at 14
+   (`--max-routes <n>` raises it); with no readable index it falls back to three GUESSED
+   paths and says so. Naming routes by hand also turns the per-route record OFF, because a
+   hand-named route has no source list to hash, so keep `--routes` for the case where you
+   genuinely want three pages and no incremental re-runs.
    It loads the site at 390 / 834 / 1440 in a real browser AND tests the paths a
    reduced-motion / `scrollTo` screenshot pass MASKS: a REAL `mouse.wheel` scroll with
    JS ON and motion ON, and a JS-OFF pass. Exit 1 = a High finding; exit 3 = browser
@@ -342,6 +350,70 @@ re-render, and re-verify. Cap at **2-3 iterations on the visual loop**, then esc
 to the human with the manifest, the gate output, and the screenshots attached. Do not
 loop forever and do not lower the bar to pass. A revision that does not improve the
 rubric score is rejected, not accepted as progress.
+
+**RE-RUN THE BLAST RADIUS, NOT THE SITE, AND RUN THE LANES CHEAP FIRST.** One pass ran past
+thirty minutes, a check failed at minute twenty-five, and the next pass re-shot everything
+because one file had changed. After a fix:
+
+1. `bash scripts/ux-lint.sh <project-dir>` first. **It takes the PROJECT DIRECTORY and nothing
+   else**, and it lints every file a rule's glob matches; handing it a file path exits 2 with
+   "project dir not found", which is a gate that did not run rather than one that passed. It
+   is seconds on a whole site, so there is nothing to save by narrowing it, and there is no
+   point paying for a browser to tell you what a regex already knows.
+   **The lane order is ux-lint before rendered, rendered before vitals.**
+2. `bash scripts/verify-rendered.sh $SERVE_URL --changed <the files you edited> --no-vitals
+   --out .palate-shots`. `--changed` renders only the routes those files can reach, and a
+   file the index has never heard of falls wide and names itself rather than narrowing on a
+   guess. **`--changed` rebuilds `.palate/index.json` first**, because both the blast radius
+   and every route's hash are read from it: a fix that adds an import leaves the old closure
+   on disk, and the next fix to that imported file would neither select the page nor
+   invalidate its record. A route whose sources have not changed since it last passed is
+   skipped and named "unchanged, skipped"; if EVERY selected route is unchanged the run exits
+   **2, skipped rather than passed**, because nothing was established. Measured on a
+   thirty-route fixture, 25s against 187s; on a small site the fixed 15s of home-route probes
+   dominates, so read the saving as a ratio of your own sweep rather than as that number.
+3. **Read the trend line, and read what it is a trend OF.** It compares against the last
+   recorded run for this project and names which run that was. Three shapes, and only one of
+   them is a direction you may act on:
+   - **A verdict** (IMPROVING / REGRESSED / UNCHANGED) when the two runs swept the same routes.
+     This is the one to act on.
+   - **NOT COMPARABLE** when they swept different routes. Both scores are printed and neither
+     is better: the design checks are measured on the home route alone, so a blast radius that
+     excludes `/` drops four of them and the number moves by five points on a change that did
+     nothing. **Do not revert anything on this line.** Re-run with `--full` for a direction.
+   - **build hygiene was NOT measured**, when the run rendered no home route at all, which is
+     the common case for `--changed --no-vitals`. There is no score and no trend; that is
+     expected in the loop and is what the sweep before hand-over is for.
+4. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
+   CPU throttling on its own throttled context, and it measures the HOME route, which your
+   fix to a service page did not touch.
+
+**THE LAST RUN BEFORE HAND-OVER IS ONE FULL SWEEP:**
+`bash scripts/verify-rendered.sh $SERVE_URL --full --out .palate-shots`, with vitals on.
+`--full` ignores every unchanged-route record. The record is keyed on a route's own source,
+its import closure, the content entries it renders (the collection its `getCollection` call
+names) AND the shared inputs (the config, `package.json`, the lockfile, `src/styles`,
+`src/layouts` and the CSS those layouts import), so editing the brand tokens or
+the shared layout drops every record and the run says
+`global inputs changed, all routes re-rendered`. What stays outside the hash is remote content,
+`public/` assets and environment values, so an unchanged source can still render differently.
+An incremental run is how you converge; the full sweep is what you certify.
+
+**AND THE RUN NOW WRITES DOWN WHICH ONE IT WAS.** Every run records its own coverage into
+`.palate-shots/manifest.json` as `sweep` (whether it covered the whole site, how many routes it
+selected, rendered and skipped, and whether `--changed`, `--routes` or `--max-routes` narrowed
+it), and `gate-done.sh` prints it: `last sweep full, 12 route(s)` or `last sweep PARTIAL, 3 of
+12 route(s) rendered, 9 unchanged and skipped`. A partial sweep does NOT fail; that is the
+incremental path working. It is written down because `public/` assets sit outside the per-route
+hash, so a hero photograph can be replaced and no route's hash moves: the full sweep is the
+mitigation, and until this existed nothing could tell whether it had happened. **The record is
+written by the tool. Do not write a `sweep` block into `verify-report.json` yourself** - the
+gate prefers the manifest's copy precisely because that one is not narration.
+
+**DO NOT REPORT THE INCREMENTAL SKIP AS BROKEN EARLY IN A BUILD.** A route earns a record only
+when it rendered and nothing at or above High was filed against it, so the skip engages only on
+a site that is already clean. On a real build the speed-up arrives near the end and not before;
+seeing every route render again on iteration two is the loop working, not the cache failing.
 
 ## Your report (return this, nothing else)
 ```

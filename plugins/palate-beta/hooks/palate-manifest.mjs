@@ -37,6 +37,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveBuildContext } from "./project-dir.mjs";
 
 function readStdin() {
@@ -119,6 +120,21 @@ function blank() {
     project_resolved_by: null,
     business: null,
     signature_move: null,
+    // WHAT THIS BUILD WAS BUILT WITH. The same brief run twice can produce two different
+    // sites because the plugin, the MCP or the library underneath moved, and until these
+    // fields existed nothing in the record said so. Three are read locally; the library's
+    // stamp can only come from the server, which is the one party that knows what its
+    // catalogue currently holds.
+    plugin_version: null,
+    mcp_version: null,
+    library: null,            // { references, catalogue_stamp } from the MCP's own answer
+    library_unverified: true, // until the MCP sends a stamp. A missing one is never a verified one
+    rubric_version: null,
+    // TRUE until the vendored rubric exports a version. It does not yet: rubric.mjs is
+    // byte-identical to the grader's copy and hash-pinned in both repos, so the constant has
+    // to be added grader-side and read from here. Recording the absence is the point; a
+    // manifest that simply had no field would read as a build nobody thought about.
+    rubric_unverified: true,
     mcp_calls: [],
     // Palate calls that were REFUSED or came back empty. They are not grounding (the depth
     // gate counts mcp_calls, and a call that returned nothing taught the build nothing), but
@@ -186,6 +202,89 @@ function blank() {
     // recording it here is what lets the fact travel past this one session.
     grounding: null, // { state:"grounded"|"ungrounded", mcp_calls:int, checked_at, note }
   };
+}
+
+/**
+ * THE VERSION STAMPS. A rebuild that quietly differs is the failure these close.
+ *
+ * The plugin root is where VERSION and the vendored rubric live. `CLAUDE_PLUGIN_ROOT` is what
+ * Claude Code sets when it runs this hook, and it wins when it actually points at a plugin;
+ * otherwise this file's own directory is the root by construction (hooks/ sits beside VERSION),
+ * which keeps the stamps working when the hook is run directly, as the tests do.
+ */
+function pluginRoot() {
+  const env = process.env.CLAUDE_PLUGIN_ROOT;
+  if (env) {
+    try {
+      if (fs.existsSync(path.join(env, "VERSION"))) return env;
+    } catch {
+      /* an unreadable env root is not a root */
+    }
+  }
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+function readPluginVersion(root) {
+  try {
+    const v = fs.readFileSync(path.join(root, "VERSION"), "utf8").trim();
+    return v || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The rubric's own version, READ rather than added.
+ *
+ * rubric.mjs is vendored byte-identical from the grader and hash-pinned in both repos, so
+ * writing a constant into this copy would fail the grader's own sync test. The plugin reads
+ * the export if the grader ever adds one and records null otherwise: an absent version is a
+ * fact, and guessing one would put a number on a manifest that nothing measured.
+ */
+function readRubricVersion(root) {
+  try {
+    const src = fs.readFileSync(path.join(root, "scripts", "reference-capture", "rubric.mjs"), "utf8");
+    const m = src.match(/export\s+const\s+RUBRIC_VERSION\s*=\s*["'`]([^"'`]+)["'`]/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The library's stamp, in the MCP's own words.
+ *
+ * Only the server knows what its catalogue holds, so `refs_list_verticals` carries `total`,
+ * `catalogue_stamp` (the newest `updated_at` across the catalogue) and `mcp_version`. An older
+ * MCP sends none of it; that returns null here and leaves `library_unverified` standing, which
+ * is the honest record of a connection that could not say.
+ */
+function readLibraryStamp(result) {
+  const bodies = [];
+  if (result && typeof result === "object") {
+    if (result.structuredContent && typeof result.structuredContent === "object") bodies.push(result.structuredContent);
+    for (const b of Array.isArray(result.content) ? result.content : []) {
+      if (b && b.type === "text" && typeof b.text === "string") {
+        try {
+          bodies.push(JSON.parse(b.text));
+        } catch {
+          /* not JSON; nothing to read */
+        }
+      }
+    }
+  }
+  for (const j of bodies) {
+    if (!j || typeof j !== "object") continue;
+    const total = Number(j.total);
+    if (typeof j.catalogue_stamp === "string" && j.catalogue_stamp.trim() && Number.isFinite(total)) {
+      return {
+        references: total,
+        catalogue_stamp: j.catalogue_stamp,
+        mcp_version: typeof j.mcp_version === "string" && j.mcp_version.trim() ? j.mcp_version : null,
+      };
+    }
+  }
+  return null;
 }
 
 // Walk an arbitrary tool result and collect every `slug` string it contains.
@@ -545,6 +644,10 @@ function main() {
   // The file being written is the strongest hint available: a write into src/pages/index.astro
   // names its project even when the session cwd sits two levels above it.
   const ctx = resolveBuildContext(p.cwd || process.cwd(), { hint: written });
+  // NEVER RECORD A BUILD INTO THE PLUGIN. This wrote five stray build-manifest.json files into
+  // the skill repo, one of them recording 188 files_written across three unrelated
+  // repositories, because the resolver fell back to whatever directory the session sat in.
+  if (ctx.how === "refused" || !ctx.manifest) return;
   const MANIFEST = adoptStaleManifest(ctx);
   const projectDir = ctx.dir;
 
@@ -631,6 +734,23 @@ function main() {
   if (!("grounding" in m)) m.grounding = null; // additive third-state label (script-set)
   if (!Array.isArray(m.mcp_failures)) m.mcp_failures = []; // additive: refused/empty calls
   if (!Array.isArray(m.files_written_outside)) m.files_written_outside = [];
+  // Additive version stamps. `library_unverified` defaults TRUE on an older manifest: it
+  // predates the stamp, so nothing verified its library, and defaulting the other way would
+  // quietly certify a build nobody measured.
+  if (!("plugin_version" in m)) m.plugin_version = null;
+  if (!("mcp_version" in m)) m.mcp_version = null;
+  if (!("library" in m)) m.library = null;
+  if (!("library_unverified" in m)) m.library_unverified = true;
+  if (!("rubric_version" in m)) m.rubric_version = null;
+  if (!("rubric_unverified" in m)) m.rubric_unverified = true;
+  // Read once and kept: these are what the build STARTED on, and re-reading them every call
+  // would let a mid-build plugin update rewrite history.
+  if (m.plugin_version == null || m.rubric_version == null) {
+    const root = pluginRoot();
+    if (m.plugin_version == null) m.plugin_version = readPluginVersion(root);
+    if (m.rubric_version == null) m.rubric_version = readRubricVersion(root);
+  }
+  if (m.rubric_version != null) m.rubric_unverified = false;
 
   if (tool.startsWith("mcp__palate__")) {
     const evidence = resultEvidence(result);
@@ -653,6 +773,17 @@ function main() {
       const q = detectQuota(result);
       if (q) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(q, result) }));
       return;
+    }
+
+    // The library stamp, first answer wins. A re-seed mid-build must not rewrite what the
+    // survey actually read.
+    if (tool === "mcp__palate__refs_list_verticals" && m.library == null) {
+      const stamp = readLibraryStamp(result);
+      if (stamp) {
+        m.library = { references: stamp.references, catalogue_stamp: stamp.catalogue_stamp };
+        m.library_unverified = false;
+        if (stamp.mcp_version && m.mcp_version == null) m.mcp_version = stamp.mcp_version;
+      }
     }
 
     const slugs = new Set();

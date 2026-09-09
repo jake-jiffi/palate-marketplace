@@ -30,8 +30,17 @@ not required for content freshness (SSR already serves fresh), so wiring the
 Sanity webhook is optional on the Cloudflare path.
 
 ## Manual refresh
-Vercel: re-run `vercel deploy --prod` or push to `main`. Cloudflare:
-`wrangler deploy` or a `workflow_dispatch` on `deploy.yml`.
+Vercel: re-run `vercel deploy --prod` or push to `main`. Cloudflare: `npm run deploy`
+(which builds first) or a `workflow_dispatch` on `deploy.yml`.
+
+**Never a bare `wrangler deploy`.** It does not build: `wrangler.toml` points at `./dist`, so it
+ships whatever is there, and four local commands rebuild `dist/` without `PUBLIC_SITE_ENV`
+(`verify-scaffold.sh`, `verify-is-real-astro.sh`, `phantom-utility-check.mjs` and
+`boards-render.mjs`). `serve-preview.sh` is NOT among them: it sets `preview` in both of its
+modes, which is what lets the local round trip run with no secret. An unbaked build noindexes
+itself, and the contact endpoint refuses the post-deploy smoke header on it rather than
+honouring it, so the round trip skips with a reason instead of a live site quietly discarding
+enquiries. `npm run deploy` bakes `production` and then deploys.
 
 ## The form handler is dynamic
 `src/pages/api/contact.ts` has `prerender = false` and runs as a server function

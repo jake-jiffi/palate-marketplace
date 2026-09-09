@@ -70,6 +70,12 @@ it and that person, rather than telling them it is fine.
 
 ## 1. Gather
 
+**First, check you are standing in a site.** These all default to the working directory. If it
+holds no `package.json` plus `src/pages`, and no `build-manifest.json` whose `project` is this
+directory, stop and ask which site to report on. Run from a plugin checkout the gates measure the
+plugin rather than anybody's website; they refuse it themselves (`refused:`, exit 2), and this is
+so you never ask them to.
+
 Run these, in this order. Each is instant or seconds.
 
 ```

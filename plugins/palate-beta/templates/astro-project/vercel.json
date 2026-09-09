@@ -26,7 +26,8 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://app.humblytics.com https://challenges.cloudflare.com https://vercel.live; connect-src 'self' https://*.humblytics.com https://challenges.cloudflare.com https://vercel.live wss://ws-us3.pusher.com; frame-src 'self' https://challenges.cloudflare.com https://vercel.live; style-src 'self' 'unsafe-inline' https://vercel.live; img-src 'self' data: blob: https:; font-src 'self' data: https://vercel.live https://assets.vercel.com" }
       ]
     }
   ]

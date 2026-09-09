@@ -24,6 +24,53 @@ set -uo pipefail
 
 TARGET="${1:-.}"
 REF="${PALATE_REF:-main}"
+
+# NEVER GRADE THE PLUGIN'S OWN FILES.
+#
+# DUPLICATED FROM hooks/project-dir.mjs ON PURPOSE, and it is the one duplication here that is
+# not drift waiting to happen: bootstrap.sh curls this script ALONE into a cache directory, so
+# it has no sibling to import and must carry the predicate itself. Three conditions, matching
+# pluginRootRefusal(): the directory is CLAUDE_PLUGIN_ROOT, it sits inside it, or it carries
+# .claude-plugin/plugin.json, on the directory itself or on any ancestor up to the git toplevel.
+# A test that needs a fixture linted copies it to a temporary directory first.
+palate_plugin_refusal() { # <dir> -> prints the reason and returns 0 when it must be refused
+  local d
+  d="$(cd "$1" 2>/dev/null && pwd)" || return 1
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    local root
+    root="$(cd "$CLAUDE_PLUGIN_ROOT" 2>/dev/null && pwd)" || root=""
+    if [ -n "$root" ]; then
+      case "$d" in
+        "$root") echo "$d is CLAUDE_PLUGIN_ROOT, the Palate plugin itself, not a site"; return 0 ;;
+        "$root"/*) echo "$d is inside CLAUDE_PLUGIN_ROOT ($root), so it is part of the Palate plugin, not a site"; return 0 ;;
+      esac
+    fi
+  fi
+  # Ancestors too, bounded by the git toplevel: checking the candidate alone still let a gate
+  # run inside scripts/test or templates/astro-project measure the plugin. `.git` is a
+  # directory in a clone and a FILE in a worktree, so -e rather than -d.
+  local cur="$d" i=0
+  while [ "$i" -lt 12 ]; do
+    if [ -f "$cur/.claude-plugin/plugin.json" ]; then
+      if [ "$cur" = "$d" ]; then
+        echo "$d carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site"
+      else
+        echo "$d is inside the Claude Code plugin checkout at $cur (.claude-plugin/plugin.json), not a site"
+      fi
+      return 0
+    fi
+    [ -e "$cur/.git" ] && break
+    local parent; parent="$(dirname "$cur")"
+    [ "$parent" = "$cur" ] && break
+    cur="$parent"; i=$((i + 1))
+  done
+  return 1
+}
+
+if refusal="$(palate_plugin_refusal "$TARGET")"; then
+  echo "palate-verify: refused: $refusal. Name the site directory explicitly. NOT a pass." >&2
+  exit 2
+fi
 BASE="https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/${REF}"
 
 # Prefer local siblings (a repo checkout: this sits in scripts/ beside the real gates), so it
@@ -52,16 +99,26 @@ else
 fi
 
 rc=0
+# WHICH GATES ACTUALLY RAN. "PASS" over two gates where one was switched off and the other
+# could not read anything says the same word as a real pass, so the line names both lists.
+RAN=""
+SKIPPED=""
+note_ran()     { RAN="${RAN:+$RAN, }$1"; }
+note_skipped() { SKIPPED="${SKIPPED:+$SKIPPED, }$1 ($2)"; }
 
 # Gate 1: anti-freestyle. verify-is-real-astro.sh inspects the CWD, so run it inside TARGET.
 if [ "${PALATE_SKIP_ASTRO:-0}" != "1" ]; then
   echo "palate-verify: [1/2] anti-freestyle - real Astro scaffold, no loose root .html, it compiles" >&2
   if ( cd "$TARGET" && bash "$ASTRO" ); then
     echo "palate-verify: [1/2] OK" >&2
+    note_ran "anti-freestyle"
   else
     echo "palate-verify: [1/2] FAILED - scaffold from templates/astro-project (npx degit jake-jiffi/palate-website-builder/templates/astro-project .); do NOT hand-write root .html" >&2
+    note_ran "anti-freestyle"
     rc=1
   fi
+else
+  note_skipped "anti-freestyle" "PALATE_SKIP_ASTRO=1"
 fi
 
 # Gate 2: anti-slop lint (bootstrap.sh = ux-lint.sh + anti-patterns.md). On a real Astro
@@ -72,15 +129,34 @@ LINT_TARGET="$TARGET"
 echo "palate-verify: [2/2] anti-slop lint ($LINT_TARGET) - banned faces, the eyebrow/status pill, the closed list of tells" >&2
 if bash "$BOOT" "$LINT_TARGET"; then
   echo "palate-verify: [2/2] OK" >&2
+  note_ran "anti-slop lint"
 else
-  echo "palate-verify: [2/2] FAILED - AI tells above" >&2
-  rc=1
+  boot_rc=$?
+  if [ "$boot_rc" -eq 2 ]; then
+    # Could not check, which is not a failure and is certainly not a pass.
+    echo "palate-verify: [2/2] SKIPPED - the lint could not check $LINT_TARGET (reason above)" >&2
+    note_skipped "anti-slop lint" "nothing to inspect"
+  else
+    echo "palate-verify: [2/2] FAILED - AI tells above" >&2
+    note_ran "anti-slop lint"
+    rc=1
+  fi
 fi
 
 echo >&2
+gates_line="ran: ${RAN:-none}"
+[ -n "$SKIPPED" ] && gates_line="$gates_line; skipped: $SKIPPED"
+# ZERO GATES RUN IS NOT A PASS. With the Astro gate switched off and a lint that could not
+# inspect anything, this printed PASS and exited 0 over nothing measured. The line named
+# "ran: none", which is the honest half, but a CI step reads the verdict word and the exit code,
+# and this whole epic exists to stop a gate exiting 0 having inspected nothing.
+if [ -z "$RAN" ]; then
+  echo "palate-verify: SKIPPED ($gates_line). Nothing was inspected, so nothing has been established. NOT a pass." >&2
+  exit 2
+fi
 if [ "$rc" -eq 0 ]; then
-  echo "palate-verify: PASS. The gate is the floor, not the ceiling - ship against the render." >&2
+  echo "palate-verify: PASS ($gates_line). The gate is the floor, not the ceiling - ship against the render." >&2
 else
-  echo "palate-verify: FAIL. Fix the causes above and re-run. You are not done until this exits 0." >&2
+  echo "palate-verify: FAIL ($gates_line). Fix the causes above and re-run. You are not done until this exits 0." >&2
 fi
 exit "$rc"

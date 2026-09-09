@@ -142,7 +142,18 @@ whole job is to make the visitor FEEL something and remember it. Record the verd
 `manifest.commission.intensity` (`"high"` or `"calm"`) the moment you write the commission: it is
 the single machine-readable switch the v1.5 gates read to bind the bold bar (the pairwise gate +
 the ambition gate + the built-Explore requirement) to high-intensity briefs only, so a calm
-conveyancer or clinic is never held to it. For a high-intensity brand
+conveyancer or clinic is never held to it.
+
+**THE CLIENT ALSO GETS ASKED, AND THE TWO ANSWERS ARE DIFFERENT FACTS.** Explore's calibration
+row shows three or four real sites from the client's own vertical spanning restrained to bold,
+and the position they point at is recorded as `manifest.commission.intensity_asked` (1 to 4) by
+`/pick --intensity <n>`. It sits BESIDE `intensity`, never over it, and when they disagree the
+split is: **the asked one sets the default pick suggestion, the inferred one still governs the
+bold bar.** That is deliberate. A client under-reporting their own appetite is exactly the case
+the bar exists for, and a bar a client can talk down is not a bar; but ignoring what they said
+when suggesting a rung would be asking a question and then not listening to the answer.
+`intensity_asked` is also written before the boards are seen, so it is the cleanest signal we
+have of what they wanted BEFORE anything was shown to them. For a high-intensity brand
 the commission MUST require (these are commitments, not options to tick):
 
 - **One committed feeling, declared up front and never diluted.** Name it in the commission

@@ -15,7 +15,7 @@ exceptions; a CMS is opt-in and most builds have none (see `build-stages.md`).
 | A.6 COMPOSE | (build canonical pages from picks, adopt dominant tokens, archive variants, `PUBLIC_EXPLORE_MODE=false`) | PAUSE - client confirms direction | canonical `index.astro` + remaining pages in the chosen direction; project shape normalised |
 | A.8 finalise | (fill content.ts, rename bracket-free templates, init git) | verify-scaffold.sh + verify-is-real-astro.sh | preview-ready: content.ts filled, git initialised, anti-freestyle gate passed |
 | B sanity | provision-sanity.sh | verify-sanity.sh | project, dataset, two tokens, schemas, **seeded from content.ts** (Studio embedded at /studio, ships with the site) |
-| C cloudflare | provision-cloudflare.sh | verify-cloudflare.sh | secrets set, SSR worker deployed, workers.dev live |
+| C cloudflare | provision-cloudflare.sh | verify-cloudflare.sh | secrets set, SSR worker deployed, workers.dev live, contact form round trip proven (see testing.md) |
 | D github | provision-github.sh | verify-github.sh | repo, secrets, branch protection, CI building + deploying |
 | E domain | attach-domain.sh | verify-domain.sh | custom domain attached or manual instructions |
 | F optional | optional-services.sh / install-cro.sh | (non-blocking) | analytics, forms, search, IndexNow, CRO dormant |

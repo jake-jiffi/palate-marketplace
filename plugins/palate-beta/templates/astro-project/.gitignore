@@ -30,6 +30,16 @@ verify-report.json
 .palate/mcp-journal.jsonl
 .palate/harvest/
 .palate/live-capture/
+# Adoption captures a full-page PNG per route plus a filmstrip; one real adoption staged
+# 874MB of them. The adoption RECORD beside them (report.json, routes.json) is measured state
+# and stays committed, so this ignores the images and not the directory.
+.palate/adoption/**/*.png
+.palate/adoption/filmstrip/
+.palate/tmp/
+.palate/explore/shots/
+.palate/explore/seed/
+public/_explore/
+*.palate-bak
 .palate-devserver.log
 .palate-devserver.pid
 # MEASURED state stays committed and is deliberately absent above: baselines, the brand

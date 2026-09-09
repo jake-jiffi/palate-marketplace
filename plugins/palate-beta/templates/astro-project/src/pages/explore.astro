@@ -4,31 +4,42 @@
  *
  * ========================== WHY THIS PAGE EXISTS ===========================
  *
- * Explore's whole value is that it is a declared RANGE, and a link to eight URLs does not
- * communicate a range. Handed `/v1` through `/v8` with no framing, a client reads them as
- * eight guesses, opens two, picks the one nearest what they already had in mind, and the
+ * Explore's whole value is that it is a declared RANGE, and a link to five URLs does not
+ * communicate a range. Handed `/boards/b1` through `/boards/b5` with no framing, a client
+ * reads five guesses, opens two, picks the one nearest what they already had in mind, and the
  * ladder has bought nothing. Worse, the restrained rung reads as "the boring one" rather than
  * as one deliberate end of a span the boldest rung defines.
  *
- * So this page does four things a list of links cannot:
+ * So this page does five things a list of links cannot:
  *   1. says what just happened, in the client's language, not the build's,
- *   2. DRAWS the ladder, so the range is a thing you can see before you click anything,
- *   3. gives every rung its own argument (what it is, why, the feeling it carries), so the
- *      conversation can be about intent rather than taste,
- *   4. says what happens next, which is the step clients most often do not know they have:
+ *   2. asks the calibration question against real sites, because "how bold do you want to be"
+ *      is unanswerable in words and obvious in pictures,
+ *   3. DRAWS the ladder, so the range is a thing you can see before you click anything, with
+ *      the calibration answer marked on it,
+ *   4. shows every board inline with its own argument (what it is, why, the feeling, and what
+ *      moves), so the conversation can be about intent rather than taste,
+ *   5. says what happens next, which is the step clients most often do not know they have:
  *      react, combine across rungs, ask for changes, and only then build the whole site.
+ *
+ * ======================= IT IS ALWAYS THE FALLBACK ========================
+ *
+ * When the design canvas is available it is the richer surface and this page links to it
+ * first. When it is not, nothing is lost: every tool can open a URL. A missing canvas is not
+ * an error, and the doctrine says to send the preview URL either way.
  *
  * ============================ IT IS TEMPORARY =============================
  *
- * Explore mode only. It renders nothing unless PUBLIC_EXPLORE_MODE=true and at least one
- * variant is registered, and it is DELETED at Compose along with the /vN routes. It must
- * never be linked from the site's own navigation and it carries noindex, because it is a
- * working document for one client, not a page of the site.
+ * Explore mode only. It renders nothing unless PUBLIC_EXPLORE_MODE=true and at least one board
+ * is registered, and it is DELETED at Compose along with the `/boards/*` routes and
+ * `public/_explore/`. It must never be linked from the site's own navigation and it carries
+ * noindex, because it is a working document for one client, not a page of the site.
  *
- * It is styled from the brand tokens like everything else: the client is looking at their
- * own brand while they choose, and a picker in some neutral tool-grey would be the one
- * surface in the preview that does not look like them.
+ * It is styled from the brand tokens like everything else: the client is looking at their own
+ * brand while they choose, and a picker in some neutral tool-grey would be the one surface in
+ * the preview that does not look like them.
  */
+import { readFileSync, existsSync } from "node:fs";
+import { join, resolve, dirname } from "node:path";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { variants, landingVariants, byAmbition } from "../lib/variants";
 
@@ -37,10 +48,51 @@ const rungs = byAmbition(variants);
 const landings = byAmbition(landingVariants);
 const show = exploreMode && rungs.length > 0;
 
+/**
+ * Read a build artefact at BUILD TIME, from the project or the repo above it.
+ *
+ * The manifest legitimately lives at a repo root while the Astro site sits one level down, and
+ * every gate in the plugin has already been caught assuming otherwise. Two levels is enough for
+ * the shapes we ship and stops well short of wandering up somebody's home directory.
+ */
+function readArtefact(rel) {
+  let dir = process.cwd();
+  for (let i = 0; i < 3; i++) {
+    const p = join(dir, rel);
+    try { if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return null;
+}
+
+const manifest = readArtefact("build-manifest.json") || {};
+const canvasUrl = typeof manifest?.explore?.canvas_url === "string" ? manifest.explore.canvas_url : null;
+const asked = Number(manifest?.commission?.intensity_asked) || null;
+
+const refs = (readArtefact(".palate/explore/refs.json") || [])
+  .filter((r) => r && r.position && r.name)
+  .sort((a, b) => a.position - b.position);
+
 // The ladder is drawn from the real registry, so a rung that was dropped leaves a real gap
 // rather than a silently renumbered row.
 const maxAmbition = rungs.length ? Math.max(...rungs.map((v) => v.ambition || 1)) : 1;
 const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbition) * 74;
+
+/**
+ * Where the client's calibration answer lands on the ladder.
+ *
+ * The answer is a position on a row of three or four references, and the ladder has N rungs, so
+ * the two scales are different and the mapping has to be stated rather than assumed. It is a
+ * MARKER, never a pick: it says where they said they were aiming, which is the thing worth
+ * having in front of them while they look at what was built.
+ */
+const askedRung = (() => {
+  if (!asked || !rungs.length) return null;
+  const span = Math.max(1, (refs.length || 4) - 1);
+  return Math.min(maxAmbition, Math.max(1, Math.round(((asked - 1) / span) * (maxAmbition - 1)) + 1));
+})();
 ---
 
 {show && (
@@ -52,10 +104,40 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
         <p class="ex-lede">
           This is not {rungs.length} attempts at the same page. Before anything was designed we
           sampled a wide set of genuinely different concepts, kept the ones worth building, and
-          put them in order from the most restrained to the boldest. You are looking at a range,
-          not a shortlist. The point is to find out where on it you want to live.
+          put them in order from the most restrained to the boldest. Each one below is a board:
+          the entrance, the design system it sets, and one real section, which is everything a
+          direction can be judged on. You are looking at a range, not a shortlist.
         </p>
+        {canvasUrl && (
+          <p class="ex-canvas">
+            <a href={canvasUrl} rel="noreferrer">Open the boards on the design canvas</a>
+            <span class="ex-canvas-note">
+              Everything is side by side there and you can change any of it in place. This page
+              is the same set, in a browser, if you would rather not.
+            </span>
+          </p>
+        )}
       </header>
+
+      {/* ---------------- the calibration question, before the ladder ---------------- */}
+      {refs.length > 0 && (
+        <section class="ex-cal" aria-labelledby="cal-h">
+          <h2 id="cal-h">First: which of these is closest to how bold you want to be?</h2>
+          <p class="ex-note">
+            Real sites in your field, ordered the same way the directions below are. You do not
+            have to like them. Pointing at one tells us where to aim better than any adjective.
+          </p>
+          <ol class="ex-refs">
+            {refs.map((r) => (
+              <li class={`ex-ref${askedRung && asked === r.position ? " is-asked" : ""}`}>
+                <img src={`/_explore/ref${r.position}.jpg`} alt={`${r.name}, a reference at position ${r.position}`} width="720" height="450" loading="lazy" />
+                <p class="ex-ref-name">{r.position}. {r.name}</p>
+                <p class="ex-ref-why">{r.why}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {/* ---------------- the ladder, drawn ---------------- */}
       <section class="ex-ladder" aria-labelledby="ladder-h">
@@ -75,6 +157,7 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
                 <span class="ex-plot"><span class="ex-bar" style={`height:${height(v)}%`}></span></span>
                 <span class="ex-rung-n">{v.ambition}</span>
                 <span class="ex-rung-name">{v.name}</span>
+                {askedRung === v.ambition && <span class="ex-marker" data-asked-rung={v.ambition}>you said about here</span>}
               </a>
             </li>
           ))}
@@ -82,13 +165,13 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
         <p class="ex-ends"><span>more restrained</span><span>bolder</span></p>
       </section>
 
-      {/* ---------------- one card per rung, each arguing for itself ---------------- */}
+      {/* ---------------- one card per board, each arguing for itself ---------------- */}
       <section class="ex-list" aria-labelledby="dirs-h">
         <h2 id="dirs-h">The directions</h2>
         {rungs.map((v) => (
           <article class="ex-card">
             {/* The rung is an ORDINAL ON THE NAME, never a label above it. A small uppercase
-                "Rung 1 of 8" sitting immediately above a heading is the eyebrow/kicker
+                "Rung 1 of 5" sitting immediately above a heading is the eyebrow/kicker
                 pattern, which is an automatic fail in our own anti-pattern list, and the
                 verifier caught this page shipping eight of them. */}
             <div class="ex-card-head">
@@ -97,9 +180,16 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
               </h3>
               <p class="ex-feeling">{v.feeling} <span class="ex-of">&middot; rung {v.ambition} of {maxAmbition}</span></p>
             </div>
+            <a class="ex-shot" href={v.href} data-board-shot={v.id}>
+              <img src={`/_explore/${v.id}.png`} alt={`The entrance of ${v.name}`} width="1440" height="900" loading="lazy" />
+            </a>
             <dl class="ex-dl">
               <div><dt>What it is</dt><dd>{v.what}</dd></div>
               <div><dt>Why</dt><dd>{v.why}</dd></div>
+              {v.motion && <div><dt>What moves</dt><dd>{v.motion}</dd></div>}
+              {v.ctas && v.ctas.length > 0 && (
+                <div><dt>Call to action</dt><dd>{v.ctas.join(" / ")}</dd></div>
+              )}
               {v.lookAt && <div><dt>Look at</dt><dd>{v.lookAt}</dd></div>}
               {v.donor && <div><dt>Craft drawn from</dt><dd><code>{v.donor}</code></dd></div>}
             </dl>
@@ -141,9 +231,9 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
             like this collapses back to the safe choice.
           </li>
           <li>
-            <strong>You can mix.</strong> "Rung 5, but with 8's hero and 2's navigation" is a
-            normal answer and a more useful one than picking a single page. Sections are labelled
-            in this preview so you can point at one by name.
+            <strong>You can mix.</strong> "Rung 4, but with 5's hero and 2's navigation" is a
+            normal answer and a more useful one than picking a single board. Sections are
+            labelled in this preview so you can point at one by name.
           </li>
           <li>
             <strong>Tell us what to change, then look again.</strong> Reactions are cheap here and
@@ -152,10 +242,11 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
           </li>
           <li>
             <strong>Then the site gets built around it, properly.</strong> Once a direction is
-            settled it becomes the design system, and every remaining page (services, about,
-            contact, the blog, the legal pages) is built on it end to end, with accessibility,
-            performance and mobile checked on every one. This preview is deleted at that point:
-            it is scaffolding, not the building.
+            settled it becomes the design system. The home page is built first and shown to you
+            in full, moving, before anything else is written on top of it; then every remaining
+            page (services, about, contact, the blog, the legal pages) is built end to end, with
+            accessibility, performance and mobile checked on every one. This preview is deleted
+            at that point: it is scaffolding, not the building.
           </li>
         </ol>
         <p class="ex-note">
@@ -200,6 +291,23 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
   .ex-lede { font-size: 1.125rem; line-height: 1.6; opacity: 0.88; margin: 0; }
   .ex h2 { font-size: 1.375rem; line-height: 1.25; margin: 0 0 0.75rem; }
   .ex-note { opacity: 0.8; margin: 0 0 2rem; }
+  .ex-canvas { margin: 2rem 0 0; display: grid; gap: 0.35rem; }
+  .ex-canvas a { font-size: 1.0625rem; }
+  .ex-canvas-note { opacity: 0.8; font-size: 0.9375rem; line-height: 1.6; }
+
+  /* The calibration row: real sites, ordered the same way the ladder is. */
+  .ex-cal { margin-bottom: 5rem; }
+  .ex-refs {
+    list-style: none; margin: 0; padding: 0; display: grid; gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  }
+  .ex-ref img {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
+    object-position: top; border: 1px solid currentColor;
+  }
+  .ex-ref.is-asked img { outline: 3px solid currentColor; outline-offset: 3px; }
+  .ex-ref-name { margin: 0.75rem 0 0.25rem; font-size: 0.9375rem; }
+  .ex-ref-why { margin: 0; font-size: 0.875rem; line-height: 1.5; opacity: 0.8; }
 
   /* The ladder. Bars rise with ambition, so the range is visible before anything is clicked. */
   .ex-ladder { margin-bottom: 5rem; }
@@ -220,12 +328,16 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
     padding-top: 0.5rem; border-top: 1px solid currentColor; opacity: 0.78;
   }
   .ex-rung-name { display: block; font-size: 0.8125rem; line-height: 1.3; padding-top: 0.25rem; }
+  .ex-marker {
+    display: block; font-size: 0.75rem; line-height: 1.3; padding-top: 0.35rem;
+    border-top: 2px solid currentColor; margin-top: 0.35rem;
+  }
   .ex-ends {
     display: flex; justify-content: space-between; font-size: 0.75rem;
     letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.78; margin: 1rem 0 0;
   }
 
-  /* One card per rung. The label column carries the field names so the band fills its width. */
+  /* One card per board. The label column carries the field names so the band fills its width. */
   .ex-list { margin-bottom: 5rem; }
   .ex-card { padding: 2rem 0; border-top: 1px solid currentColor; }
   .ex-card:first-of-type { border-top-width: 2px; }
@@ -238,6 +350,11 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
   .ex-card h3 a { color: inherit; text-decoration: none; }
   .ex-card h3 a:hover, .ex-card h3 a:focus-visible { text-decoration: underline; }
   .ex-feeling { font-style: italic; opacity: 0.82; margin: 0 0 1.5rem; }
+  .ex-shot { display: block; margin: 0 0 1.5rem; }
+  .ex-shot img {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
+    object-position: top; border: 1px solid currentColor;
+  }
   .ex-dl { margin: 0 0 1.5rem; display: grid; gap: 1rem; }
   .ex-dl > div { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; align-items: baseline; }
   .ex-dl dt {

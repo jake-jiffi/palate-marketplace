@@ -138,6 +138,19 @@ which cannot be known before the commit exists.
    `<dir>/.palate/ledger.jsonl`. Name the files. Never `git add -A`, and never commit
    `.palate/index.json`, which is derived and gitignored.
 
+   **Once staged, and BEFORE the commit, run the size guard:**
+
+   ```
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/palate-stage-guard.sh" <dir>
+   ```
+
+   It exits 1 and names any staged file over 5 MB or any directory holding over 50 MB of
+   staged content. Ignores only cover paths somebody thought of, and an adoption run staged
+   874 MB of screenshots from a directory that had no rule yet. If it refuses, unstage what it
+   names, add the rule, and run `scripts/palate-gitignore.sh` so the next run is covered too.
+   Do not raise the limits to get past it unless the large file genuinely belongs in the
+   client's repository.
+
    **The ledger is not optional here.** `check` appended a line to it in section 2, and that line
    is the only artefact proving the gate did anything: what it caught, what it healed, what it
    held. Leave it out of this commit and it sits dirty in the working tree until the next person

@@ -275,7 +275,8 @@ test('with the gate off, nothing is reported as having passed anything', () => {
   const cur = entryFor(p, ON);
   const line = summaryLine({ scored: p, cmp: compare(cur, null), stall: detectStall([cur]), minScore: 0 });
   assert.match(line, /UNGATED/);
-  assert.doesNotMatch(line, /CLEARS/, '"CLEARS the 0 floor" reads as an endorsement of a build nothing judged');
+  assert.doesNotMatch(line, /clears/i, '"clears the 0 floor" reads as an endorsement of a build nothing judged');
+  assert.match(line, /\(not a grade\)/, 'an ungated number is still not a grade');
 });
 
 test('the rubric BAND never reaches a message or the history', () => {
@@ -306,7 +307,10 @@ test('clearing the floor is NOT reported as a quality verdict', () => {
   const p = proj(97);
   const cur = entryFor(p, ON);
   const pass = summaryLine({ scored: p, cmp: compare(cur, null), stall: detectStall([cur]), minScore: 80 });
-  assert.match(pass, /CLEARS the 80 floor/);
+  // The VERDICT leads and the number follows it. A number in front reads as a grade whatever
+  // the rest of the sentence says, and this one correlates with the public grade at -0.074.
+  assert.match(pass, /build hygiene: clears the 80 floor at 97 \(not a grade\)/);
+  assert.doesNotMatch(pass, /build hygiene 97\/100/, 'the score must not lead the line');
   assert.match(pass, /NOT A QUALITY VERDICT/);
   assert.match(pass, /cannot see whether the page is a template/);
   assert.match(pass, /A tidy template with no idea in it scores 97/);
@@ -322,7 +326,7 @@ test('clearing the floor is NOT reported as a quality verdict', () => {
 
   // And it must NOT appear on the block path, where it would be noise on top of a list of fixes.
   const fail = summaryLine({ scored: proj(61), cmp: compare(entry(61), null), stall: detectStall([entry(61)]), minScore: 80 });
-  assert.match(fail, /is BELOW the 80 floor/);
+  assert.match(fail, /build hygiene: is BELOW the 80 floor at 61 \(not a grade\)/);
   assert.doesNotMatch(fail, /NOT A QUALITY VERDICT/);
 });
 
@@ -330,7 +334,60 @@ test('the summary line is printed on a PASS too, so a lucky pass is still visibl
   const p = proj(84);
   const cur = entryFor(p, ON);
   const line = summaryLine({ scored: p, cmp: compare(cur, entry(83)), stall: detectStall([entry(83), cur]), minScore: 80 });
-  assert.match(line, /build hygiene 84\/100 CLEARS the 80 floor/);
+  assert.match(line, /build hygiene: clears the 80 floor at 84 \(not a grade\)/);
   assert.match(line, /UNCHANGED/, 'passing by one point on a flat trend is not the same as converging');
   assert.match(line, /HYGIENE ONLY: measured to disagree substantially with the public grade/);
+});
+
+// ------------------------------------------------- the trend across a blast radius ----
+// Once the rendered gate learned to render only a blast radius, every incremental run swept a
+// different route set and the basis refused every comparison. The loop this module exists for
+// was then available on a full sweep and nowhere else, which is precisely when nobody needs it.
+test('a different route set gets both numbers and NO verdict', () => {
+  // THE SCORED SETS DIFFER TOO, which is the whole mechanism and the thing the first version of
+  // this case could not see: it built both entries from the same projection helper, so only the
+  // route list moved, which is the one thing that does not happen on a real blast radius. The
+  // design checks are computed on the home route alone, so a radius that excludes `/` drops
+  // them and the denominator falls with them.
+  const sweep = entry(95, { text_contrast: 1, colour_accent_discipline: 0.9, spacing_rhythm: 0.9 },
+    { ...ON, routes: ['/', '/about', '/contact'] });
+  const radius = entry(90, { text_contrast: 1 }, { ...ON, routes: ['/about'] });
+  assert.equal(sweep.basis, radius.basis, 'the route set is coverage, not configuration');
+  const c = compare(radius, sweep);
+  assert.equal(c.verdict, 'coverage', 'a coverage difference must not be given a direction');
+  assert.equal(c.delta, null, 'a delta across coverage is a number that means nothing');
+  assert.match(c.coverageNote, /swept 1 of the 3 route\(s\)/);
+  const line = trendLine(c, 2);
+  assert.match(line, /NOT COMPARABLE/);
+  assert.match(line, /scored 90 and the run being compared scored 95/, 'both numbers are still reported');
+  assert.match(line, /Compared against the run at /, 'the line must say which run it compared with');
+  assert.doesNotMatch(line, /IMPROVING|REGRESSED|UNCHANGED/, 'no verdict may be stated');
+  assert.doesNotMatch(line, /revert it|Keep going/, 'and no instruction may be given');
+});
+
+test('a CHANGED SCORED SET inside the same route set still reports its verdict', () => {
+  // The other half, and the one that must not regress: repairing the contrast violation drops
+  // text_contrast from the roll-up, which is the run where the agent did exactly what it was
+  // told. It reports the gain, with the denominator disclosed.
+  const before = entry(21, { colour_accent_discipline: 0.25, text_contrast: 0 });
+  const after = entry(62, { colour_accent_discipline: 0.9 });
+  const c = compare(after, before);
+  assert.equal(c.verdict, 'improved');
+  assert.equal(c.coverageNote, null, 'the routes did not move, so there is nothing to disclose');
+  assert.match(trendLine(c, 2), /IMPROVING/);
+});
+
+test('a route set that is not a subset says so differently', () => {
+  const c = compare(entry(70, undefined, { ...ON, routes: ['/pricing'] }), entry(60, undefined, { ...ON, routes: ['/'] }));
+  assert.match(c.coverageNote, /a different route set/);
+});
+
+test('the same route set carries no coverage caveat', () => {
+  assert.equal(compare(entry(70), entry(60)).coverageNote, null);
+});
+
+test('a configuration change is STILL refused across route sets', () => {
+  const c = compare(entry(80, undefined, { ...ON, vitals: false, routes: ['/'] }),
+    entry(61, undefined, { ...ON, vitals: true, routes: ['/', '/about'] }));
+  assert.equal(c.verdict, 'incomparable', '--no-vitals is a different quantity whatever it swept');
 });

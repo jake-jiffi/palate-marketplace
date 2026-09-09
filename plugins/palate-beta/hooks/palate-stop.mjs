@@ -55,7 +55,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { buildLogEntry } from "./build-log-entry.mjs";
 import { resolveBuildContext } from "./project-dir.mjs";
 
@@ -66,6 +66,31 @@ const MERGE = path.join(HERE, "..", "scripts", "manifest-merge.mjs");
 const PHANTOM = path.join(HERE, "..", "scripts", "phantom-utility-check.mjs");
 const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$/i;
 const OVERFLOW_PX = 16; // a layout break, not a scrollbar/sub-pixel (clean builds read ~0)
+
+/**
+ * THE ONE CHANNEL THE OPERATOR ACTUALLY SEES.
+ *
+ * Writing to stderr and exiting 0 puts nothing in front of anybody. The Claude Code hooks
+ * reference is explicit: "Stderr from a hook that exits 0 goes to the debug log only, never the
+ * transcript, and Claude never sees it." So the first version of this forwarding moved the
+ * summary from one invisible place to another. The documented way is `systemMessage` in a JSON
+ * object on stdout, which for a Stop hook with `continue` unset is "shown to the user in the
+ * transcript instead".
+ *
+ * Lines are BUFFERED rather than written as they happen, because stdout carries the hook
+ * protocol: exactly one JSON object may be written, and a second one (or any loose text) would
+ * break the hook itself. Every exit path calls emitUserMessage() at most once, and the blocking
+ * path writes its own object and never calls it. The stderr copy stays, for `--debug`.
+ */
+const userLines = [];
+function say(line) {
+  userLines.push(line);
+  process.stderr.write(`[palate] ${line}\n`);
+}
+function emitUserMessage() {
+  if (!userLines.length) return;
+  process.stdout.write(JSON.stringify({ systemMessage: userLines.join("\n") }));
+}
 
 // Positive ON-DISK evidence of a REAL failure - the "enforce on evidence" layer. Unlike a
 // gate exit code (which conflates a real fail with could-not-verify, e.g. a subagent survey
@@ -303,26 +328,61 @@ function recordDonors(manifest, m) {
   }
 }
 
+/**
+ * Append one entry to the cross-build log. Extracted so the gates-off path can record that a
+ * build happened without going through the whole faces-and-donors read that recordBuild does.
+ */
+function appendBuildLog(entry) {
+  const dir = path.join(os.homedir(), ".config", "palate");
+  fs.mkdirSync(dir, { recursive: true });
+  const log = path.join(dir, "builds.log.json");
+  let entries = [];
+  try {
+    entries = JSON.parse(fs.readFileSync(log, "utf8"));
+  } catch {
+    // Back-compat: migrate the v1 jiffi-namespaced log on first write.
+    try {
+      entries = JSON.parse(
+        fs.readFileSync(path.join(os.homedir(), ".config", "jiffi", "builds.log.json"), "utf8"),
+      );
+    } catch {
+      entries = [];
+    }
+  }
+  if (!Array.isArray(entries)) entries = [];
+  entries.push(entry);
+  fs.writeFileSync(log, JSON.stringify(entries, null, 2) + "\n");
+}
+
+/**
+ * A BUILD RUN WITH THE GATES OFF STILL HAPPENED, and cross-build memory has to know.
+ *
+ * The manifest stamp landed, but the log entry only ever arrived through a LATER gated Stop on
+ * the same build. Somebody who sets PALATE_GATE_OFF=1 for a session and never runs a gated Stop,
+ * which is the ordinary way the variable is used, left no trace at all.
+ *
+ * MINIMAL ON PURPOSE. gate-novelty reads these entries to judge later builds, so an ungated
+ * build must not arrive carrying donors and faces and go on to certify a future build as
+ * different from one nothing checked. Timestamp, business, and the flag.
+ */
+function recordGatesOffBuild(manifestPath) {
+  try {
+    let business = null;
+    try {
+      business = JSON.parse(fs.readFileSync(manifestPath, "utf8")).business ?? null;
+    } catch {
+      /* an unreadable manifest still leaves a dated record that the gates were off */
+    }
+    appendBuildLog({ ts: new Date().toISOString(), business, gates_off: true });
+  } catch {
+    /* memory is best-effort; never block finishing over it */
+  }
+}
+
 function recordBuild(manifest) {
   try {
     const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
     recordDonors(manifest, m);
-    const dir = path.join(os.homedir(), ".config", "palate");
-    fs.mkdirSync(dir, { recursive: true });
-    const log = path.join(dir, "builds.log.json");
-    let entries = [];
-    try {
-      entries = JSON.parse(fs.readFileSync(log, "utf8"));
-    } catch {
-      // Back-compat: migrate the v1 jiffi-namespaced log on first write.
-      try {
-        entries = JSON.parse(
-          fs.readFileSync(path.join(os.homedir(), ".config", "jiffi", "builds.log.json"), "utf8"),
-        );
-      } catch {
-        entries = [];
-      }
-    }
     // Record the display faces used, read from the rendered variant HTML the manifest
     // points at, so type-face recurrence is computable across builds. Best-effort: a
     // missing/unreadable variant file just contributes no faces.
@@ -340,8 +400,7 @@ function recordBuild(manifest) {
     }
     // Entry shape (incl. the W1 Explore labels) lives in build-log-entry.mjs so it is
     // unit-testable without faking a whole passing build.
-    entries.push(buildLogEntry(m, [...faces]));
-    fs.writeFileSync(log, JSON.stringify(entries, null, 2) + "\n");
+    appendBuildLog(buildLogEntry(m, [...faces]));
   } catch {
     /* memory is best-effort; never block finishing over it */
   }
@@ -385,6 +444,47 @@ function readStopGate(manifestPath) {
 // Returns false when the latch could not be persisted. That matters: with no memory of the
 // previous stop every stop looks like the first, which would block forever, so the caller
 // falls back to the platform's own loop guard instead.
+/**
+ * PALATE_GATE_OFF=1 IS RECORDED, NEVER SILENT.
+ *
+ * Both hooks read the variable as their first act and exited before touching anything, so a
+ * build run with every gate disabled left no trace. Weeks later the manifest, the check report
+ * and the local grade all read exactly like a build that had been gated and passed. The bypass
+ * is legitimate and stays; it just goes on the record. Written through manifest-merge.mjs (the
+ * same script the gating path uses) so the stamp cannot clobber a concurrent hook write, and
+ * best-effort: a recording failure must never wedge the bypass it is recording.
+ */
+function recordGatesOff(startDir) {
+  let manifestPath = null;
+  let firstTime = false;
+  try {
+    const candidate = resolveBuildContext(startDir).manifest;
+    if (!candidate || !fs.existsSync(candidate)) return;
+    const m = JSON.parse(fs.readFileSync(candidate, "utf8"));
+    // THE SAME TEST THE GATED PATH APPLIES. That path exits on !wroteSource before it records
+    // anything, so a bypass must not record MORE than the gate it bypassed: a session that keeps
+    // the variable set and stands near any stale build-manifest.json was logging a build that
+    // was not happening, one entry per turn.
+    if (!(m.files_written ?? []).some((f) => SOURCE.test(f))) return;
+    // ONCE PER BUILD, NOT ONCE PER STOP. By the second turn the stamp is already in the manifest
+    // and a second entry says nothing the first did not.
+    firstTime = !(m.gates && m.gates.state === "off");
+    manifestPath = candidate;
+  } catch {
+    return; // an unreadable manifest is not a build to record, exactly as the gated path treats it
+  }
+  try {
+    execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
+      cwd: path.dirname(manifestPath),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch {
+    /* the bypass must work even when the record cannot be written */
+  }
+  // Separately, so a failed manifest stamp does not also cost the log entry.
+  if (firstTime) recordGatesOffBuild(manifestPath);
+}
+
 function writeStopGate(manifestPath, gate) {
   try {
     const m = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -398,14 +498,19 @@ function writeStopGate(manifestPath, gate) {
 }
 
 const p = readStdin() || {};
-if (process.env.PALATE_GATE_OFF === "1") process.exit(0);
+if (process.env.PALATE_GATE_OFF === "1") {
+  recordGatesOff(p.cwd || process.cwd());
+  process.exit(0);
+}
 
 // ONE answer to "which project is this", shared with palate-manifest.mjs. The manifest used to
 // be looked for in the session cwd while gate-done.sh reads the artefacts beside the manifest,
 // and on a build under WORK_ROOT/{slug}-site those are different directories.
 const ctx = resolveBuildContext(p.cwd || process.cwd());
 const manifest = ctx.manifest;
-if (!fs.existsSync(manifest)) process.exit(0); // not a build session
+// A refusal (the candidate is the Palate plugin itself) hands back no manifest at all, and
+// that is not a build session either: say nothing and write nothing.
+if (!manifest || !fs.existsSync(manifest)) process.exit(0); // not a build session
 // The artefact root is the manifest's own directory, deliberately: that is exactly how
 // gate-done.sh derives it, and the two agreeing is the whole point of the change.
 const cwd = path.dirname(manifest);
@@ -438,7 +543,7 @@ try {
  * Block, unless the same evidence has already been refused too many times.
  * Returns true when it BLOCKED (the caller must exit), false when it RELEASED (loudly).
  */
-function latchedBlock(reasons, reasonText) {
+function latchedBlock(reasons, reasonText, kind = "evidence") {
   const fingerprint = evidenceFingerprint(reasons);
   const prev = readStopGate(manifest);
   const same = Boolean(prev && prev.fingerprint === fingerprint);
@@ -449,6 +554,13 @@ function latchedBlock(reasons, reasonText) {
     unchanged,
     total,
     reasons,
+    // WHICH KIND OF LATCH THIS IS, so the evidence branch can clear its own and leave the gate
+    // one alone. Without it strict mode never counted past 1: the clear below fires whenever the
+    // evidence list is empty, a GATE failure is empty-evidence by definition, and every strict
+    // Stop therefore wiped the previous latch before gateFailure wrote a fresh one at 1. The
+    // comment in gateFailure says this latch exists so strict mode is not an unbounded block
+    // loop; for gate failures it was one.
+    kind,
     at: new Date().toISOString(),
   });
 
@@ -456,10 +568,12 @@ function latchedBlock(reasons, reasonText) {
   // release. Hand back to the platform's own loop guard rather than wedge the session.
   const untrackable = !persisted && p.stop_hook_active === true;
   if (unchanged > MAX_UNCHANGED_BLOCKS || total > MAX_TOTAL_BLOCKS || untrackable) {
-    process.stderr.write(
-      `[palate] RELEASING a build that still has ${reasons.length} unresolved gate failure(s) after ${unchanged} attempt(s) on the same evidence:\n` +
-        reasons.map((r) => `  - ${r}\n`).join("") +
-        "This is NOT a pass. The failures above are still on disk.\n",
+    // THE ONE LINE THE OPERATOR MOST NEEDS. It is the moment the hook stops standing in the
+    // way of a build with failures still on disk, and it went to the debug log alone.
+    say(
+      `RELEASING a build that still has ${reasons.length} unresolved gate failure(s) after ${unchanged} attempt(s) on the same evidence:\n` +
+        reasons.map((r) => `  - ${r}`).join("\n") +
+        "\nThis is NOT a pass. The failures above are still on disk.",
     );
     return false;
   }
@@ -492,10 +606,16 @@ if (positive.length) {
   // build must NOT reach cross-build memory: recordBuild feeds the novelty gate, and a build
   // recorded here would go on to certify future builds as different from a broken one.
   releasedWithFailures = true;
-} else if (readStopGate(manifest)) {
+} else {
   // The evidence cleared. Drop the latch so the next block starts from zero rather than
   // inheriting a spent counter.
-  writeStopGate(manifest, null);
+  //
+  // ONLY AN EVIDENCE LATCH. A gate failure records no evidence reasons, so this branch runs on
+  // every strict Stop that failed a gate and used to clear the counter that bounds it. A latch
+  // written before `kind` existed is treated as evidence, which is what it was: the gate latch
+  // never survived a single Stop.
+  const prevLatch = readStopGate(manifest);
+  if (prevLatch && (prevLatch.kind ?? "evidence") === "evidence") writeStopGate(manifest, null);
 }
 
 // Hard enforcement is opt-in. By DEFAULT never block finishing — blocking traps a
@@ -505,10 +625,16 @@ function gateFailure(reason) {
   if (process.env.PALATE_GATE_STRICT === "1") {
     // Through the SAME latch as the evidence path. Without it, removing the blanket
     // stop_hook_active release would turn strict mode into an unbounded block loop.
-    latchedBlock([reason], reason);
+    //
+    // A BLOCK already wrote its own JSON object to stdout, and a second one would break the
+    // hook, so only a RELEASE may hand the buffered lines over.
+    if (!latchedBlock([reason], reason, "gate")) emitUserMessage();
     process.exit(0);
   }
-  process.stderr.write(`[palate] ${reason}\n(Set PALATE_GATE_STRICT=1 to enforce this as a hard gate.)\n`);
+  // Through the same user channel as the summary: this line has been reaching the debug log
+  // and nobody else since the hook was written, which is the whole point of the fix above.
+  say(`${reason}\n(Set PALATE_GATE_STRICT=1 to enforce this as a hard gate.)`);
+  emitUserMessage();
   process.exit(0);
 }
 
@@ -546,20 +672,59 @@ const UNGROUNDED_FALLBACK =
 // still written to cross-build memory (a hole in that memory would quietly weaken the
 // novelty gate). It was previously sharing one try block with the done gate, where any
 // non-zero exit skipped both gate-done.sh and recordBuild().
-let depth = { state: "grounded", reason: "" };
-try {
-  execFileSync("bash", [GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // KEEP THE FLOOR
-} catch (e) {
-  const msg = (e && e.stderr ? e.stderr.toString() : "").trim();
-  if (isMissingShell(e)) {
-    process.stderr.write(`[palate] ${NO_SHELL_NOTE}\n`);
-    depth = { state: "unchecked", reason: NO_SHELL_NOTE };
-  } else {
-    depth =
-      e && e.status === 3
-        ? { state: "ungrounded", reason: msg || UNGROUNDED_FALLBACK }
-        : { state: "blocked", reason: msg || GATE_FALLBACK };
+/**
+ * Run one gate and keep BOTH streams. execFileSync discarded stdout outright and only handed
+ * back stderr when the call threw, so on exit 0 every word a gate printed was lost.
+ */
+function runGate(script, manifestPath) {
+  const r = spawnSync("bash", [script, manifestPath], { encoding: "utf8" });
+  return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "", err: r.error || null };
+}
+
+// The shape isMissingShell was written against (an execFileSync error), rebuilt from spawnSync.
+const asError = (r) => (r.err ? { code: r.err.code, message: r.err.message, status: r.status } : { status: r.status });
+
+/**
+ * SAY WHAT THE GATES SAID. A build where ship-ready, SEO, uniqueness and Explore all SKIPPED
+ * read, in the transcript, exactly like a build where every one of them ran and passed: the
+ * summary line goes to the gate's stdout and the skips to its stderr, and both were thrown away.
+ */
+function forwardGateOutput(r) {
+  // A NOTE'S INDENTED LINES ARE PART OF THE NOTE. On a build with zero MCP calls the gate
+  // prints two headlines and seven indented lines saying what went unchecked, why, and the
+  // command that reconnects the MCP; matching headlines alone told the operator that none of
+  // it was gated and nothing about what to do next. The "Passed:" tail of the summary is an
+  // indented continuation for the same reason.
+  //
+  // The filter takes `skipped:` as well as `skipped(`, because the depth gate writes
+  // "MCP-depth gate skipped: ..." and was dropped entirely over the punctuation.
+  let carrying = false;
+  for (const raw of `${r.stdout}\n${r.stderr}`.split("\n")) {
+    const line = raw.trim();
+    if (!line) { carrying = false; continue; }
+    const indented = /^\s/.test(raw);
+    if (indented && carrying) { say(line); continue; }
+    const headline = line.startsWith("Done gate") || /skipped[:(]/.test(line);
+    carrying = headline;
+    if (headline) say(line);
   }
+}
+
+let depth = { state: "grounded", reason: "" };
+const depthRun = runGate(GATE, manifest); // KEEP THE FLOOR
+if (!depthRun.err && depthRun.status === 0) {
+  forwardGateOutput(depthRun);
+} else if (isMissingShell(asError(depthRun))) {
+  // On Windows without WSL every gate here is a shell script that cannot run, and this note is
+  // the entire experience. Through the user channel, not the debug log.
+  say(NO_SHELL_NOTE);
+  depth = { state: "unchecked", reason: NO_SHELL_NOTE };
+} else {
+  const msg = depthRun.stderr.trim();
+  depth =
+    depthRun.status === 3
+      ? { state: "ungrounded", reason: msg || UNGROUNDED_FALLBACK }
+      : { state: "blocked", reason: msg || GATE_FALLBACK };
 }
 
 // Record the grounding fact in the manifest BEFORE acting on it, so it travels to the
@@ -568,14 +733,30 @@ recordGrounding(manifest, depth);
 
 if (depth.state === "blocked") gateFailure(depth.reason);
 
-try {
-  execFileSync("bash", [DONE_GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // visual loop + verifier (reads artefacts, fails open)
-} catch (e) {
+const doneRun = runGate(DONE_GATE, manifest); // visual loop + verifier (reads artefacts, fails open)
+if (!doneRun.err && doneRun.status === 0) {
+  forwardGateOutput(doneRun);
+} else if (!isMissingShell(asError(doneRun))) {
   // Same distinction as above: a missing shell is a skip that says so, never a verdict that
   // the build failed. It has already been reported once by the depth call, so stay quiet here.
-  if (!isMissingShell(e)) {
-    gateFailure((e && e.stderr ? e.stderr.toString() : "").trim() || GATE_FALLBACK);
-  }
+  gateFailure(doneRun.stderr.trim() || GATE_FALLBACK);
+}
+
+// THE GATE LATCH IS SPENT ONCE THE GATE PASSES, and nothing dropped it. `total` never resets,
+// so after one release cycle a build sat at kind "gate" with total past MAX_TOTAL_BLOCKS, and
+// the NEXT failure of that build, a different one, was released on its first Stop instead of
+// blocked. Strict mode stopped blocking that manifest for the rest of its life. This mirrors
+// the evidence clear above and is scoped the same way: only a GATE latch.
+//
+// THAT SCOPING IS DEFENSIVE AND CANNOT BE MADE TO FIRE TODAY, which is worth saying so nobody
+// reads it later as dead code. An evidence latch reaching this line would need positive
+// evidence on this run (or the branch above would have cleared it), and positive evidence on
+// this run sets releasedWithFailures, which the guard excludes. Two writers, one reachable
+// state. If a third writer ever appears, this stays correct instead of silently clearing a
+// latch that still has evidence behind it.
+if (!releasedWithFailures) {
+  const spent = readStopGate(manifest);
+  if (spent && spent.kind === "gate") writeStopGate(manifest, null);
 }
 
 // Only record the build to cross-build memory after ALL gates pass, and never when the latch
@@ -584,5 +765,6 @@ if (!releasedWithFailures) recordBuild(manifest);
 
 // Degrade LOUDLY, ONCE. Stated here and nowhere else in the build (the write gate stays
 // silent on purpose), factually, with the one command that fixes it. Never a block.
-if (depth.state === "ungrounded") process.stderr.write(`[palate] ${depth.reason}\n`);
+if (depth.state === "ungrounded") say(depth.reason);
+emitUserMessage();
 process.exit(0);

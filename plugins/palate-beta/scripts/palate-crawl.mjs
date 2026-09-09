@@ -64,9 +64,9 @@
  */
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve, extname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { kindOf, assess } from './palate-assets.mjs';
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 const UA = 'PalateCrawl/1 (+https://palatemcp.com; site adoption)';
 
@@ -933,7 +933,7 @@ async function main() {
   finish(incomplete ? 1 : 0);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (invokedDirectly(import.meta.url)) {
   main().catch((e) => {
     console.error(`palate-crawl: ${(e && e.stack) || e}`);
     process.exit(2);

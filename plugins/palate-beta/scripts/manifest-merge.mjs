@@ -25,9 +25,18 @@
  * convenience cache). Run by palate-verifier at the end of its pass, or by the Stop
  * hook before gating.
  *
+ * IT ALSO CARRIES OTHER SCRIPTS' WRITES. `--set '<json>'` deep-merges an object into the
+ * manifest, which is how boards-render records `explore.shown_at` and palate-pick records the
+ * picks. They go through here rather than reading, editing and rewriting the file themselves
+ * because the PostToolUse hook writes the same file on every tool call, and two processes each
+ * doing read-modify-write is how a survey disappears. Arrays REPLACE rather than concatenate:
+ * a caller that means to append reads the current value and sends the whole list, so nothing
+ * doubles when a command is run twice.
+ *
  * Usage:
  *   node scripts/manifest-merge.mjs [--manifest build-manifest.json] \
- *     [--report verify-report.json] [--shots .palate-shots/manifest.json]
+ *     [--report verify-report.json] [--shots .palate-shots/manifest.json] \
+ *     [--set '{"explore":{"shown_at":"..."}}']
  * Defaults resolve relative to the current project (cwd).
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -40,9 +49,28 @@ const CWD = process.cwd();
 const MANIFEST = arg("--manifest", join(CWD, "build-manifest.json"));
 const REPORT = arg("--report", join(CWD, "verify-report.json"));
 const SHOTS = arg("--shots", join(CWD, ".palate-shots", "manifest.json"));
+// PALATE_GATE_OFF=1 is a legitimate bypass and it must be ON THE RECORD. Written through this
+// script rather than by each hook so a gates-off stamp cannot clobber a concurrent hook write.
+const GATES_OFF = args.includes("--gates-off");
+const SET = arg("--set", null);
 
 function readJSON(p) {
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
+}
+
+/**
+ * Deep-merge a patch into the manifest. Plain objects merge key by key; everything else,
+ * arrays included, replaces. Replacing an array is the safe default: appending would double a
+ * pick every time a command was re-run, and a caller that wants to append already has to read
+ * the current value to know what it is appending to.
+ */
+export function deepMerge(target, patch) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) return patch;
+  const base = target && typeof target === "object" && !Array.isArray(target) ? target : {};
+  for (const [k, v] of Object.entries(patch)) {
+    base[k] = v && typeof v === "object" && !Array.isArray(v) ? deepMerge(base[k], v) : v;
+  }
+  return base;
 }
 
 function main() {
@@ -101,6 +129,25 @@ function main() {
       verdict: report.verdict ?? "fail",
       report_path: REPORT,
     };
+  }
+
+  // --set: another script's write, folded in here so it cannot race the hook's own.
+  if (SET) {
+    let patch = null;
+    try { patch = JSON.parse(SET); } catch { /* reported below */ }
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      process.stderr.write("manifest-merge: --set needs a JSON object; nothing was merged.\n");
+    } else {
+      deepMerge(m, patch);
+    }
+  }
+
+  // GATES OFF, recorded. A build run with every gate disabled used to leave no trace at all,
+  // so the manifest, the check report and the local grade all read like a gated build that
+  // passed. The stamp is the first moment the bypass was seen this session; a later gated run
+  // never clears it, because what happened, happened.
+  if (GATES_OFF && !(m.gates && m.gates.state === "off")) {
+    m.gates = { state: "off", at: new Date().toISOString() };
   }
 
   // Idempotent additive write; never disturb the agent/Move-1 blocks.

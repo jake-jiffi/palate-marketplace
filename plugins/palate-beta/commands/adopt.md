@@ -14,6 +14,20 @@ beats complete and invented, every time.
 Nothing here is a judgement of the site. A site adopted at 44 must still be able to merge a typo
 fix tomorrow, so record what is there and never gate on it.
 
+## 0. Cover the working files before you write any
+
+Run this first, before anything below writes a screenshot:
+
+```
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/palate-gitignore.sh" <dir>
+```
+
+Adoption captures a full-page PNG per route and a filmstrip, and one real adoption staged
+874 MB of them into the client's own repository. The rules only cover the run that comes after
+them, so this belongs at the start rather than at the end. It is idempotent, it never rewrites a
+rule anyone else put there, and on a repo that already carries the block it adds only the rules
+that are missing. No git repo yet means there is nothing to do and it says nothing.
+
 ## 1. Work out what you are adopting
 
 If the argument is a path, use it. If it is a URL, look for a local checkout first (ask, do not

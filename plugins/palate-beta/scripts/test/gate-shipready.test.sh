@@ -55,11 +55,37 @@ check "live variants after the pick fire" "$(run "$TMP/ex")" "1"
 check "the sitemap leak is called out separately" \
   "$(out "$TMP/ex" | grep -c 'sitemap')" "1"
 
+# 2b. THE BOARDS ARE THE SAME FAULT IN ITS CURRENT SHAPE. `/boards/bN` and `public/_explore/`
+# name the directions the client did NOT choose and ship stills of them to their own domain.
+scaffold "$TMP/boards"
+mkdir -p "$TMP/boards/src/pages/boards" "$TMP/boards/public/_explore"
+printf -- '---\n---\n<h1>b1</h1>\n' > "$TMP/boards/src/pages/boards/b1.astro"
+printf -- '---\n---\n<h1>b2</h1>\n' > "$TMP/boards/src/pages/boards/b2.astro"
+printf '\x89PNG\r\n\x1a\n' > "$TMP/boards/public/_explore/b1.png"
+echo 'export const variants = [{ id: "b1", name: "The Quiet Room", href: "/boards/b1" }];' > "$TMP/boards/src/lib/variants.ts"
+mkdir -p "$TMP/boards/dist"; echo '<urlset><url><loc>https://x.com/boards/b1/</loc></url></urlset>' > "$TMP/boards/dist/sitemap-0.xml"
+check "live boards after the pick fire" "$(run "$TMP/boards")" "1"
+check "and src/pages/boards is named" \
+  "$(out "$TMP/boards" | grep -c 'src/pages/boards/ still exists')" "1"
+check "and the card stills are named" \
+  "$(out "$TMP/boards" | grep -c 'public/_explore/ still exists')" "1"
+check "and the sitemap leak is called out" \
+  "$(out "$TMP/boards" | grep -c 'advertises')" "1"
+
 # 3. BEFORE the pick, variants are the deliverable and must not be a finding
 scaffold "$TMP/pre"; printf -- '---\n---\n<h1>v1</h1>\n' > "$TMP/pre/src/pages/v1.astro"
 echo 'export const variants = [{ id: "v1", name: "Deep Trawl", href: "/v1" }];' > "$TMP/pre/src/lib/variants.ts"
 echo '{"explore":{"ran":false}}' > "$TMP/pre/build-manifest.json"
 check "variants before the pick are NOT a finding" "$(run "$TMP/pre")" "0"
+
+# 3b. And neither are the boards. Before the pick they ARE the deliverable, and a gate that
+# fired here would fail every build at the exact moment the client is meant to be looking.
+scaffold "$TMP/preboards"
+mkdir -p "$TMP/preboards/src/pages/boards" "$TMP/preboards/public/_explore"
+printf -- '---\n---\n<h1>b1</h1>\n' > "$TMP/preboards/src/pages/boards/b1.astro"
+echo 'export const variants = [{ id: "b1", name: "The Quiet Room", href: "/boards/b1" }];' > "$TMP/preboards/src/lib/variants.ts"
+echo '{"explore":{"ran":false}}' > "$TMP/preboards/build-manifest.json"
+check "boards before the pick are NOT a finding" "$(run "$TMP/preboards")" "0"
 
 # 4. photos: never measured, and measured but never looked at
 scaffold "$TMP/noassets"; rm "$TMP/noassets/.palate/assets.json"

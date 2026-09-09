@@ -18,6 +18,29 @@ import { cmsIntegrations } from "./astro.cms.mjs";
 // See references/cms-and-draft-preview.md.
 const env = loadEnv(process.env.NODE_ENV ?? "production", process.cwd(), "");
 
+// Which deployment this build is, and it has to be BAKED IN here.
+//
+// Cloudflare has no VERCEL_ENV to fall back on, so CI sets PUBLIC_SITE_ENV on the build step
+// (production in deploy.yml, preview in preview.yml). It cannot live in wrangler.toml: those
+// vars reach the Worker at RUNTIME, and BaseLayout decides the robots meta from
+// import.meta.env at BUILD time. Vite only exposes PUBLIC_ vars it can see in a .env file, and
+// in CI this one arrives as a process env var with no .env at all, which is why it is defined
+// rather than left to be picked up.
+//
+// Empty when nothing sets it. For INDEXING that is the safe direction: BaseLayout treats the
+// build as a preview and noindexes it, and a preview that gets indexed puts a client's content
+// on a domain they do not own, so gate-seo's live pass catches a production origin that
+// noindexed itself.
+//
+// EMPTY IS NOT SAFE IN EVERY DIRECTION, and this is the one to know about. `smokeAllowed` in
+// src/pages/api/contact.ts gates the `x-palate-smoke` header on this same value: empty means
+// not-production, so the header is honoured with no secret and any request carrying it has its
+// enquiry validated and DISCARDED. On a live site that is lost enquiries. Every path that
+// produces a production build therefore sets it: deploy.yml, revalidate.yml, and the bootstrap
+// `npm run build` in scripts/provision-cloudflare.sh, which is the one that used to be missed
+// because it runs locally rather than in CI.
+const siteEnv = env.PUBLIC_SITE_ENV || "";
+
 // Server-rendered (SSR) on Cloudflare Workers. SSR is the default even with no
 // CMS, so adding one later is purely additive: it is what the embedded Studio
 // and visual editing need, and retrofitting it would be a rebuild.
@@ -35,7 +58,10 @@ export default defineConfig({
   ],
   // never let the Astro dev toolbar appear in screenshots or the client preview
   devToolbar: { enabled: false },
-  vite: { plugins: [tailwind()] },
+  vite: {
+    plugins: [tailwind()],
+    define: { "import.meta.env.PUBLIC_SITE_ENV": JSON.stringify(siteEnv) },
+  },
 });
 
 // SSR gotcha (see cms-and-draft-preview.md): if the deploy complains it needs a

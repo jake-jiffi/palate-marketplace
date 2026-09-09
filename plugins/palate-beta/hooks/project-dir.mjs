@@ -45,6 +45,75 @@ import path from "node:path";
 // Deep enough for any real tree, bounded so a symlink cycle or a pathological path cannot spin.
 const MAX_UP = 12;
 
+/**
+ * THE PLUGIN IS NOT A SITE, and nothing said so.
+ *
+ * Every gate defaults its project to "." and this resolver falls back to the start directory
+ * when it detects nothing, so a gate run from the plugin checkout measured the plugin. Its
+ * doctrine files QUOTE the tells the lint hunts, its templates carry {{PLACEHOLDER}} tokens on
+ * purpose, and its repo root is not anybody's website: ux-lint read 314 of the plugin's own
+ * files and returned 179 findings. The hooks did the same in the other direction, writing five
+ * stray build-manifest.json files inside the repo, one recording 188 files_written spanning
+ * three unrelated repositories.
+ *
+ * IT WALKS ANCESTORS, BOUNDED BY THE GIT TOPLEVEL. Checking the candidate alone left the fault
+ * half open: a session standing in `scripts/test` or `templates/astro-project` still resolved a
+ * project and the manifest hook still wrote `build-manifest.json` there, which is two of the
+ * five stray locations and the habit (an agent cd-ing into a subdirectory of its own build) the
+ * 2026-08-28 changelog already records. The walk stops at the directory holding `.git`, so it
+ * cannot reach out of the repository it started in, and there is no environment escape hatch:
+ * a test that needs a fixture linted copies it to a temporary directory first, which is what
+ * most of the suites here already do.
+ *
+ * Returns the reason to refuse, or null when the directory is fair game.
+ */
+export function pluginRootRefusal(dir) {
+  let resolved;
+  try {
+    resolved = path.resolve(dir);
+  } catch {
+    return null; // an unresolvable path is somebody else's error, not a plugin
+  }
+  const root = process.env.CLAUDE_PLUGIN_ROOT;
+  if (root && root.trim()) {
+    try {
+      const abs = path.resolve(root.trim());
+      if (resolved === abs) return `${resolved} is CLAUDE_PLUGIN_ROOT, the Palate plugin itself, not a site`;
+      if (resolved.startsWith(abs + path.sep)) return `${resolved} is inside CLAUDE_PLUGIN_ROOT (${abs}), so it is part of the Palate plugin, not a site`;
+    } catch {
+      /* an unresolvable override is not a reason to refuse a real project */
+    }
+  }
+
+  let cur = resolved;
+  for (let i = 0; i < MAX_UP; i++) {
+    let isPlugin = false;
+    try {
+      isPlugin = fs.statSync(path.join(cur, ".claude-plugin", "plugin.json")).isFile();
+    } catch {
+      /* not a plugin checkout at this level */
+    }
+    if (isPlugin) {
+      return cur === resolved
+        ? `${resolved} carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site`
+        : `${resolved} is inside the Claude Code plugin checkout at ${cur} (.claude-plugin/plugin.json), not a site`;
+    }
+    // The repository root is the ceiling. `.git` is a directory in a clone and a FILE in a
+    // worktree, so existsSync rather than a directory test.
+    let atRepoRoot = false;
+    try {
+      atRepoRoot = fs.existsSync(path.join(cur, ".git"));
+    } catch {
+      /* unreadable: treat as not a root and keep the MAX_UP bound */
+    }
+    if (atRepoRoot) break;
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  return null;
+}
+
 /** A directory with both package.json and src/pages: the shape the gates already assume. */
 export function isProjectDir(dir) {
   try {
@@ -117,8 +186,10 @@ function hintDir(hint, startDir) {
 
 /**
  * The project directory for this tool call.
- * Returns { dir, how } where `how` is one of env | hint | cwd | child | fallback.
+ * Returns { dir, how } where `how` is one of env | hint | cwd | child | fallback | refused.
  * `how === "fallback"` means NOTHING was detected: callers must not treat that as knowledge.
+ * `how === "refused"` means the candidate is the Palate plugin itself: `dir` is null and
+ * `reason` says why. A caller must do NOTHING with a refusal, never fall back to the cwd.
  */
 export function resolveProjectDir(startDir, opts = {}) {
   const start = (() => {
@@ -129,24 +200,43 @@ export function resolveProjectDir(startDir, opts = {}) {
     }
   })();
 
+  // Refused before every rung, the env override included: an override pointing into the plugin
+  // is a mistake, not an instruction, and it is the one place where honouring it writes a
+  // client's telemetry into the tool.
+  const refuse = (reason) => ({ dir: null, how: "refused", reason });
+  const startRefusal = pluginRootRefusal(start);
+  if (startRefusal) return refuse(startRefusal);
+
   const env = process.env.PALATE_PROJECT_DIR;
   if (env && env.trim()) {
     try {
       const dir = path.resolve(env.trim());
-      if (fs.statSync(dir).isDirectory()) return { dir, how: "env" };
+      if (fs.statSync(dir).isDirectory()) {
+        const r = pluginRootRefusal(dir);
+        return r ? refuse(r) : { dir, how: "env" };
+      }
     } catch {
       /* an override pointing at nothing is not a reason to stop: fall through to detection */
     }
   }
 
   const fromHint = walkUp(hintDir(opts.hint, start) || "");
-  if (fromHint) return { dir: fromHint, how: "hint" };
+  if (fromHint) {
+    const r = pluginRootRefusal(fromHint);
+    return r ? refuse(r) : { dir: fromHint, how: "hint" };
+  }
 
   const fromCwd = walkUp(start);
-  if (fromCwd) return { dir: fromCwd, how: "cwd" };
+  if (fromCwd) {
+    const r = pluginRootRefusal(fromCwd);
+    return r ? refuse(r) : { dir: fromCwd, how: "cwd" };
+  }
 
   const child = singleChildProject(start);
-  if (child) return { dir: child, how: "child" };
+  if (child) {
+    const r = pluginRootRefusal(child);
+    return r ? refuse(r) : { dir: child, how: "child" };
+  }
 
   return { dir: start, how: "fallback" };
 }
@@ -222,7 +312,10 @@ export function resolveBuildContext(startDir, opts = {}) {
       return process.cwd();
     }
   })();
-  const { dir, how } = resolveProjectDir(start, opts);
+  const { dir, how, reason } = resolveProjectDir(start, opts);
+  // A refusal is not a project with a caveat, it is the absence of one. Hand back nothing to
+  // read and nothing to write, so a caller that ignores `how` still cannot touch the plugin.
+  if (how === "refused") return { dir: null, how, reason, detected: null, manifest: null, stale: null };
   const detected = how === "fallback" ? null : dir;
 
   // An explicit override is an instruction, not a guess: never second-guess it with the cwd.

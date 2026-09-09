@@ -60,13 +60,23 @@ start_dev() {
   # <url>", which the URL scrape below would otherwise hand over as if it were
   # this build. On Astro 6 it just picked a free port. So clear the lock first.
   kill_dev
-  ( npm run dev > "$LOG" 2>&1 & echo $! > "$PIDFILE" )
+  # PUBLIC_SITE_ENV IS SET HERE TOO, and this is the path that matters most because it is the
+  # DEFAULT. An unbaked build is closed: the contact endpoint requires the smoke secret unless
+  # the build says out loud it is not production. Without this the first thing an operator meets
+  # is a blocking High reading "answered 400 (verification failed)" on a perfectly correct form,
+  # with nothing in the message pointing at an environment variable, and the likely next move is
+  # to go and debug Turnstile.
+  ( PUBLIC_SITE_ENV=preview npm run dev > "$LOG" 2>&1 & echo $! > "$PIDFILE" )
 }
 start_built() {
   # SSR site: build it, then run the built worker with wrangler dev (npm run
   # preview). A static file server cannot run server-rendered pages.
-  [ -d dist ] || npm run build > "$LOG" 2>&1
-  ( npm run preview > "$LOG" 2>&1 & echo $! > "$PIDFILE" )
+  # PUBLIC_SITE_ENV IS BAKED AT BUILD, and an unbaked build is now closed: the contact
+  # endpoint requires the smoke secret unless the build says out loud it is not production.
+  # Saying so here is what lets verify-rendered's form round trip run against a local preview
+  # with no secret configured.
+  [ -d dist ] || PUBLIC_SITE_ENV=preview npm run build > "$LOG" 2>&1
+  ( PUBLIC_SITE_ENV=preview npm run preview > "$LOG" 2>&1 & echo $! > "$PIDFILE" )
 }
 
 echo "starting preview server (${MODE})..."

@@ -76,13 +76,16 @@ const anySrc = (re) => srcText.filter(({ t }) => re.test(t)).map(({ f }) => rela
 
 const catRaw = read(".palate/catalogue.json");
 if (!catRaw) {
-  console.log("gate-headless: no .palate/catalogue.json, so this is not a headless Shopify storefront. Nothing checked.");
+  // STDERR, like every other gate's skip. The caller merges the streams so it made no
+  // difference there, but a gate whose skip is on stdout and whose other skip is on stderr is
+  // one more dialect for the next caller to get wrong.
+  console.error("gate-headless: skipped (no .palate/catalogue.json, so this is not a headless Shopify storefront). Nothing checked.");
   process.exit(2);
 }
 let cat = null;
 try { cat = JSON.parse(catRaw); } catch { /* below */ }
 if (!cat) {
-  console.error("gate-headless: .palate/catalogue.json is not readable JSON. The survey is UNKNOWN, not clean.");
+  console.error("gate-headless: skipped (.palate/catalogue.json is not readable JSON, so the survey is UNKNOWN, not clean). This IS a commerce build and none of it was checked.");
   process.exit(2);
 }
 
@@ -999,7 +1002,17 @@ if (JSON_OUT) {
     console.error(`gate-headless: ${findings.length} finding(s) over ${total} check(s). This storefront is NOT correctly constructed.\n`);
     for (const f of findings) console.error(`  [${f.id}] ${f.msg}\n      FIX: ${f.fix}\n`);
   } else {
-    console.log(`gate-headless: clean over ${passes.length} check(s)${unknowns.length ? `, ${unknowns.length} unknown` : ""}.`);
+    // A RUN WHERE NOTHING PASSED AND NOTHING FAILED CHECKED NOTHING, and "clean over 0
+    // check(s)" is the sentence a caller would have quoted as its skip reason. Exit 2 already
+    // said cannot-check; now the line says so too.
+    if (passes.length === 0) {
+      console.error(
+        `gate-headless: skipped (a commerce build, and not one of the ${total} checks could run over it` +
+        `${unknowns.length ? `: ${unknowns.length} unknown` : ""}). NOT a pass.`,
+      );
+    } else {
+      console.log(`gate-headless: clean over ${passes.length} check(s)${unknowns.length ? `, ${unknowns.length} unknown` : ""}.`);
+    }
   }
 }
 process.exit(findings.length ? 1 : (passes.length === 0 ? 2 : 0));

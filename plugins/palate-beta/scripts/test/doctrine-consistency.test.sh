@@ -106,6 +106,64 @@ grep -qi "governs the CHARACTER of motion" SKILL.md \
   && ok "SKILL.md: calm governs the character of motion, not its existence" \
   || bad "SKILL.md reads 'a calm brand demands calm' with no character/existence split (reads as motionless)"
 
+# --- 7. ONE COUNT RULE, STATED THE SAME WAY IN ALL THREE PLACES ----------------------------
+# The count moved from eight complete pages to five boards. Three files state it and a reader
+# grounds on whichever one they opened, so the failure mode is exactly the 18 June one: two
+# shipped files with opposite numbers and the always-loaded one winning in silence.
+for f in SKILL.md references/explore-stage.md; do
+  grep -qiE "defaulting to 5|[Dd]efault 5" "$f" \
+    && ok "$f: the board count defaults to 5" \
+    || bad "$f no longer says the count defaults to 5 (the other files do)"
+  grep -qiE "never fewer than (3|three)|no BETWEEN|there is no BETWEEN" "$f" \
+    && ok "$f: and never fewer than three" \
+    || bad "$f states the default without the floor of three"
+done
+grep -qiE "N sets the resolution, never the range|sets the RESOLUTION of\s*$|RESOLUTION of" references/explore-stage.md \
+  && ok "explore-stage.md: the count is resolution, never range" \
+  || bad "explore-stage.md lost 'the count sets the resolution, never the range'"
+# THE DELETED LINE MUST STAY DELETED. "fewer is a failed Explore" was the eight-page floor, and
+# it contradicts a default of five on the same page.
+if grep -qiE "fewer is a failed Explore|[Ee]ight is the floor" references/explore-stage.md SKILL.md; then
+  bad "the eight-page floor came back, and it contradicts the count rule beside it"
+else
+  ok "the eight-page floor stays deleted"
+fi
+
+# --- 8. THE MOTION PROOF IS ON BOTH SURFACES -----------------------------------------------
+# A board is a still, so a bold rung is chosen on a picture of itself. The home page is built
+# and shown MOVING before anything is built on top of it, and a file that omits it teaches a
+# builder to go straight from a pick to three thousand pages.
+grep -qi "MOTION PROOF" SKILL.md \
+  && ok "SKILL.md: Compose proves the home page moving first" \
+  || bad "SKILL.md lost the motion proof (a bold rung ships unseen in motion)"
+grep -qi "MOTION PROOF" references/explore-stage.md \
+  && ok "explore-stage.md: Compose proves the home page moving first" \
+  || bad "explore-stage.md lost the motion proof"
+
+# --- 9. WHICH INTENSITY WINS, WHERE THEY DISAGREE ------------------------------------------
+# Two intensity fields now exist and nothing else in the repo says which one governs what. An
+# unstated split is how a bar a client can talk down gets built by accident.
+grep -qi "intensity_asked" references/build-commission.md \
+  && ok "build-commission.md records the calibration answer beside the inferred intensity" \
+  || bad "build-commission.md does not mention intensity_asked, so the two fields have no stated relationship"
+# Matched on a fragment that fits one wrapped line: the sentence spans two, and a pattern
+# that spans them can only ever fail.
+grep -qiE "inferred one still governs" references/build-commission.md \
+  && ok "and says which one governs the bold bar when they disagree" \
+  || bad "build-commission.md does not say which intensity wins when the two disagree"
+
+# --- 10. THE MOTION PROOF IS A COMMAND, NOT A FACT ABOUT A JSON FIELD ----------------------
+# `gate-done.sh` runs the fidelity gate only once `explore.proof` is recorded, so the stamp is
+# load-bearing. Doctrine that says "record manifest.explore.proof" and never says HOW leaves the
+# model to hand-edit a file the PostToolUse hook also writes, and a model that sometimes does
+# not leaves `fidelity=skipped` on every build after Compose with nothing saying a check was
+# lost. Both files that tell Compose to prove the home page have to carry the command.
+for f in SKILL.md references/explore-stage.md; do
+  grep -q "palate-pick.mjs" "$f" && grep -q -- "--proof" "$f" \
+    && ok "$f: the motion proof is recorded by a named command" \
+    || bad "$f tells Compose to record the motion proof without naming the command that writes it"
+done
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

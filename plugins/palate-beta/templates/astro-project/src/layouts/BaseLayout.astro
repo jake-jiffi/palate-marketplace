@@ -23,6 +23,23 @@ interface Props {
 const { title, description = business.description, image = "/og/default.png", noindex = false } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 
+// Is this build the live site? Everything else is a preview, and a preview is a real,
+// publicly fetchable origin. robots.txt Disallow stops the CRAWL and does not stop the URL
+// being INDEXED when something links to it, so the page says noindex as well. Belt and braces,
+// deliberately: the two mechanisms fail in different ways and neither covers the other.
+//
+// Independent of the `noindex` prop on purpose. A page that asks for noindex gets it in
+// production too, and a preview gets it whether or not the page asked.
+//
+// UNKNOWN FAILS TOWARD NOINDEX, so production has to be DETECTABLE on every host we ship to.
+// Both signals are read because they arrive by different routes: astro.config inlines
+// PUBLIC_SITE_ENV (folding in VERCEL_ENV on Vercel and set by CI on the Cloudflare overlay),
+// and process.env.VERCEL_ENV is the direct read for a build whose config did not do that.
+// gate-seo's live pass catches the case where both are missing on the real origin.
+const isProduction =
+  import.meta.env.PUBLIC_SITE_ENV === "production" ||
+  (typeof process !== "undefined" && process.env?.VERCEL_ENV === "production");
+
 // Visual editing is gated by a build-time env var, set "true" only on the
 // preview deployment. When on: mount the overlay, never edge-cache, noindex.
 // See references/cms-and-draft-preview.md.
@@ -38,7 +55,7 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    {(noindex || visualEditing) && <meta name="robots" content="noindex" />}
+    {(noindex || visualEditing || !isProduction) && <meta name="robots" content="noindex" />}
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />

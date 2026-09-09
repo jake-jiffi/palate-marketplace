@@ -1,0 +1,95 @@
+---
+/**
+ * BoardNotes - the panel that makes a board argue for itself.
+ *
+ * A board is a quarter of a page. Without this panel it is a fragment, and a client looking at
+ * a fragment can only say whether they like it. With it they can say what they are choosing:
+ * the structural idea, the argument for this business, the feeling, WHAT MOVES (a still cannot
+ * show that and it is the most expensive property on the page), the CTA options, and the
+ * reference whose craft it reproduces.
+ *
+ * Everything here is the registry entry rendered verbatim. It writes nothing of its own, so a
+ * board whose notes read thin is a board whose thinking was thin, which is the check worth
+ * having before a client reads it rather than after.
+ */
+import type { Variant } from "../lib/variants";
+
+interface Props {
+  variant: Variant;
+  total?: number;
+}
+const { variant, total } = Astro.props;
+const muted = "var(--brand-muted, var(--brand-text-muted, #6d6b65))";
+const ink = "var(--brand-text, var(--brand-text-primary, #111111))";
+const ground = "var(--brand-bg, var(--brand-bg-default, #ffffff))";
+const displayFamily = "var(--brand-font-display, var(--brand-font-body, Georgia, serif))";
+---
+
+<section class="bn" style={`background:${ground};color:${ink};border-top:1px solid ${muted}`}>
+  <div class="bn-in">
+    <div class="bn-head">
+      {/* The rung is an ORDINAL ON THE NAME, never a small uppercase label sitting above the
+          heading. That shape is the eyebrow/kicker pattern and it is an automatic fail in our
+          own anti-pattern list; the explore page shipped eight of them once. */}
+      <h2 class="bn-name" style={`font-family:${displayFamily}`}>
+        <span class="bn-num" style={`color:${muted}`}>{variant.ambition}</span>{variant.name}
+      </h2>
+      <p class="bn-feeling" style={`color:${muted}`}>
+        {variant.feeling}
+        {total ? <span> &middot; rung {variant.ambition} of {total}</span> : null}
+      </p>
+    </div>
+
+    <dl class="bn-dl">
+      <div><dt style={`color:${muted}`}>What it is</dt><dd>{variant.what}</dd></div>
+      <div><dt style={`color:${muted}`}>Why</dt><dd>{variant.why}</dd></div>
+      <div><dt style={`color:${muted}`}>What moves</dt><dd>{variant.motion}</dd></div>
+      <div>
+        <dt style={`color:${muted}`}>Section shown</dt>
+        <dd>{variant.section}</dd>
+      </div>
+      <div>
+        <dt style={`color:${muted}`}>Call to action</dt>
+        <dd>
+          <ul class="bn-ctas">
+            {variant.ctas.map((label) => <li>{label}</li>)}
+          </ul>
+          <span class="bn-hint" style={`color:${muted}`}>Pick one, or say what it should read instead.</span>
+        </dd>
+      </div>
+      {variant.lookAt && <div><dt style={`color:${muted}`}>Look at</dt><dd>{variant.lookAt}</dd></div>}
+      <div>
+        <dt style={`color:${muted}`}>Craft drawn from</dt>
+        <dd>
+          <code>{variant.donor}</code>
+          {variant.clip && (
+            <span> &middot; <a href={variant.clip} rel="noreferrer">see it moving</a></span>
+          )}
+        </dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+<style>
+  .bn { padding: 3.5rem 1.5rem 4.5rem; }
+  .bn-in { max-width: 54rem; margin: 0 auto; }
+  .bn-head { margin-bottom: 2rem; }
+  .bn-name { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.15; margin: 0 0 0.35rem; }
+  .bn-num {
+    display: inline-block; min-width: 2ch; font-variant-numeric: tabular-nums; margin-right: 0.5rem;
+  }
+  .bn-feeling { font-style: italic; margin: 0; }
+  .bn-dl { display: grid; gap: 1.25rem; margin: 0; }
+  .bn-dl > div { display: grid; grid-template-columns: 10rem 1fr; gap: 1rem; align-items: baseline; }
+  .bn-dl dt { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  .bn-dl dd { margin: 0; line-height: 1.6; }
+  .bn-ctas { list-style: none; margin: 0 0 0.35rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .bn-ctas li { border-bottom: 1px solid currentColor; }
+  .bn-hint { font-size: 0.8125rem; }
+  .bn code { font-size: 0.9375rem; }
+
+  @media (max-width: 46rem) {
+    .bn-dl > div { grid-template-columns: 1fr; gap: 0.25rem; }
+  }
+</style>

@@ -55,7 +55,7 @@
 
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
 const DEFAULT_VERSION = '2026-07';
@@ -306,7 +306,7 @@ export function resolveDynamic(paths, cataloguePath) {
   return { paths: out, resolved, had: true };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (invokedDirectly(import.meta.url)) {
   const args = process.argv.slice(2);
   const url = args.find((a) => !a.startsWith('-'));
   const outIdx = args.indexOf('--out');

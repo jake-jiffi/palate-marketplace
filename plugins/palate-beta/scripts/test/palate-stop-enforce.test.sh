@@ -7,9 +7,14 @@ set -uo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$DIR/../hooks/palate-stop.mjs"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+# HOME is redirected: recordBuild appends to ~/.config/palate/builds.log.json, and a suite
+# that drives the Stop hook must not write into the operator's real cross-build log. It lives
+# under this suite's own temp dir so the existing trap cleans it up; a second trap on EXIT would
+# REPLACE that one rather than add to it.
+LOG_HOME="$T/palate-home"; mkdir -p "$LOG_HOME"
 pass=0; fail=0
 mk() { local d="$T/$1"; rm -rf "$d"; mkdir -p "$d/.palate-shots"; printf '{"files_written":["src/pages/index.astro"]}' > "$d/build-manifest.json"; [ -n "${2:-}" ] && printf '%s' "$2" > "$d/.palate-shots/manifest.json"; [ -n "${3:-}" ] && printf '%s' "$3" > "$d/verify-report.json"; [ -n "${4:-}" ] && printf '%s' "$4" > "$d/.palate-shots/interaction.json"; true; }
-blocks() { echo "{\"cwd\":\"$T/$1\"}" | node "$HOOK" 2>/dev/null | grep -q '"decision":"block"'; }
+blocks() { echo "{\"cwd\":\"$T/$1\"}" | env HOME="$LOG_HOME" node "$HOOK" 2>/dev/null | grep -q '"decision":"block"'; }
 want() { local desc="$1" name="$2" expect="$3"; if blocks "$name"; then got=BLOCK; else got=allow; fi; if [ "$got" = "$expect" ]; then echo "ok   - $desc ($got)"; pass=$((pass+1)); else echo "FAIL - $desc (got $got want $expect)"; fail=$((fail+1)); fi; }
 
 mk clean    '{"console_errors":0,"overflow":{"desktop":0},"sections":[{"sid":"hero","viewport":"desktop","overflow":0}]}' '{"verdict":"pass","visual":{"ran":true,"pass":true,"console_errors":0}}'

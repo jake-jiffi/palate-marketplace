@@ -31,6 +31,30 @@ set -euo pipefail
 DIR="${1:-.}"
 MARKER="# --- Palate working files (managed by palate-gitignore.sh; edit above this line) ---"
 
+# Every managed rule, in one list, so the top-up below can tell which are missing from a repo
+# that already carries the marker. Keep this in step with the block written further down and
+# with templates/astro-project/.gitignore, which carries the same rules for the other layout.
+RULES='build-manifest.json
+build-manifest.json.*.json
+.palate-skill-state.json
+.palate-shots/
+verify-report.json
+.palate/index.json
+.palate/*.log
+.palate/*.backup.json
+.palate/mcp-journal.jsonl
+.palate/harvest/
+.palate/live-capture/
+.palate/adoption/**/*.png
+.palate/adoption/filmstrip/
+.palate/tmp/
+.palate/explore/shots/
+.palate/explore/seed/
+public/_explore/
+*.palate-bak
+.palate-devserver.log
+.palate-devserver.pid'
+
 root="$(git -C "$DIR" rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -z "$root" ]; then
   # Not a git repo. That is normal early in a build and is not a problem to report: the
@@ -39,7 +63,28 @@ if [ -z "$root" ]; then
 fi
 
 TARGET="$root/.gitignore"
+
+# A REPO THAT ALREADY CARRIES THE BLOCK STILL NEEDS NEW RULES. The marker used to end the
+# script here, so a rule added today never reached a repo adopted yesterday, and a repo
+# adopted yesterday is exactly the one about to commit the leak the new rule exists to stop.
+# Still append-only: only rules that are ABSENT are added, and nothing already in the file is
+# touched or reordered.
 if [ -f "$TARGET" ] && grep -qF "$MARKER" "$TARGET"; then
+  missing=""
+  while IFS= read -r rule; do
+    [ -n "$rule" ] || continue
+    grep -qxF "$rule" "$TARGET" || missing="$missing$rule
+"
+  done <<RULELIST
+$RULES
+RULELIST
+  [ -n "$missing" ] || exit 0
+  [ -n "$(tail -c 1 "$TARGET" 2>/dev/null)" ] && printf '\n' >> "$TARGET"
+  {
+    printf '\n# --- Palate working files, added later by palate-gitignore.sh ---\n'
+    printf '%s' "$missing"
+  } >> "$TARGET"
+  echo "palate: topped up the working-file ignores in $TARGET" >&2
   exit 0
 fi
 
@@ -63,6 +108,16 @@ verify-report.json
 .palate/mcp-journal.jsonl
 .palate/harvest/
 .palate/live-capture/
+# Adoption captures a full-page PNG per route and a filmstrip; one real adoption staged
+# 874 MB of them. The adoption RECORD beside them (report.json, routes.json) is measured
+# state and stays committed, which is why this ignores the images and not the directory.
+.palate/adoption/**/*.png
+.palate/adoption/filmstrip/
+.palate/tmp/
+.palate/explore/shots/
+.palate/explore/seed/
+public/_explore/
+*.palate-bak
 .palate-devserver.log
 .palate-devserver.pid
 

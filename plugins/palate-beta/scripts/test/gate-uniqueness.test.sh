@@ -34,5 +34,52 @@ else
 fi
 rm -rf "$UT"
 
+# --- THE ARCHIVED STYLESHEET IS NOT A STYLE SIGNATURE --------------------------------------
+# boards-render inlines the build's whole stylesheet into every archived render so the render
+# survives the next build. That stylesheet is one shared Tailwind output, byte-identical on
+# every board, so signing it puts the style axis near 1.00 for every pair and collapses this
+# gate to structure-only, silently. Two boards whose actual styling differs must still read
+# as differing.
+AC="$(mktemp -d)"
+shared='<style data-palate-archived-css="1">.a{color:#111111}.b{background:#222222}.c{font-family: Georgia, serif}.d{border-radius: 4px}</style>'
+printf '<html><head>%s</head><body><section class="hero"><h1 style="color:#2f5d50">a</h1></section></body></html>\n' "$shared" > "$AC/a.html"
+printf '<html><head>%s</head><body><main class="wall"><h2 style="color:#8a3b12">b</h2></main></body></html>\n' "$shared" > "$AC/b.html"
+uniq_out="$(node "$GATE" "$AC/a.html" "$AC/b.html" 2>&1 >/dev/null || true)"
+style_score="$(printf '%s' "$uniq_out" | sed -n 's/.*style \([0-9.]*\).*/\1/p' | head -1)"
+awk -v s="${style_score:-1}" 'BEGIN { exit !(s <= 0.2) }' \
+  && { echo "ok   - the shared archived stylesheet is stripped before signing (style ${style_score:-?})"; pass=$((pass+1)); } \
+  || { echo "FAIL - the archived stylesheet is being signed, so the style axis is ~1 on every pair (style ${style_score:-?})"; fail=$((fail+1)); }
+rm -rf "$AC"
+
+# --- --project FINDS THE RENDERS, in both places they live ---------------------------------
+# gate-done.sh used to glob `.palate-shots/v*/rendered.html` in the shell. Explore writes its
+# renders to `.palate/explore/shots/b*/` now, so that glob found nothing and every board build
+# reported "fewer than 2 to compare" with five renders sitting on disk: a gate switched off by
+# a path, silently, which is the class of fault this suite exists for.
+PT="$(mktemp -d)"
+mkdir -p "$PT/.palate/explore/shots/b1" "$PT/.palate/explore/shots/b2"
+cp "$DIR/fixtures/uniq-a.html" "$PT/.palate/explore/shots/b1/rendered.html"
+cp "$DIR/fixtures/uniq-b.html" "$PT/.palate/explore/shots/b2/rendered.html"
+check "--project finds two board renders and compares them" 0 --project "$PT"
+
+cp "$DIR/fixtures/uniq-dup.html" "$PT/.palate/explore/shots/b2/rendered.html"
+check "--project blocks a near-duplicate pair of boards" 2 --project "$PT"
+
+# The older shape still counts, so a site mid-flight is not suddenly unchecked.
+rm -rf "$PT/.palate"
+mkdir -p "$PT/.palate-shots/v1" "$PT/.palate-shots/v2"
+cp "$DIR/fixtures/uniq-a.html" "$PT/.palate-shots/v1/rendered.html"
+cp "$DIR/fixtures/uniq-b.html" "$PT/.palate-shots/v2/rendered.html"
+check "--project still finds the older /vN renders" 0 --project "$PT"
+
+# ONE render is nothing to compare, and it says so in the shape gate-done reads.
+rm -rf "$PT/.palate-shots/v2"
+one_err="$(node "$GATE" --project "$PT" 2>&1 >/dev/null || true)"
+case "${one_err%%$'\n'*}" in
+  "uniqueness gate: skipped ("*) echo "ok   - one render skips with the reason, in the shape gate-done reads"; pass=$((pass+1)) ;;
+  *) echo "FAIL - one render did not print the skip line (got: ${one_err%%$'\n'*})"; fail=$((fail+1)) ;;
+esac
+rm -rf "$PT"
+
 echo "---"; echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
 

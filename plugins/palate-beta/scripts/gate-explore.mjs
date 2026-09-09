@@ -10,34 +10,55 @@
  * expensive thing about the ladder is then wasted, and the restrained rung in particular reads
  * as "the boring one" rather than as one deliberate end of a span.
  *
- * So this gate holds three things that are easy to skip and impossible to notice missing:
+ * So this gate holds five things that are easy to skip and impossible to notice missing:
  *
  *   1. THE COACHING PAGE EXISTS. `src/pages/explore.astro` is what says what happened, draws
  *      the ladder, and tells the client what to do next (react, mix across rungs, ask for
- *      changes, and only then build the whole site). A set of variant routes with no such page
+ *      changes, and only then build the whole site). A set of board routes with no such page
  *      is a pile of links.
- *   2. EVERY VARIANT ARGUES FOR ITSELF. `what`, `why` and `feeling` on each entry are the
- *      difference between "I like that one" and "somewhere around 5, with 8's motion". They
+ *   2. EVERY BOARD ARGUES FOR ITSELF. `what`, `why` and `feeling` on each entry are the
+ *      difference between "I like that one" and "somewhere around 4, with 5's motion". They
  *      are also a check on the BUILD: a rung whose `why` restates its `what`, or whose feeling
  *      is "modern and clean", did not have an idea, and that is worth catching before a client
  *      reads it rather than after.
  *   3. THE LADDER IS REAL. Every rung carries a distinct `ambition`, and they run 1..N with no
  *      gaps, because a set that is all rung 1 or has three rung 4s is a bag wearing a ladder's
  *      labels.
+ *   4. THE BOARD EXISTS AND THE MOTION IS WRITTEN. A registered `href` with no page is a link
+ *      the client clicks into a 404, and a board is mostly a STILL: a direction whose motion
+ *      plan was never written is chosen with its most expensive property invisible. A `motion`
+ *      that restates `what` is that field filled in rather than thought about.
+ *   5. THE SET IS A SET. One distinct donor per rung, because five boards drawn from one
+ *      reference are one idea wearing five skins, and two or three CTA labels per board,
+ *      because one is a guess and four is a survey.
  *
  * ============================ FAIL-OPEN, ALWAYS ============================
  *
  * It only has an opinion once variants are REGISTERED. No variants.ts, no variants, or a build
- * that is not doing Explore all skip (exit 0). It has nothing to say about a non-Explore build,
- * a single-page edit, or a user who never ran Explore at all.
+ * that is not doing Explore all SKIP. It has nothing to say about a non-Explore build, a
+ * single-page edit, or a user who never ran Explore at all.
  *
- * Exit 0 = pass or skip, 2 = block with the specific entries named.
+ * A SKIP SAYS SO AND EXITS 2, it does not exit 0. Exiting 0 having inspected nothing put
+ * "explore=pass" in the done gate's summary line on every build that never ran Explore.
+ *
+ * Exit 0 = pass, 2 = skip (first stderr line `gate-explore: skipped (<reason>)`) OR block
+ * (with the specific entries named). The caller separates the two on that first line.
  * Usage: node scripts/gate-explore.mjs [projectDir]
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 
 const dir = process.argv[2] || ".";
+
+// NEVER GRADE THE PLUGIN'S OWN FILES. This defaults to ".", and the plugin ships a template
+// variants.ts, so a run from a plugin checkout would judge the scaffold's example entries as
+// though a client were about to be handed them.
+const refusal = pluginRootRefusal(dir);
+if (refusal) {
+  console.error(`gate-explore: refused: ${refusal}. Name the site directory explicitly. NOT a pass.`);
+  process.exit(2);
+}
 const read = (p) => {
   try {
     return readFileSync(join(dir, p), "utf8");
@@ -149,6 +170,13 @@ function objects(body) {
   return out;
 }
 
+/** A string-array field (`ctas: ["a", "b"]`). Returns null when the key is absent. */
+function arrayField(obj, key) {
+  const m = new RegExp(`\\b${key}\\s*:\\s*\\[([^\\]]*)\\]`, "s").exec(obj);
+  if (!m) return null;
+  return [...m[1].matchAll(/(["'\`])((?:\\.|(?!\1)[^\\])*)\1/g)].map((x) => x[2].trim()).filter(Boolean);
+}
+
 function field(obj, key) {
   const s = new RegExp(`\\b${key}\\s*:\\s*(["'\`])((?:\\\\.|(?!\\1)[^\\\\])*)\\1`, "s").exec(obj);
   if (s) return s[2].replace(/\\(['"`])/g, "$1").trim();
@@ -160,12 +188,21 @@ const findings = [];
 const add = (what, why) => findings.push({ what, why });
 
 const src = read("src/lib/variants.ts");
-if (!src) process.exit(0); // not an Explore build, or not this scaffold: nothing to say
+if (!src) {
+  // A SKIP IS NOT A PASS. Exiting 0 here put "explore=pass" in the done gate's summary for
+  // every build that never ran Explore, so the one line a person reads claimed a gate had
+  // cleared a thing it had not looked at. Say what was not inspected, and exit 2.
+  console.error("gate-explore: skipped (not an Explore build: no src/lib/variants.ts)");
+  process.exit(2);
+}
 
 const clean = stripComments(src);
 const body = arrayBody(clean, "variants");
 const entries = body ? objects(body) : [];
-if (!entries.length) process.exit(0); // Explore has not registered anything yet
+if (!entries.length) {
+  console.error("gate-explore: skipped (no boards registered)");
+  process.exit(2);
+}
 
 // ------------------------------------------------------- 1. the coaching page
 if (!existsSync(join(dir, "src/pages/explore.astro"))) {
@@ -182,15 +219,22 @@ const EMPTY_FEELING = /^(modern|clean|professional|sleek|minimal|fresh|bold|simp
 const PLACEHOLDER_NAME = /^(option|variant|version|direction|concept|design|idea)\s*\d*$/i;
 
 const seenAmbition = new Map();
+const seenDonor = new Map();
 const parsed = [];
+const words = (s) => new Set(String(s).toLowerCase().match(/[a-z]{4,}/g) || []);
 
 for (const o of entries) {
   const id = field(o, "id") || "(unnamed)";
   const name = field(o, "name");
+  const href = field(o, "href");
   const ambition = field(o, "ambition");
   const what = field(o, "what");
   const why = field(o, "why");
   const feeling = field(o, "feeling");
+  const donor = field(o, "donor");
+  const section = field(o, "section");
+  const motion = field(o, "motion");
+  const ctas = arrayField(o, "ctas");
   parsed.push({ id, ambition });
 
   const missing = [];
@@ -198,12 +242,56 @@ for (const o of entries) {
   if (!what) missing.push("what");
   if (!why) missing.push("why");
   if (!feeling) missing.push("feeling");
+  if (!donor) missing.push("donor");
+  if (!section) missing.push("section");
+  if (!motion) missing.push("motion");
+  if (!ctas) missing.push("ctas");
   if (missing.length) {
     add(
       `${id} does not argue for itself`,
-      `missing ${missing.join(", ")}. Every rung needs its own position on the ladder, what it is, why it is doing that for THIS business, and the feeling it carries. Without them the client can only judge on taste.`,
+      `missing ${missing.join(", ")}. Every rung needs its own position on the ladder, what it is, why it is doing that for THIS business, the feeling it carries, the reference its craft came from, the section it shows, what MOVES on it, and the CTA labels the client can choose between. Without them the client can only judge on taste, and a board is mostly a still, so unwritten motion is unseen motion.`,
     );
     continue;
+  }
+
+  // --------------------------------------------------- 4. the board exists and moves
+  if (href) {
+    const route = String(href).replace(/^\/+/, "").replace(/\/+$/, "");
+    if (!existsSync(join(dir, "src/pages", `${route}.astro`))) {
+      add(
+        `${id} registers a board that does not exist`,
+        `href ${href} needs src/pages/${route}.astro and there is no such file. The client clicks it from /explore and lands on a 404, which is the one impression a preview cannot recover from.`,
+      );
+    }
+  } else {
+    add(`${id} has no href`, "nothing links to it, so it is registered and unreachable.");
+  }
+
+  {
+    const w = words(what);
+    const mo = words(motion);
+    if (w.size >= 4 && mo.size >= 4) {
+      const shared = [...mo].filter((t) => w.has(t)).length;
+      if (shared / mo.size >= 0.5) {
+        add(
+          `${id}'s motion restates its "what"`,
+          "The motion plan and the description are the same sentence twice, so nobody wrote down what actually moves. Say what moves, when, and how it feels: a board is a still, and the client is otherwise choosing a direction with its most expensive property invisible.",
+        );
+      }
+    }
+  }
+
+  if (ctas && (ctas.length < 2 || ctas.length > 3)) {
+    add(
+      `${id} offers ${ctas.length} call${ctas.length === 1 ? "" : "s"} to action`,
+      "Two or three, so the client makes a choice rather than accepting a guess. One is a guess and four is a survey.",
+    );
+  }
+
+  if (donor) {
+    const n = seenDonor.get(donor) || [];
+    n.push(id);
+    seenDonor.set(donor, n);
   }
 
   if (name && PLACEHOLDER_NAME.test(name)) {
@@ -218,7 +306,6 @@ for (const o of entries) {
   // A `why` that restates the `what` is the commonest way this section gets filled in without
   // being thought about, and it is detectable: the argument shares almost all of its words with
   // the description.
-  const words = (s) => new Set(String(s).toLowerCase().match(/[a-z]{4,}/g) || []);
   const w = words(what);
   const y = words(why);
   if (w.size >= 4 && y.size >= 4) {
@@ -233,6 +320,16 @@ for (const o of entries) {
   const n = seenAmbition.get(ambition) || [];
   n.push(id);
   seenAmbition.set(ambition, n);
+}
+
+// ------------------------------------------------------ 5. one distinct donor per rung
+for (const [slug, who] of seenDonor) {
+  if (who.length > 1) {
+    add(
+      `${who.length} boards are drawn from ${slug}`,
+      `${who.join(", ")} share one donor, so they are one idea wearing ${who.length} skins. One distinct reference per rung: the range is the product, and a range sampled from a single site is not one.`,
+    );
+  }
 }
 
 // -------------------------------------------------------- 3. the ladder is real
@@ -257,8 +354,30 @@ if (rungs.length >= 2) {
   }
 }
 
+// -------------------------------------------- 6. a bold brief needs a real ladder
+// The count sets the RESOLUTION of the ladder, never its range, so a floor is about having
+// enough steps for "somewhere between 3 and 4" to mean anything. Below three there is no
+// between. Only enforced on a high-intensity brief, where a collapsed Explore is the
+// documented cause of a Variety-flat build.
+let intensity = "";
+try {
+  const m = JSON.parse(readFileSync(join(dir, "build-manifest.json"), "utf8"));
+  intensity = String(m?.commission?.intensity ?? "");
+} catch { /* no manifest, no opinion */ }
+// An off-enum value fails toward BOLD, the same way gate-done.sh reads it: a wrongly-bold
+// build gets a loud gate and a wrongly-calm one gets a timid site nobody can explain.
+const isHigh = intensity !== "" && intensity !== "calm";
+let MIN_BOARDS = Number(process.env.PALATE_MIN_BOARDS ?? 3);
+if (!Number.isFinite(MIN_BOARDS) || MIN_BOARDS < 1) MIN_BOARDS = 3;
+if (isHigh && entries.length < MIN_BOARDS) {
+  add(
+    `a high-intensity brief has ${entries.length} board(s)`,
+    `the ladder needs at least ${MIN_BOARDS} rungs for a client to point BETWEEN them, and this brief records commission.intensity "${intensity}". Build the remaining rungs, or record commission.explore_skip with the named-direction reason.`,
+  );
+}
+
 if (!findings.length) {
-  console.log(`Explore gate passed: ${entries.length} variant(s), each with a rung, a description, an argument and a feeling, and a page that explains the range.`);
+  console.log(`Explore gate passed: ${entries.length} board(s), each with a rung, a description, an argument, a feeling, a distinct donor, a motion plan and its CTA options, and a page that explains the range.`);
   process.exit(0);
 }
 

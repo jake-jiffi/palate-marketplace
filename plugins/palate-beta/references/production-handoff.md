@@ -57,8 +57,14 @@ does not hand a failing command back to the user.
   `@sanity/astro` bakes these in at build, so CI must set them before
   `astro build` runs. The preview deployment sets the flag to `true`.
 - **Cloudflare Worker secrets** (`wrangler secret put`): the Sanity write token
-  (the `/api/contact` handler), and the forms keys (`RESEND_API_KEY`,
-  `TURNSTILE_SECRET`) - read at runtime via `locals.runtime.env`.
+  (the `/api/contact` handler), the forms keys (`RESEND_API_KEY`,
+  `TURNSTILE_SECRET`), and `PALATE_SMOKE_SECRET` on production only, without which
+  the post-deploy form round trip skips against the live site and says so. On
+  Cloudflare all of these reach the Worker at runtime through
+  `locals.runtime.env`; on Vercel there is no `locals.runtime`, so the handler
+  reads `process.env` layered over the build-time values, which is still runtime.
+  Either way a rotation takes effect without a redeploy. `PUBLIC_SITE_ENV` is the
+  exception: it is baked at build and changing it needs one.
 - **GitHub repo secrets**: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
   plus the build-time vars above - so CI can build and deploy.
 - A token is never written into the skill, the template, or a committed file.

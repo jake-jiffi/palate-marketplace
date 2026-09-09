@@ -2,7 +2,7 @@
 // Explore-mode "pick a direction" picker. A floating pill in the BOTTOM-RIGHT
 // that expands UPWARD into a labelled panel - deliberately out of the site's
 // own navigation so it never interferes with the real header. Renders only when
-// PUBLIC_EXPLORE_MODE=true AND at least one variant is registered in
+// PUBLIC_EXPLORE_MODE=true AND at least one board is registered in
 // src/lib/variants.ts. Zero-JS (native <details>). See references/explore-stage.md.
 //
 // IT LISTS IN LADDER ORDER AND SHOWS THE RUNG, because the set is a declared range and a
@@ -13,12 +13,19 @@
 import { variants, landingVariants, byAmbition } from "../lib/variants";
 
 const exploreMode = import.meta.env.PUBLIC_EXPLORE_MODE === "true";
-const path = Astro.url.pathname;
+/**
+ * THE TRAILING SLASH IS NOT COSMETIC HERE. A static build serves /boards/b2/ and the registry
+ * records /boards/b2, so a raw equality never matched and `current` fell back to the first
+ * entry: the pill said "1 The Quiet Room" on every board, which is the one thing the picker
+ * exists to get right. Compared with both sides normalised.
+ */
+const trim = (s: string) => (s.length > 1 ? s.replace(/\/+$/, "") : s);
+const path = trim(Astro.url.pathname);
 const rungs = byAmbition(variants);
 const landings = byAmbition(landingVariants);
 const all = [...rungs, ...landings];
 const show = exploreMode && all.length > 0;
-const current = all.find((v) => v.href === path) ?? all[0];
+const current = all.find((v) => trim(v.href) === path) ?? all[0];
 const top = rungs.length ? Math.max(...rungs.map((v) => v.ambition || 1)) : 0;
 const optionClass = (active: boolean) =>
   [
@@ -39,7 +46,7 @@ const optionClass = (active: boolean) =>
       <ul class="max-h-[60vh] space-y-0.5 overflow-y-auto">
         {rungs.map((v) => (
           <li>
-            <a href={v.href} class={optionClass(v.href === path)}>
+            <a href={v.href} class={optionClass(trim(v.href) === path)}>
               <span class="text-white/40 tabular-nums">{v.ambition}</span> {v.name}
             </a>
           </li>
@@ -49,7 +56,7 @@ const optionClass = (active: boolean) =>
         )}
         {landings.map((v) => (
           <li>
-            <a href={v.href} class={optionClass(v.href === path)}>
+            <a href={v.href} class={optionClass(trim(v.href) === path)}>
               <span class="text-white/40">{v.id}</span> {v.name}
             </a>
           </li>

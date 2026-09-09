@@ -14,7 +14,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +22,11 @@ import { spawnSync } from "node:child_process";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GATE = join(HERE, "..", "gate-seo.mjs");
+const TEMPLATE = join(HERE, "..", "..", "templates", "astro-project");
+
+// The storefront's own entity, the shape BaseLayout emits. A fixture that trips a finding it
+// was not written to prove is a fixture nobody can read, and this one had stopped being clean.
+const ORG = JSON.stringify({ "@context": "https://schema.org", "@type": "Organization", name: "X", url: "https://x.test" });
 
 /** A minimal Astro project with a dynamic product route and a built sitemap. */
 function project({ catalogue }) {
@@ -44,8 +49,15 @@ function project({ catalogue }) {
   for (const u of urls) {
     const d = join(dir, "dist", "client", u === "/" ? "" : u);
     mkdirSync(d, { recursive: true });
-    writeFileSync(join(d, "index.html"), `<html><head><link rel="canonical" href="https://x.test${u}"><title>t</title></head><body><h1>h</h1></body></html>`);
+    writeFileSync(
+      join(d, "index.html"),
+      `<html><head><link rel="canonical" href="https://x.test${u}"><title>t</title>` +
+      `<script type="application/ld+json">${ORG}</script></head><body><h1>h</h1></body></html>`,
+    );
   }
+  // The rest of a delivered site, so the only thing this fixture can fail on is enumeration.
+  writeFileSync(join(dir, "src", "pages", "robots.txt.ts"), readFileSync(join(TEMPLATE, "src/pages/robots.txt.ts"), "utf8"));
+  writeFileSync(join(dir, "dist", "client", "llms.txt"), "# X\n");
   if (catalogue) {
     mkdirSync(join(dir, ".palate"), { recursive: true });
     writeFileSync(join(dir, ".palate", "catalogue.json"), JSON.stringify(catalogue));
@@ -57,16 +69,23 @@ const run = (dir) => {
   const r = spawnSync("node", [GATE, dir], { encoding: "utf8" });
   return `${r.stdout}${r.stderr}`;
 };
+const runFull = (dir) => {
+  const r = spawnSync("node", [GATE, dir], { encoding: "utf8" });
+  return { code: r.status, out: `${r.stdout}${r.stderr}` };
+};
 
 const OK_CAT = { ok: true, routes: ["/", "/products/alpha", "/products/beta"] };
 
 test("a storefront's product routes are enumerated from the catalogue", () => {
   const dir = project({ catalogue: OK_CAT });
   try {
-    const out = run(dir);
+    const { code, out } = runFull(dir);
     assert.doesNotMatch(out, /dynamic route not enumerable/,
       "the handles come from Shopify, not from a content collection, and that is not a defect");
     assert.match(out, /3 expected URL\(s\)/, `expected all three URLs to be counted:\n${out}`);
+    // THE EXIT CODE IS ASSERTED, not just the words. Without this the fixture can drift into
+    // failing for reasons nobody wrote it to prove, and every run still reports PASS.
+    assert.equal(code, 0, `the enumerating fixture must be clean:\n${out}`);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -17,4 +17,6 @@ directory = "./dist"
 # RUNTIME Worker secrets (`wrangler secret put` - never committed) - read per
 # request via `locals.runtime.env`:
 #   SANITY_API_WRITE_TOKEN  - /api/contact writes formSubmission docs
+#   PALATE_SMOKE_SECRET     - production only; lets the post-deploy form round trip
+#                             reach /api/contact without sending (references/testing.md)
 #   RESEND_API_KEY, TURNSTILE_SECRET - the contact form

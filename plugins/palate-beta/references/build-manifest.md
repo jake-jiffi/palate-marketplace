@@ -13,6 +13,14 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   "created_at": "ISO-8601",
   "business": "free-text brief (optional; the agent may set it)",
   "signature_move": { "name": "...", "source_slug": "..." },  // optional, agent-set
+
+  // --- what this build was built WITH (hook-set) ---
+  "plugin_version": "1.17.0",                     // hook-set: the plugin's own VERSION file
+  "mcp_version": "2026-09-09.catalogue-stamp",    // hook-set: the MCP's version, as the MCP reports it
+  "library": { "references": 2170, "catalogue_stamp": "2026-07-09T04:12:55.108Z" }, // hook-set: from the MCP's refs_list_verticals answer; null when it did not say
+  "library_unverified": false,                    // hook-set: true until the MCP sends a stamp. A missing stamp never reads as a verified one
+  "rubric_version": null,                         // hook-set: the vendored rubric's own RUBRIC_VERSION export, null when it has none
+  "rubric_unverified": true,                      // hook-set: true while rubric.mjs exports no version. FOLLOW-UP: the constant belongs grader-side (see below)
   "mcp_calls": [
     { "tool": "mcp__palate__refs_search", "args": { ... }, "slugs": ["..."], "ts": "..." }
   ],
@@ -33,9 +41,9 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   // scripts/manifest-merge.mjs. The hook NEVER sets a pass/fail.
   "diverge": null,      // MODE-AWARE: { ran, n, mode, axes_varied:[...], locked:{...}, concepts:[{ id, mechanic, lens, analogical_seed, conventionality:0..1, colourway, type, layout, motion, density, art_direction }] }
   "converge": null,     // { ran, scored:[{ id, originality:0..5, craft_feasibility:0..5, combined:0..5 }], advanced:[id,...] }
-  "commission": null,   // A.3.5: { bar, intensity:"high"|"calm", concept, vision, chosen_mechanisms:[{ name, recipe, precedent_slug, astro_recipe_pulled, fit_reason }], proof:{ viewports, read_pixels, read_console, mobile_friendly, holds_60fps, honours_reduced_motion }, restraint_note, explore_skip?:bool } - agent-set descriptive only; intensity arms the v1.5 bold bar in scripts/gate-done.sh (high -> pairwise + ambition + built-Explore enforced); explore_skip records a named-direction Explore exemption
+  "commission": null,   // A.3.5: { bar, intensity:"high"|"calm", concept, vision, chosen_mechanisms:[{ name, recipe, precedent_slug, astro_recipe_pulled, fit_reason }], proof:{ viewports, read_pixels, read_console, mobile_friendly, holds_60fps, honours_reduced_motion }, restraint_note, explore_skip?:bool } - agent-set descriptive only; intensity arms the v1.5 bold bar in scripts/gate-done.sh (high -> pairwise + ambition + built-Explore enforced); explore_skip records a named-direction Explore exemption; intensity_asked (1..4) is the calibration answer the CLIENT gave, recorded beside intensity and never over it - the asked one sets the default pick suggestion, the inferred one still governs the bold bar
   "variants": [],       // [{ id, route, name, concept_id, donor_slugs:[], html_path }]
-  "explore": null,      // W1 labels: { ran, shown:[{ id, name, donor_slug, hero_pattern, position }], picks:[{ surface, variant_id }], edits:[{ surface, variant_id, note }] } - persisted to builds.log.json by palate-stop.mjs
+  "explore": null,      // W1 labels + the board record: { ran, boards:[{ id, rung, donor }], shown_at, canvas_url, shown:[{ id, name, donor_slug, hero_pattern, position }], picks:[{ surface, variant_id, rung, position, picked_at }], second_passes:int, cta, notes:[{ surface, variant_id, note, at }], edits:[...], proof:{ url, verified_at } } - persisted to builds.log.json by palate-stop.mjs. boards-render.mjs writes boards + shown_at, palate-pick.mjs writes the rest, both through manifest-merge.mjs; time to pick is picked_at - shown_at, which is the only number this stage has ever produced
   "architecture": null, // W16: { ran, pages:[{ route, pageType, purpose, donor_slug }], nav, journey, rationale } - the page inventory, read by the verifier's cross-page check (8.5)
   "visual": null,       // SCRIPT-set: { ran, pass, iterations:[{ i, shots:{...}, axes:{...}, defects:[{type,location}], score }], console_errors:int }
   "novelty": null,      // SCRIPT-set: { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
@@ -55,6 +63,20 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   resolved by `hooks/project-dir.mjs`, overridable with `PALATE_PROJECT_DIR`), is moved there
   once when the scaffold first appears, and is started fresh rather than merged if the project
   underneath it changes.
+- **The version stamps** answer "what was this built with", because the same brief run twice
+  against a different plugin, a different MCP deploy or a re-seeded library produces two
+  different sites and nothing used to record why. `plugin_version` and `rubric_version` are read
+  locally (the plugin's `VERSION`, and the vendored `rubric.mjs`'s own `RUBRIC_VERSION` export
+  when the grader adds one, since that file is byte-identical to the grader's copy and hash-pinned
+  in both repos, so the plugin reads it rather than writing one). **`rubric_version` is null on
+  every build today and `rubric_unverified` says so.** The constant has to be added in
+  palate-product's copy of `rubric.mjs` and will then be read here with no plugin change; that is
+  a tracked follow-up, and until it lands a re-grade cannot be attributed to a rubric change from
+  the manifest alone. `mcp_version` and `library` come
+  from the MCP's own `refs_list_verticals` answer, because only the server knows what its
+  catalogue currently holds, and the FIRST answer of a build is kept: a re-seed mid-build must not
+  rewrite what the survey actually read. An older MCP sends no stamp, which leaves `library: null`
+  and `library_unverified: true` standing rather than certifying a library nobody measured.
 - **`business`**, **`signature_move`**, **`sections`** are optional and may be set by
   the agent/surveyor to record intent; the depth gate cross-checks them against the
   telemetry (e.g. a declared signature move's `source_slug` must appear in

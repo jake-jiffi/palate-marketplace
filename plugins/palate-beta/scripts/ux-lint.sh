@@ -19,7 +19,8 @@
 # Exit codes:
 #   0 - clean (no findings at or above --fail-on)
 #   1 - findings at or above --fail-on
-#   2 - internal error (bad args, missing rules, missing perl)
+#   2 - could not check: bad args, missing rules, missing perl, or NOTHING TO INSPECT
+#       (no file under the project matches any rule's Files glob). Never a pass.
 #
 # Per-line escape: add `ux-lint-disable <rule-id>` as a comment on the same or
 # preceding line. `ux-lint-disable-all` skips every rule for that line.
@@ -56,6 +57,54 @@ done
 [ -f "$RULES_FILE" ]  || { echo "ux-lint: rules not found at $RULES_FILE" >&2; exit 2; }
 [ -d "$PROJECT_DIR" ] || { echo "ux-lint: project dir not found at $PROJECT_DIR" >&2; exit 2; }
 command -v perl >/dev/null 2>&1 || { echo "ux-lint: perl is required" >&2; exit 2; }
+
+# NEVER GRADE THE PLUGIN'S OWN FILES.
+#
+# DUPLICATED FROM hooks/project-dir.mjs ON PURPOSE, and it is the one duplication here that is
+# not drift waiting to happen: bootstrap.sh curls this script ALONE into a cache directory, so
+# it has no sibling to import and must carry the predicate itself. Three conditions, matching
+# pluginRootRefusal(): the directory is CLAUDE_PLUGIN_ROOT, it sits inside it, or it carries
+# .claude-plugin/plugin.json, on the directory itself or on any ancestor up to the git toplevel.
+# A test that needs a fixture linted copies it to a temporary directory first.
+palate_plugin_refusal() { # <dir> -> prints the reason and returns 0 when it must be refused
+  local d
+  d="$(cd "$1" 2>/dev/null && pwd)" || return 1
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    local root
+    root="$(cd "$CLAUDE_PLUGIN_ROOT" 2>/dev/null && pwd)" || root=""
+    if [ -n "$root" ]; then
+      case "$d" in
+        "$root") echo "$d is CLAUDE_PLUGIN_ROOT, the Palate plugin itself, not a site"; return 0 ;;
+        "$root"/*) echo "$d is inside CLAUDE_PLUGIN_ROOT ($root), so it is part of the Palate plugin, not a site"; return 0 ;;
+      esac
+    fi
+  fi
+  # Ancestors too, bounded by the git toplevel: checking the candidate alone still let a gate
+  # run inside scripts/test or templates/astro-project measure the plugin. `.git` is a
+  # directory in a clone and a FILE in a worktree, so -e rather than -d.
+  local cur="$d" i=0
+  while [ "$i" -lt 12 ]; do
+    if [ -f "$cur/.claude-plugin/plugin.json" ]; then
+      if [ "$cur" = "$d" ]; then
+        echo "$d carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site"
+      else
+        echo "$d is inside the Claude Code plugin checkout at $cur (.claude-plugin/plugin.json), not a site"
+      fi
+      return 0
+    fi
+    [ -e "$cur/.git" ] && break
+    local parent; parent="$(dirname "$cur")"
+    [ "$parent" = "$cur" ] && break
+    cur="$parent"; i=$((i + 1))
+  done
+  return 1
+}
+
+if refusal="$(palate_plugin_refusal "$PROJECT_DIR")"; then
+  echo "ux-lint: refused: $refusal. Name the site directory explicitly. NOT a pass." >&2
+  echo "  (Run from the plugin checkout it read 314 of the plugin's own files and returned 179 findings: its doctrine QUOTES the tells this lint hunts.)" >&2
+  exit 2
+fi
 
 severity_rank() {
   case "$1" in
@@ -362,7 +411,11 @@ run_two_tone_heading() {
 }
 
 TMP=$(mktemp)
-trap "rm -f $TMP" EXIT
+# HOW MUCH DID IT ACTUALLY READ. Every file handed to a rule is recorded here, so the report
+# can say what the lint covered. "0 finding(s)" over a directory holding nothing the rules
+# match is not a clean build, it is a lint that never ran, and the two used to print the same.
+INSPECTED=$(mktemp)
+trap "rm -f $TMP $INSPECTED" EXIT
 
 [ "$CI" = "0" ] && printf "ux-lint: rules=%s project=%s fail-on=%s\n" \
   "$(basename "$RULES_FILE")" "$PROJECT_DIR" "$FAIL_ON" >&2
@@ -392,6 +445,7 @@ while IFS=$'\t' read -r RULE_ID SEVERITY MODE FILES_GLOB REGEX; do
 
   while IFS= read -r f; do
     [ -z "$f" ] && continue
+    printf '%s\n' "$f" >> "$INSPECTED"
     run_rule "$f" "$RULE_ID" "$SEVERITY" "$REGEX" "$REQUIRES_REASON" >> "$TMP"
   done < <(list_files "$FILES_GLOB" "$PROJECT_DIR")
 done < <(parse_rules)
@@ -404,6 +458,7 @@ if [ "$(severity_rank High)" -ge "$SHOW_RANK" ]; then
     *)
       while IFS= read -r f; do
         [ -z "$f" ] && continue
+        printf '%s\n' "$f" >> "$INSPECTED"
         run_tracked_eyebrow "$f" >> "$TMP"
       done < <(list_files "*.css" "$PROJECT_DIR")
       ;;
@@ -437,6 +492,7 @@ if [ "$(severity_rank High)" -ge "$SHOW_RANK" ]; then
         if [ "$_pill_commerce" -eq 1 ]; then
           case "$f" in */products/*) continue ;; esac
         fi
+        printf '%s\n' "$f" >> "$INSPECTED"
         run_hero_status_pill "$f" >> "$TMP"
       done < <(list_files "*.astro,*.html,*.tsx" "$PROJECT_DIR")
       ;;
@@ -451,10 +507,21 @@ if [ "$(severity_rank Medium)" -ge "$SHOW_RANK" ]; then
     *)
       while IFS= read -r f; do
         [ -z "$f" ] && continue
+        printf '%s\n' "$f" >> "$INSPECTED"
         run_two_tone_heading "$f" >> "$TMP"
       done < <(list_files "*.astro,*.html,*.tsx" "$PROJECT_DIR")
       ;;
   esac
+fi
+
+FILES_READ=$(sort -u "$INSPECTED" 2>/dev/null | grep -c . || true)
+FILES_READ="${FILES_READ:-0}"
+# A LINT THAT READ NOTHING IS A SKIP, NOT A CLEAN BILL. Exit 2 is this script's "could not
+# check" code and this is that case: the rules never saw a file, so nothing about the project
+# has been established. Said even under --ci, because it is a verdict and not display.
+if [ "$FILES_READ" -eq 0 ]; then
+  echo "ux-lint: skipped (nothing to inspect: no file under $PROJECT_DIR matches any rule's Files glob). NOT a pass." >&2
+  exit 2
 fi
 
 VIOLATIONS=$(wc -l < "$TMP" | tr -d ' ')
@@ -474,8 +541,8 @@ while IFS=$'\t' read -r _ _ sev _ _; do
   [ "$r" -gt "$HIGHEST" ] && HIGHEST="$r"
 done < "$TMP"
 
-[ "$CI" = "0" ] && printf "ux-lint: %d finding(s) at severity %s or above\n" \
-  "$VIOLATIONS" "$SHOW_SEVERITY" >&2
+[ "$CI" = "0" ] && printf "ux-lint: %d finding(s) at severity %s or above (inspected %d file(s))\n" \
+  "$VIOLATIONS" "$SHOW_SEVERITY" "$FILES_READ" >&2
 
 if [ "$HIGHEST" -ge "$FAIL_RANK" ]; then
   exit 1

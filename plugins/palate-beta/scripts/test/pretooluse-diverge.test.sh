@@ -365,6 +365,37 @@ want "src/pages/index.astro -> still DENY (this IS composed)" DENY \
 want "src/components/Hero.astro -> still DENY" DENY \
   "$(run "$S25" Write "$S25/src/components/Hero.astro")"
 
+# === THE BOARD PATHS ARE PAGE AND SECTION SOURCE, exactly like /v1 was =====================
+# Explore writes `src/pages/boards/bN.astro` and `src/components/sections/BNHero.astro` first
+# now, and they are the FIRST design writes of a build. If either fell outside the wall's idea
+# of page-or-section source, the whole Explore stage would slip past both the DIVERGE wall and
+# the survey wall: a build could write five boards having diverged nothing and surveyed nothing,
+# which is the exact failure both walls exist to stop, arriving through a new directory.
+BB="$TMP/boards-nodiverge"; mkdir -p "$BB"; echo "$MARKER" > "$BB/.palate-skill-state.json"
+want "board page before DIVERGE -> deny" DENY \
+  "$(run "$BB" Write "$BB/src/pages/boards/b1.astro")"
+want "board section before DIVERGE -> deny" DENY \
+  "$(run "$BB" Write "$BB/src/components/sections/B1Hero.astro")"
+
+BB2="$TMP/boards-diverged"; mkdir -p "$BB2"; echo "$MARKER" > "$BB2/.palate-skill-state.json"
+write_valid_manifest "$BB2"
+want "board page after a valid DIVERGE -> allow" ALLOW \
+  "$(run "$BB2" Write "$BB2/src/pages/boards/b1.astro")"
+want "board section after a valid DIVERGE -> allow" ALLOW \
+  "$(run "$BB2" Write "$BB2/src/components/sections/B1Hero.astro")"
+
+# AND THE SURVEY WALL REACHES THEM, which the DIVERGE cases above cannot show: a NEW file is
+# denied before DIVERGE whether or not the wall thinks it is page-or-section source, so those
+# two assertions pass on a wall that has stopped recognising the board paths entirely. This is
+# the one that fails when it does, and it is the one that matters: a build could otherwise
+# write five boards on three Palate calls, which is the fault the survey wall was written for.
+BB3="$TMP/boards-survey"; mkdir -p "$BB3"; echo "$MARKER" > "$BB3/.palate-skill-state.json"
+write_valid_manifest "$BB3"; add_calls "$BB3" "$SHALLOW"
+want "board page with a thin survey -> deny (this IS composed from the library)" DENY \
+  "$(run "$BB3" Write "$BB3/src/pages/boards/b1.astro")"
+want "board section with a thin survey -> deny" DENY \
+  "$(run "$BB3" Write "$BB3/src/components/sections/B1Hero.astro")"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

@@ -78,6 +78,37 @@ not converge on the same sites.
    WHY of each choice, and `refs_get { slug, layer:"do_dont" }` for the backbone.
 5. `refs_get_screenshot` the relevant **inner pages** (pricing, menu, booking,
    services) of the donors. View **at least 3 inner pages**.
+6. **THE CALIBRATION ROW.** Pick 3 or 4 references from the client's own vertical that
+   span restrained to bold, and write them to `.palate/explore/refs.json` in the project.
+   This is the row the client is shown FIRST, above the boards, under the question "which
+   of these is closest to how bold you want to be?".
+
+   Why it exists: the ambition ladder is built BEFORE anyone has told us how bold to be, so
+   the intensity in the commission is inferred from the brief and nothing has ever checked
+   it. A row of real sites is the cheapest way to ask, and it asks in the only language
+   that works, which is pictures of finished work rather than the word "bold".
+
+   How to choose them: real sites from the client's vertical, so the client is comparing
+   like with like and cannot dismiss the range as "that is for a different sort of
+   business". Spread them by ambition, not by preference: position 1 is genuinely
+   restrained and EXCELLENT, the last position genuinely commits. Prefer high taste scores
+   at every position, because a weak restrained example teaches the client that restraint
+   is the poor option. Fetch each one's hero with `refs_get_screenshot { slug }` and save
+   the file inside the project.
+
+   The shape, one entry per reference:
+
+   ```json
+   [{ "slug": "aesop", "name": "Aesop", "position": 1,
+      "why": "Restrained: one photograph, a great deal of air, and the product does the talking.",
+      "screenshot": "refshots/aesop.png" }]
+   ```
+
+   `position` is 1..4 running restrained to bold, `why` is one line saying why it sits
+   where it does on the range (never a compliment, an argument), and `screenshot` is
+   relative to `refs.json`. `scripts/boards-render.mjs --refs .palate/explore/refs.json`
+   draws them as row 0 of the canvas and `/explore` shows them above the ladder. The
+   client's answer is recorded by `/pick --intensity <n>` as `commission.intensity_asked`.
 
 These calls are recorded automatically into `build-manifest.json` by the
 PostToolUse hook, so the depth gate sees real telemetry. Do not fabricate the
@@ -97,6 +128,7 @@ TOKEN INTENT: <3-5 lines distilled from the DESIGN.md rationale - which type sca
   the reasoning, not just the values>
 DO/DONT: <the 2-3 load-bearing do/don't rules from the backbone's do_dont layer>
 INNER PAGES SEEN: <slug>/<page>, ...
+CALIBRATION ROW: <slug> (1, restrained) .. <slug> (N, bold) - written to .palate/explore/refs.json
 AVOIDED (recent builds): <slugs you deliberately skipped>
 COMPOSITION NOTE: pick the backbone for structure, compose specific moves from at
 least three donors, re-skin every identity layer, never clone one reference.
