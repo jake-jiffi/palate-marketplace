@@ -114,6 +114,36 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   fi
 fi
 
+# 8. THE MCP REPORTS THE VERSION CUSTOMERS ARE ACTUALLY ON. `palate_setup` answers "what am I
+#    running?", and its constant is the fifth hand-maintained version string across three
+#    repos. It has drifted FOUR times: 1.1.0 while 1.4.x shipped, then 1.4.3, then stuck at
+#    1.7.0 against a shipped 1.9.0, and last at 1.10.0 against 1.16.0, six releases stale. A
+#    stale answer here is worse than none, because it is the number an agent reads back to a
+#    customer. The constant lives in one place now (mcp-server lib/plugin-version.ts) and this
+#    is what makes the next promotion move it: bump the pin without the constant and this
+#    fails, by name.
+#
+#    The MCP clone is not on every machine that runs this script, so its absence is a SKIP with
+#    the path printed, never a failure and never silence.
+MCP="${PALATE_MCP_DIR:-$HOME/dev/palate/mcp-server}"
+PV="$MCP/lib/plugin-version.ts"
+if [ -f "$PV" ]; then
+  mcp_v=$(node -e "
+    const s=require('fs').readFileSync(process.argv[1],'utf8');
+    const m=s.match(/PLUGIN_VERSION\s*=\s*process\.env\.PALATE_PLUGIN_VERSION\s*\?\?\s*[\"'\`]([^\"'\`]+)/);
+    console.log(m ? m[1] : '');
+  " "$PV")
+  if [ -z "$mcp_v" ]; then
+    bad "cannot read PLUGIN_VERSION out of $PV; the constant moved or its shape changed"
+  else
+    [ "$mcp_v" = "$PROD_V" ] \
+      && ok "the MCP reports the prod plugin version ($mcp_v)" \
+      || bad "the MCP's PLUGIN_VERSION is '$mcp_v' but the prod pin is '$PROD_V': palate_setup will tell customers the wrong version. Fix $PV"
+  fi
+else
+  echo "skipped: mcp-server not found at $MCP (set PALATE_MCP_DIR to check the MCP's PLUGIN_VERSION)"
+fi
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
