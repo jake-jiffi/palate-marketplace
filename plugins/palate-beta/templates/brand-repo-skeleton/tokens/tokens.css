@@ -37,6 +37,49 @@
   --brand-radius-sm: 0.25rem;
   --brand-radius: 0.5rem;
   --brand-radius-lg: 1rem;
+
+  /* ---- THE FULL SET THE WEBSITE KIT CONSUMES ----------------------------------------------
+     These are brand decisions, not kit decisions, and the kit reads every one of them. Before
+     they were published here, each fell through to a literal written inside foundations.css, so
+     a brand could not choose its own error red, its own dark-ground accent or its own page
+     width, and every site came out with the kit's defaults. gate-brand-bridge.mjs compares this
+     file against what the kit reads and fails when a name the kit reads FIRST is missing.
+
+     A brand that wants the kit's default for any of these can delete the line: the kit's
+     fallback then applies, which is a choice rather than an accident. */
+
+  /* A second ground, one step off the page, for alternating section bands. */
+  --brand-bg-2: #f5f5f5;
+
+  /* THE ACCENT MOVES IN OPPOSITE DIRECTIONS BY GROUND. accent-hover darkens on a light page;
+     accent-lift LIGHTENS on a dark band. One accent used on both is the commonest contrast
+     failure in a themed kit, measured at 1.06:1 before this existed. */
+  --brand-accent-lift: var(--palette-white);
+
+  /* A quiet divider and a control edge are different jobs: a value chosen to be an unobtrusive
+     rule measures 1.36:1 on white, and WCAG 1.4.11 asks 3:1 for the boundary of a control. */
+  --brand-border-strong: var(--palette-ink-900);
+  --brand-border-width: 1px;
+
+  /* Feedback. Semantic and deliberately NOT the brand accent: an error that is also the brand
+     colour reads as decoration. These are the values the kit measures against both grounds. */
+  --brand-success: #1d7a4c;
+  --brand-warning: #8a5a00;
+  --brand-error: #b3261e;
+  --brand-info: var(--palette-ink-500);
+
+  /* Layout. A brand has a page width the same way it has a typeface. */
+  --brand-page-max: 1180px;
+  --brand-page-wide: 1440px;
+
+  /* Surfaces. Shadow is opt-in: a kit that shadows everything flattens its own hierarchy. */
+  --brand-radius-pill: 999px;
+  --brand-shadow: none;
+  --brand-shadow-raised: none;
+
+  /* Type. The mono face and the weight the display face is actually set at. */
+  --brand-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --brand-weight-display: 400;
 }
 
 /* mode switch: one-line override via the data attribute */

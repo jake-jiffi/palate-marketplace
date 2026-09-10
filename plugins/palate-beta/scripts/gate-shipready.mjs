@@ -145,6 +145,45 @@ if (picked) {
   }
 }
 
+// ------------------------------------------------- 2b. the kit's own demo surfaces are gone
+//
+// THE KIT INDEX SAID THIS GATE REMOVED THEM AND IT DID NOT.
+//
+// `/kit`, `/kit/<piece>/<Variation>` and the framed renders under `/kit-frame` are working
+// documents: they demonstrate every section piece with INVENTED firms, INVENTED people and
+// INVENTED quotes, which is exactly the class of content a real client build had to correct four
+// times over. Left in the tree they build to real routes on the client's own domain, noindex or
+// not, and a page nobody linked is still a page a crawler that finds it will read. The generated
+// artwork under `public/images/kit/` and `public/media/kit/` ships with them.
+//
+// Only at PRODUCTION stage. A preview exists so the pieces can be judged, and taking the kit away
+// there would remove the one surface that makes the sections reviewable at all.
+let stage = "";
+try { stage = JSON.parse(read(".palate-skill-state.json") || "{}")?.stage || ""; } catch { /* unreadable */ }
+if (stage === "production") {
+  const kitSurfaces = [
+    ["src/pages/kit", "the piece and state demos, which name firms and people that do not exist"],
+    ["src/pages/kit-frame", "the framed renders of the same demos"],
+    ["public/images/kit", "the demo artwork: invented wordmarks, product screens and stand-ins"],
+    ["public/media/kit", "the demo video files"],
+    ["src/lib/kit-sample.ts", "the invented people, firms and quotes the demos render"],
+    ["src/lib/kit-states.ts", "the state fixtures, which carry the same invented content at length"],
+  ];
+  for (const [rel, why] of kitSurfaces) {
+    if (existsSync(join(dir, rel))) {
+      add("kit demos not retired", `${rel} is still in the tree at production stage. It holds ${why}. Delete it before hand-over: the composed pages keep working, because a page imports the COMPONENTS and never the demos.`);
+    }
+  }
+  for (const sm of ["dist/sitemap-0.xml", ".vercel/output/static/sitemap-0.xml", "public/sitemap-0.xml"]) {
+    const x = read(sm);
+    if (x && /\/kit(-frame)?\//.test(x)) {
+      const n = (x.match(/\/kit(-frame)?\/[^<]*</g) || []).length;
+      add("kit demos not retired", `${sm} advertises ${n} kit demo URL(s), so the invented content is offered to crawlers and answer engines.`);
+      break;
+    }
+  }
+}
+
 // ------------------------------------------------------- 3. the photos were looked at
 // A check that only fails when its own output exists cannot fail on a build that skipped it,
 // which is exactly how four destructive treatments shipped. Absence IS the finding.
@@ -204,7 +243,7 @@ if (usesImages) {
 
 // ------------------------------------------------------------------------ report
 if (!findings.length) {
-  console.log(`gate-shipready: clean (placeholders resolved, Explore retired, photos reviewed) (inspected ${inspected} file(s)).`);
+  console.log(`gate-shipready: clean (placeholders resolved, Explore retired, kit demos retired, photos reviewed) (inspected ${inspected} file(s)).`);
   process.exit(0);
 }
 console.error(`gate-shipready: ${findings.length} finding(s) (inspected ${inspected} file(s)). This build is NOT ready to hand over.\n`);

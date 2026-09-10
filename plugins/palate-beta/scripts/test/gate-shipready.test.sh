@@ -125,6 +125,32 @@ scaffold "$TMP/icononly"
 node -e "const fs=require('fs');const p='$TMP/icononly/.palate/assets.json';const d=JSON.parse(fs.readFileSync(p));d.assets['brand/favicon.png'].reviewed=false;fs.writeFileSync(p,JSON.stringify(d));"
 check "an unreviewed ICON does not fire (furniture is not judged)" "$(run "$TMP/icononly")" "0"
 
+# 4b. the kit's own demo surfaces
+# They render invented firms, people and quotes, which is the class of content a real client
+# build had to correct four separate times. The kit index claimed this gate removed them and it
+# did not, so these four assertions are what makes the claim true.
+scaffold "$TMP/kitprod"
+printf '{"stage":"production"}' > "$TMP/kitprod/.palate-skill-state.json"
+mkdir -p "$TMP/kitprod/src/pages/kit"; echo 'x' > "$TMP/kitprod/src/pages/kit/index.astro"
+check "kit demo routes fire at production stage" "$(run "$TMP/kitprod")" "1"
+check "and the finding names the surface" \
+  "$(out "$TMP/kitprod" | grep -c 'src/pages/kit is still in the tree')" "1"
+
+scaffold "$TMP/kitprev"
+printf '{"stage":"preview"}' > "$TMP/kitprev/.palate-skill-state.json"
+mkdir -p "$TMP/kitprev/src/pages/kit"; echo 'x' > "$TMP/kitprev/src/pages/kit/index.astro"
+check "the same tree passes at PREVIEW stage, where the demos are the point" "$(run "$TMP/kitprev")" "0"
+
+scaffold "$TMP/kitgone"
+printf '{"stage":"production"}' > "$TMP/kitgone/.palate-skill-state.json"
+check "and passes at production once the demos are gone" "$(run "$TMP/kitgone")" "0"
+
+scaffold "$TMP/kitmap"
+printf '{"stage":"production"}' > "$TMP/kitmap/.palate-skill-state.json"
+mkdir -p "$TMP/kitmap/public"
+printf '<urlset><url><loc>https://x.test/kit/faq/FaqAccordion/</loc></url></urlset>' > "$TMP/kitmap/public/sitemap-0.xml"
+check "a sitemap advertising a kit demo URL fires on its own" "$(run "$TMP/kitmap")" "1"
+
 # 5. cannot check must never read as clean
 mkdir -p "$TMP/empty"
 check "a project with no src/pages BLOCKS rather than passing" "$(run "$TMP/empty")" "2"

@@ -1,0 +1,303 @@
+---
+/**
+ * CompareAlternatives: your offer next to the alternatives, on attributes that can be defended.
+ *
+ * Use this late, near pricing, when the visitor is actively weighing somebody else. It is a
+ * closing argument, and a closing argument that overreaches loses the room.
+ *
+ * THE ALTERNATIVE COLUMNS ARE NOT STYLED AS WORSE, AND THAT IS DELIBERATE.
+ * The usual version of this section paints green ticks down its own column and red crosses down
+ * everybody else's. Three things are wrong with that. It is read as advertising rather than as
+ * information, so the reader discounts the whole table. It carries nothing to a screen reader,
+ * where a tick and a cross are both a decorative image. And it is invisible to anybody who cannot
+ * separate the two hues it depends on, which is a meaningful share of any audience. So every cell
+ * here uses the SAME neutral mark and the same type, the content does the arguing, and a reader
+ * who disagrees with a row can see exactly what they are disagreeing with.
+ *
+ * `fairnessNote` is a required prop for the same reason. A comparison written by one of the
+ * parties is not neutral and pretending otherwise insults the reader. The note says who wrote it,
+ * when it was checked, and what the alternatives are genuinely better at. A business willing to
+ * write that sentence is more believable than one that scores itself ten out of ten.
+ *
+ * Your own column is tinted so the eye can hold it while scanning across a wide table. That is a
+ * locating device, not a verdict: it says "this is the column you started from", and the
+ * alternative columns are left on the page's own ground rather than being greyed out or dimmed.
+ *
+ * Naming competitors is a legal and commercial decision, not a design one. Generic labels ("a
+ * national chain", "doing it yourself") are usually the better call and work identically here.
+ */
+interface Attribute {
+  name: string;
+  /** Your value. A short phrase, not a tick. */
+  yours: string;
+  /** One value per alternative, in the same order as `alternatives`. */
+  others: string[];
+  /** Where the claim comes from, if it comes from anywhere checkable. */
+  source?: string;
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  caption?: string;
+  /** How your own column is headed. */
+  yourName?: string;
+  /** One to three alternatives. More than three and nobody reads across. */
+  alternatives?: string[];
+  attributes?: Attribute[];
+  /** Required. Who wrote this, when it was checked, and what the alternatives do better. */
+  fairnessNote?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "How we compare",
+  lede,
+  caption = "The three ways most people get this work done, compared on the things that change the outcome.",
+  yourName = "Us",
+  alternatives = ["A national chain", "Doing it yourself"],
+  attributes = [
+    {
+      name: "Who turns up",
+      yours: "The same two engineers each visit, named on your account.",
+      others: ["Whoever is on the rota that day.", "You, and whoever you can borrow."],
+    },
+    {
+      name: "How the price is set",
+      yours: "Quoted per job after a site visit, fixed in writing.",
+      others: ["Priced from a national rate card, adjusted on the day.", "Materials only, plus your own time."],
+    },
+    {
+      name: "Parts",
+      yours: "At cost, itemised on the invoice.",
+      others: ["Marked up, typically between 20 and 40 per cent.", "Retail, unless you have a trade account."],
+    },
+    {
+      name: "Response when something fails",
+      yours: "Same day on a managed plan, two working days otherwise.",
+      others: ["Next available slot in your region.", "Whenever you are free."],
+    },
+    {
+      name: "If it goes wrong",
+      yours: "Twelve month workmanship guarantee, and we come back.",
+      others: ["Covered by the chain's national guarantee.", "Yours to put right."],
+      source: "Guarantee terms are on our terms page.",
+    },
+    {
+      name: "What it costs to start",
+      yours: "A site visit, free within 30 km.",
+      others: ["A call-out fee, refunded against the work.", "Nothing."],
+    },
+  ],
+  fairnessNote = "We wrote this, so read it as our account rather than an independent one. It was last checked in March against published rate cards and our own invoices. A national chain will beat us on out-of-hours cover and on anything needing a part at three in the morning, and doing it yourself is genuinely cheaper on small jobs where nothing is hidden behind the wall.",
+  emptyMessage = "This comparison will be published once the claims in it have been checked.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `ca-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const noteId = `${uid}-fairness`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const others = (alternatives ?? []).filter(Boolean);
+/* Rows are padded to the column count, so a missing value leaves a stated gap rather than
+   shifting every cell after it one column to the left. */
+const rows = (attributes ?? [])
+  .filter((a) => a?.name)
+  .map((a) => ({ ...a, others: others.map((_, i) => a.others?.[i] ?? "") }));
+const hasTable = rows.length > 0 && others.length > 0;
+/* The fairness note is never allowed to be absent. If a build forgets it, the section states the
+   bare truth rather than presenting a one-sided comparison as though nobody wrote it. */
+const note =
+  fairnessNote && fairnessNote.trim()
+    ? fairnessNote
+    : "We wrote this comparison ourselves and it has not been checked by anyone independent. Read it as our account of the alternatives, not a neutral one.";
+const columnCount = others.length + 1;
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container">
+    <div class="ca__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+  </div>
+
+  {!hasTable ? (
+    <div class="kit-container">
+      <p class="kit-empty">{emptyMessage}</p>
+    </div>
+  ) : (
+    <div class="kit-container kit-container--wide ca">
+      <section class="ca__scroll kit-scroll-x" aria-label={caption} tabindex="0" data-kit-scroll-region data-columns={columnCount}>
+        <table class="ca__table" aria-describedby={noteId}>
+          <caption class="ca__caption">{caption}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="ca__corner"><span class="kit-visually-hidden">Attribute</span></th>
+              <th scope="col" class="ca__col ca__col--yours">{yourName}</th>
+              {others.map((name) => (
+                <th scope="col" class="ca__col">{name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr>
+                <th scope="row" class="ca__attr">
+                  <span class="ca__attr-name">{row.name}</span>
+                  {row.source && <span class="ca__attr-source kit-muted">{row.source}</span>}
+                </th>
+                <td class="ca__cell ca__cell--yours">
+                  <span class="ca__mark" aria-hidden="true"></span>
+                  <span class="ca__value">{row.yours}</span>
+                </td>
+                {row.others.map((value) => (
+                  <td class="ca__cell">
+                    <span class="ca__mark" aria-hidden="true"></span>
+                    <span class:list={["ca__value", value === "" && "kit-muted"]}>
+                      {value === "" ? "Not stated" : value}
+                    </span>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  )}
+
+  <div class="kit-container">
+    <p id={noteId} class="ca__fairness">{note}</p>
+  </div>
+</section>
+
+<script>
+  import { initKitScrollRegions } from "../scroll-region";
+  initKitScrollRegions();
+</script>
+
+<style>
+  /* ONLY THE TABLE GETS THE EXTRA ROOM. The heading, the lede and the fairness note sit in the
+     ordinary container, so on a composed page this section's heading lines up with every other
+     section's heading rather than starting further out and reading as a different page. */
+
+  .ca__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
+
+  /* Focusable so it can be scrolled from the keyboard, and named so the focus stop makes sense.
+     It is a <section>, which foundations' shared focus rule does not cover, so the ring is set
+     here from the shared tokens rather than invented.
+
+     `position: relative` is load-bearing, not tidiness: `.kit-visually-hidden` is absolutely
+     positioned with auto insets, so without a positioned ancestor its containing block is the
+     viewport. One hidden span inside a button in the table footer was then laid out at the
+     table's scrolled-out coordinates and widened the DOCUMENT to 684px at a 390px viewport,
+     giving the whole page a horizontal scrollbar. `clip` hides the paint, not the layout. */
+  .ca__scroll { position: relative; overflow-x: auto; }
+  .ca__scroll:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+
+  .ca__table {
+    /* `separate` rather than `collapse`, because a browser drops the borders on a sticky cell
+       under collapsed borders and the attribute column would lose its rule while scrolling. */
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    min-width: 44ch;
+    font-size: var(--kit-text-sm);
+  }
+
+  .ca__caption {
+    caption-side: top;
+    text-align: start;
+    padding-block-end: var(--kit-space-md);
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+    max-width: var(--kit-measure);
+  }
+
+  .ca__corner, .ca__attr, .ca__col, .ca__cell {
+    padding: var(--kit-space-md);
+    border-block-end: var(--kit-border-width) solid var(--kit-border);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  .ca__corner, .ca__attr {
+    position: sticky;
+    inset-inline-start: 0;
+    background: var(--kit-bg);
+    border-inline-end: var(--kit-border-width) solid var(--kit-border);
+    /* THE MINIMUM IS THE PADDING PLUS A READABLE MEASURE, NOT A MEASURE.
+       These cells are border-box, so 12ch had to cover 2rem of padding as well as the text, which
+       left about 5ch of column: measured at 390px, "straightforward" and "Maintenance" both broke
+       across two lines inside a table that was already free to scroll sideways. A scroll container
+       exists so a column can keep its width; squeezing the column to avoid using it gives away the
+       only thing it bought. */
+    min-width: 18ch;
+    max-width: 26ch;
+    z-index: 1;
+  }
+
+  /* EVERY column heading is set identically. The only difference is the tint behind our own,
+     which locates it while scanning; it does not say "better". */
+  .ca__col {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-strong);
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-snug);
+    border-block-end-width: calc(var(--kit-border-width) * 2);
+    border-block-end-color: var(--kit-border-strong);
+    min-width: 16ch;
+  }
+  .ca__col--yours, .ca__cell--yours { background: var(--kit-bg-subtle); }
+
+  .ca__attr-name { display: block; font-weight: var(--kit-weight-medium); }
+  .ca__attr-source {
+    display: block;
+    margin-block-start: var(--kit-space-2xs);
+    font-size: var(--kit-text-xs);
+    font-weight: var(--kit-weight-body);
+    line-height: var(--kit-leading-snug);
+  }
+
+  .ca__value { line-height: var(--kit-leading-snug); }
+
+  /* One neutral mark, identical in every cell in every column. It is a bullet, not a verdict. */
+  .ca__mark {
+    display: inline-block;
+    width: var(--kit-space-xs);
+    height: var(--kit-space-xs);
+    margin-inline-end: var(--kit-space-xs);
+    border-radius: var(--kit-radius-pill);
+    border: var(--kit-border-width) solid var(--kit-border-strong);
+    vertical-align: baseline;
+  }
+
+  .ca__fairness {
+    margin: 0;
+    margin-block-start: var(--kit-space-xl);
+    padding-block-start: var(--kit-space-md);
+    border-block-start: var(--kit-border-width) solid var(--kit-border);
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-body);
+    color: var(--kit-text-muted);
+    max-width: var(--kit-measure);
+  }
+</style>

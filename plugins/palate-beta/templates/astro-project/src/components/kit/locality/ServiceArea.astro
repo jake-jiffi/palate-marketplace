@@ -1,0 +1,143 @@
+---
+/**
+ * SERVICE AREAS. Named areas with what each covers and how to reach it, so locality is concrete
+ * before the buyer is asked to commit.
+ *
+ * Every local-service flagship in the survey makes place concrete: greenwise's "Our Service Area"
+ * region cards carry a phone per region and a map each, then "Don't see your area listed?";
+ * block-renovation lists a 50-state city grid of compact link cards; parsley names its centres;
+ * re-bath puts a locator directly after the trust band. The kit's sixteen pieces had nothing that
+ * could say WHERE, which for a trades or clinic build is the first question after "can I trust
+ * you". Its `when` is drawn from those notes and the gate holds it to the survey.
+ *
+ * NO AREAS ARE DEFAULTED. A defaulted region on a real client's site is a false promise of
+ * coverage, which is worse than an empty state. The demo passes samples from kit-sample.ts.
+ */
+export interface Area {
+  name: string;
+  /** The suburbs, towns or districts inside it. Rendered as prose, so write it as a list. */
+  covers: string;
+  phone?: string;
+  href?: string;
+  linkLabel?: string;
+}
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  areas?: Area[];
+  /** What to say beneath the grid for the visitor whose area is not listed. */
+  outsideNote?: string;
+  outsideHref?: string;
+  outsideLabel?: string;
+  tone?: "default" | "subtle" | "inverse";
+  id?: string;
+  class?: string;
+  emptyMessage?: string;
+}
+
+const {
+  heading = "Where we work",
+  lede = "",
+  areas = [],
+  outsideNote = "",
+  outsideHref = "",
+  outsideLabel = "Ask whether we can come to you",
+  tone = "default",
+  id,
+  class: className,
+  emptyMessage = "The areas we cover are being written up. Ring us and we will tell you whether we come to you.",
+} = Astro.props as Props;
+
+const items = (Array.isArray(areas) ? areas : []).filter((a) => a && a.name && a.covers);
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+const uid = id || `sa-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "kit-sa", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="kit-sa__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {items.length === 0 ? (
+      <p class="kit-empty kit-sa__empty">{emptyMessage}</p>
+    ) : (
+      <ul class="kit-sa__grid" role="list">
+        {items.map((area, index) => (
+          <li class="kit-sa__card">
+            <h3 class="kit-h3 kit-sa__name" id={`${uid}-area-${index}`}>{area.name}</h3>
+            <p class="kit-body kit-sa__covers">{area.covers}</p>
+            {(area.phone || area.href) && (
+              <p class="kit-sa__actions">
+                {area.phone && (
+                  <a class="kit-link kit-sa__phone" href={telHref(area.phone)}>{area.phone}</a>
+                )}
+                {area.href && (
+                  <a class="kit-btn kit-btn--quiet kit-sa__more" href={area.href} aria-describedby={`${uid}-area-${index}`}>
+                    <span class="kit-btn__label">{area.linkLabel || "This area"}</span>
+                  </a>
+                )}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+
+    {items.length > 0 && outsideNote && (
+      <p class="kit-body kit-muted kit-sa__outside">
+        {outsideNote}
+        {outsideHref && (
+          <a class="kit-link" href={outsideHref}>{outsideLabel}</a>
+        )}
+      </p>
+    )}
+  </div>
+</section>
+
+<style>
+  .kit-sa__head { display: grid; gap: var(--kit-space-sm); max-width: var(--kit-measure); }
+  .kit-sa__grid {
+    list-style: none;
+    margin: var(--kit-space-xl) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-gutter);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  }
+  .kit-sa__card {
+    display: grid;
+    gap: var(--kit-space-sm);
+    align-content: start;
+    padding: var(--kit-space-lg);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    background: var(--kit-bg);
+  }
+  .kit-section--inverse .kit-sa__card {
+    background: color-mix(in srgb, var(--kit-text-inverse) 6%, transparent);
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 18%, transparent);
+  }
+  .kit-sa__name { margin: 0; }
+  .kit-sa__covers { margin: 0; }
+  .kit-sa__actions {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-sm) var(--kit-space-md);
+    align-items: center;
+  }
+  .kit-sa__phone { font-weight: var(--kit-weight-medium); }
+  .kit-sa__outside { margin: var(--kit-space-lg) 0 0; max-width: var(--kit-measure); }
+  .kit-sa__outside .kit-link { margin-inline-start: var(--kit-space-xs); }
+  .kit-sa__empty { margin-top: var(--kit-space-xl); }
+</style>

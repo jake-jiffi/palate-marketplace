@@ -1,0 +1,20 @@
+---
+/**
+ * WHERE A FORM POSTED WITHOUT SCRIPTS LANDS. Every kit form carries a real action and method, so a
+ * submit made before its script bound (or with scripts off) reaches the endpoint as form data and
+ * is answered with a redirect here rather than a JSON body. With scripts on, the pieces show their
+ * own confirmation in place and this page is never seen.
+ */
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+<BaseLayout title="Message received" description="Your message has been received." noindex={true}>
+  <section class="kit-section">
+    <div class="kit-container" style="max-width: var(--kit-measure)">
+      <h1 class="kit-h1">Message received</h1>
+      <p class="kit-lede" style="margin-top: var(--kit-space-md)">
+        Thank you. It has reached us and somebody will be in touch.
+      </p>
+      <p class="kit-body" style="margin-top: var(--kit-space-lg)"><a class="kit-link" href="/">Back to the home page</a></p>
+    </div>
+  </section>
+</BaseLayout>

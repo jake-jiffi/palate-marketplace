@@ -1,0 +1,177 @@
+---
+/**
+ * TestimonialGrid: several customer quotes where the volume is part of the argument.
+ *
+ * Use it when you have three or more quotes of roughly equal strength. If one is plainly better
+ * than the others, TestimonialSingle will do more for you: a strong quote loses force sitting in
+ * a grid beside weaker ones.
+ *
+ * THESE ARE SOMEBODY ELSE'S WORDS AND THE COMPONENT TREATS THEM THAT WAY.
+ * Each quote is transcribed verbatim, or cut (trimmed at the ends, or an elision marked). Never
+ * rewritten, never tightened, never made to sound more like the rest of the page. A name is never
+ * attached to words the person did not say. A role, a company or a location is never added to a
+ * quote that did not carry one, so every attribution field except `name` is optional and the card
+ * is designed to look finished without them.
+ *
+ * The cards are deliberately not links. A testimonial that navigates somewhere invites a click
+ * that the content has not earned, and it puts a tab stop on every quote. If a quote has a public
+ * source, that link goes in the attribution where a reader expects a citation.
+ *
+ * Quotes vary wildly in length, so the cards sit on `align-items: start` rather than stretching:
+ * a two-line quote padded out to match a nine-line one looks like a layout fault.
+ *
+ * The lists carry an explicit `role="list"` beside `list-style: none`. A strict validator calls
+ * that redundant, and it is not: Safari with VoiceOver drops list semantics from a list whose
+ * markers have been removed, so without it the items stop being announced as a list at all. Do
+ * not strip it to quieten a linter.
+ */
+interface Testimonial {
+  quote: string;
+  name: string;
+  role?: string;
+  company?: string;
+  location?: string;
+  photo?: { src: string; alt: string };
+  source?: { label: string; href?: string };
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  items?: Testimonial[];
+  /** Shown in place of the grid when `items` is empty. */
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "What people say afterwards",
+  lede,
+  /* Empty by default. These name real people and real firms, so an omitted prop must render the empty state rather than an invented one; the demo pages pass samples from src/lib/kit-sample.ts. */
+  items = [],
+  emptyMessage = "Customer quotes will appear here once they have been collected and approved for use.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `tg-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const quotes = (items ?? []).filter((t) => t?.quote && t.quote.trim() && t?.name);
+/* Two columns for four or fewer, three above that, so five quotes never leave a lone card in a
+   row of three. Below the breakpoints it is one column regardless. */
+const wide = quotes.length > 4;
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container tg">
+    <div class="tg__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {quotes.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ul class:list={["tg__grid", wide && "tg__grid--three"]} role="list">
+        {quotes.map((t) => {
+          const detail = [t.role, t.company, t.location].filter(Boolean).join(", ");
+          return (
+            <li class="tg__item">
+              <figure class="tg__card">
+                <blockquote class="tg__quote"><p class="tg__text">{t.quote}</p></blockquote>
+                <figcaption class="tg__by">
+                  {t.photo?.src && (
+                    <span class="tg__avatar kit-media">
+                      <img src={t.photo.src} alt={t.photo.alt} loading="lazy" decoding="async" />
+                    </span>
+                  )}
+                  <span class="tg__who">
+                    <cite class="tg__name">{t.name}</cite>
+                    {detail && <span class="kit-muted tg__detail">{detail}</span>}
+                    {t.source?.label && (
+                      <span class="kit-muted tg__detail">
+                        {t.source.href
+                          ? <a class="kit-link" href={t.source.href} rel="nofollow noopener">{t.source.label}</a>
+                          : t.source.label}
+                      </span>
+                    )}
+                  </span>
+                </figcaption>
+              </figure>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  .tg__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
+
+  /* An intrinsic grid rather than breakpoints: the column count follows the measure a quote needs
+     to stay readable, so three quotes and nine quotes both lay out sensibly and a narrow container
+     (a sidebar, a CMS preview pane) is handled without the piece knowing about it. */
+  .tg__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-gutter);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 26ch), 1fr));
+    align-items: start;
+  }
+
+  .tg__item { display: flex; min-width: 0; }
+
+  .tg__card {
+    margin: 0;
+    display: grid;
+    gap: var(--kit-space-lg);
+    align-content: start;
+    width: 100%;
+    min-width: 0;
+    padding: var(--kit-space-lg);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    transition: border-color var(--kit-duration) var(--kit-ease);
+  }
+  .tg__card:hover { border-color: var(--kit-border-strong); }
+
+  .tg__quote { margin: 0; }
+  .tg__text {
+    margin: 0;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    text-wrap: pretty;
+    /* Overriding .kit-body's measure is deliberate: inside a column the column IS the measure. */
+    max-width: none;
+  }
+  .tg__text::before { content: "“"; }
+  .tg__text::after { content: "”"; }
+
+  .tg__by { display: flex; align-items: center; gap: var(--kit-space-sm); }
+  .tg__avatar { width: var(--kit-target); aspect-ratio: 1; flex: none; }
+  .tg__avatar > img { width: 100%; height: 100%; object-fit: cover; }
+
+  .tg__who { display: grid; gap: var(--kit-space-2xs); min-width: 0; }
+  .tg__name {
+    font-style: normal;
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-strong);
+    color: var(--kit-text);
+  }
+  .tg__detail { font-size: var(--kit-text-xs); line-height: var(--kit-leading-snug); }
+</style>

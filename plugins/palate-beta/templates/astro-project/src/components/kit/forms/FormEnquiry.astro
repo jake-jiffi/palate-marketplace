@@ -1,0 +1,420 @@
+---
+/**
+ * Enquiry form, for a quote or a job.
+ *
+ * Use this when three or four structured answers save a phone call: what they need, where they
+ * are, and when. Every one of those is a field, so the reply can be useful first time instead of
+ * being a request for the same information back. Anything more than that belongs in the free-text
+ * box, not in another select.
+ *
+ * IF THERE ARE NO SERVICES TO LIST the select is replaced by a plain text field rather than
+ * rendering a dropdown with nothing in it. An empty picker is the state that makes a form look
+ * broken while still technically working.
+ *
+ * THE FILE FIELD IS OFF BY DEFAULT AND THAT IS DELIBERATE. /api/contact takes JSON, so it cannot
+ * receive an attachment; turning `fileField` on sends the NAMES of the chosen files with the
+ * enquiry, so the business knows to ask for them, and the hint says so plainly. A field that looks
+ * like an upload and quietly discards the photos is worse than no field, particularly on a trade
+ * site where the photo is half the quote. Wire a real upload endpoint before promising one.
+ *
+ * The behaviour lives in ./form-runtime.ts. See FormContact for the field-attribute contract.
+ */
+export interface Props {
+  title?: string;
+  intro?: string;
+  /** What they can ask for. The last option is always a way out for anything not listed. */
+  services?: string[];
+  submitLabel?: string;
+  endpoint?: string;
+  /** Make the phone number compulsory. True for most trades, where the callback is the follow-up. */
+  phoneRequired?: boolean;
+  /** Show a file field that sends file NAMES only. Read the note above before turning this on. */
+  fileField?: boolean;
+  successTitle?: string;
+  successBody?: string;
+  errorHelp?: string;
+  /** Said where the form would be, for the small number of people who have no JavaScript. */
+  noScriptNote?: string;
+  privacyNote?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  title = "Ask for a quote",
+  intro = "Four questions, about a minute. The more you can tell us now, the closer the first number will be.",
+  services = [
+    "Repair or fault finding",
+    "Replacement or upgrade",
+    "New installation",
+    "Maintenance or a service",
+    "Something else",
+  ],
+  submitLabel = "Send enquiry",
+  endpoint = "/api/contact",
+  phoneRequired = false,
+  fileField = false,
+  successTitle = "Enquiry received",
+  successBody = "We have your details and we are looking at the job now. You will hear back from us within one business day, either with a price or with the one question we need answered before we can give you one.",
+  errorHelp = "If it will not send, ring us or email us directly and we will take the details that way.",
+  noScriptNote = "This form needs JavaScript to send. If yours is turned off, ring us or send an email and we will take the details that way.",
+  privacyNote = "Your details are used to quote this job and nothing else.",
+  tone = "default",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `fe-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+const hasServices = Array.isArray(services) && services.length > 0;
+---
+
+<section class:list={["kit-section", toneClass, "kit-formsec", className]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container kit-formsec__inner">
+    <div class="kit-formsec__intro">
+      <h2 class="kit-h2 kit-formsec__title" id={headingId}>{title}</h2>
+      {intro && <p class="kit-lede kit-muted kit-formsec__intro-text">{intro}</p>}
+    </div>
+
+    <div class="kit-formsec__panel">
+      <form
+        class="kit-form"
+        method="post"
+        action={endpoint}
+        data-kit-form
+        data-kit-endpoint={endpoint}
+        data-kit-sending="Sending your enquiry."
+        data-kit-fallback-message="Enquiry sent from the website."
+      >
+        <div class="kit-form__alert" data-kit-alert role="alert" tabindex="-1" hidden>
+          <p class="kit-form__alert-text" data-kit-alert-text></p>
+          <p class="kit-form__alert-help kit-muted">{errorHelp}</p>
+        </div>
+
+        <div class="kit-field">
+          <label class="kit-field__label" for={`${uid}-name`}>Your name</label>
+          <input
+            class="kit-input"
+            id={`${uid}-name`}
+            name="name"
+            type="text"
+            autocomplete="name"
+            required
+            aria-describedby={`${uid}-name-error`}
+            data-kit-key="name"
+            data-kit-validate="required"
+            data-kit-required-message="Please tell us your name, so we know who we are quoting for."
+            data-kit-error={`${uid}-name-error`}
+          />
+          <p class="kit-field__error" id={`${uid}-name-error`} role="alert" hidden></p>
+        </div>
+
+        <div class="kit-form__row">
+          <div class="kit-field">
+            <label class="kit-field__label" for={`${uid}-email`}>Email address</label>
+            <input
+              class="kit-input"
+              id={`${uid}-email`}
+              name="email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              required
+              aria-describedby={`${uid}-email-error`}
+              data-kit-key="email"
+              data-kit-validate="required email"
+              data-kit-required-message="Please give us an email address. The written quote goes there."
+              data-kit-error={`${uid}-email-error`}
+            />
+            <p class="kit-field__error" id={`${uid}-email-error`} role="alert" hidden></p>
+          </div>
+
+          <div class="kit-field">
+            <label class="kit-field__label" for={`${uid}-phone`}>
+              Phone
+              {!phoneRequired && <span class="kit-field__optional kit-muted">&#32;(optional)</span>}
+            </label>
+            <input
+              class="kit-input"
+              id={`${uid}-phone`}
+              name="phone"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+              required={phoneRequired}
+              aria-describedby={`${uid}-phone-error`}
+              data-kit-summary="Phone"
+              data-kit-validate={phoneRequired ? "required tel" : "tel"}
+              data-kit-required-message="Please add a phone number. Most quotes need one quick call."
+              data-kit-error={`${uid}-phone-error`}
+            />
+            <p class="kit-field__error" id={`${uid}-phone-error`} role="alert" hidden></p>
+          </div>
+        </div>
+
+        <div class="kit-field">
+          <label class="kit-field__label" for={`${uid}-service`}>What do you need done?</label>
+          {hasServices ? (
+            <select
+              class="kit-select"
+              id={`${uid}-service`}
+              name="service"
+              required
+              aria-describedby={`${uid}-service-error`}
+              data-kit-summary="What they need"
+              data-kit-validate="required"
+              data-kit-required-message="Please choose the closest match. If nothing fits, choose the last one."
+              data-kit-error={`${uid}-service-error`}
+            >
+              <option value="" disabled selected>Choose one</option>
+              {services.map((service) => <option value={service}>{service}</option>)}
+            </select>
+          ) : (
+            /* No list configured, so ask in words rather than opening an empty dropdown. */
+            <input
+              class="kit-input"
+              id={`${uid}-service`}
+              name="service"
+              type="text"
+              required
+              aria-describedby={`${uid}-service-error`}
+              data-kit-summary="What they need"
+              data-kit-validate="required"
+              data-kit-required-message="Please tell us in a few words what the job is."
+              data-kit-error={`${uid}-service-error`}
+            />
+          )}
+          <p class="kit-field__error" id={`${uid}-service-error`} role="alert" hidden></p>
+        </div>
+
+        <div class="kit-field">
+          <label class="kit-field__label" for={`${uid}-location`}>Suburb or postcode</label>
+          <input
+            class="kit-input"
+            id={`${uid}-location`}
+            name="location"
+            type="text"
+            autocomplete="address-level2"
+            required
+            aria-describedby={`${uid}-location-hint ${uid}-location-error`}
+            data-kit-summary="Location"
+            data-kit-validate="required"
+            data-kit-required-message="Please tell us where the job is, so we can say whether we cover it."
+            data-kit-error={`${uid}-location-error`}
+          />
+          <p class="kit-field__hint" id={`${uid}-location-hint`}>
+            We will tell you straight away if you are outside the area we cover.
+          </p>
+          <p class="kit-field__error" id={`${uid}-location-error`} role="alert" hidden></p>
+        </div>
+
+        <div class="kit-field">
+          <label class="kit-field__label" for={`${uid}-detail`}>
+            Anything else we should know
+            <span class="kit-field__optional kit-muted">&#32;(optional)</span>
+          </label>
+          <textarea
+            class="kit-textarea"
+            id={`${uid}-detail`}
+            name="message"
+            rows="5"
+            aria-describedby={`${uid}-detail-hint`}
+            data-kit-key="message"
+          ></textarea>
+          <p class="kit-field__hint" id={`${uid}-detail-hint`}>
+            Age of the building, access, whether anything has been done before: all of it helps.
+          </p>
+        </div>
+
+        {fileField && (
+          <div class="kit-field">
+            <label class="kit-field__label" for={`${uid}-files`}>
+              Photos<span class="kit-field__optional kit-muted">&#32;(optional)</span>
+            </label>
+            <input
+              class="kit-input kit-form__file"
+              id={`${uid}-files`}
+              name="files"
+              type="file"
+              accept="image/*"
+              multiple
+              aria-describedby={`${uid}-files-hint`}
+              data-kit-summary="Photos they mentioned"
+            />
+            <p class="kit-field__hint" id={`${uid}-files-hint`}>
+              We list the photos you choose with your enquiry and ask you to email them through when
+              we reply, so nothing is lost on the way.
+            </p>
+          </div>
+        )}
+
+        {siteKey && <div class="cf-turnstile" data-sitekey={siteKey}></div>}
+
+        <noscript>
+          <p class="kit-form__fine">{noScriptNote}</p>
+        </noscript>
+
+        <button type="submit" class="kit-btn kit-btn--primary kit-form__submit" data-kit-submit>
+          <span class="kit-spinner" data-kit-spinner aria-hidden="true" hidden></span>
+          <span class="kit-btn__label">{submitLabel}</span>
+        </button>
+
+        {privacyNote && <p class="kit-form__fine kit-muted">{privacyNote}</p>}
+        <p class="kit-visually-hidden" data-kit-status role="status" aria-live="polite"></p>
+      </form>
+
+      <div class="kit-form__done" data-kit-success hidden>
+        <svg class="kit-form__tick" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10.5 8 14.5 16 5.5" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <h3 class="kit-h3" data-kit-success-heading tabindex="-1">{successTitle}</h3>
+        <p class="kit-body">{successBody}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{siteKey && (
+  <script is:inline>
+    (function () {
+      if (document.querySelector("script[data-kit-turnstile]")) return;
+      var s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      s.async = true;
+      s.defer = true;
+      s.setAttribute("data-kit-turnstile", "");
+      document.head.appendChild(s);
+    })();
+  </script>
+)}
+
+<style>
+  /* An author `display` rule out-ranks the browser's [hidden], and every state here is switched
+     with `hidden`. Restated so success, error and loading really do hide. */
+  [hidden] { display: none !important; }
+
+  /* foundations.css does not set box-sizing, and what normally does is Tailwind's preflight. A
+     build that vendors its own preset instead, which is a failure this repo has already paid for
+     once, would push every full-width control past the right edge of a phone. One rule, stated
+     where it binds, so the form does not depend on a reset arriving from somewhere else. */
+  .kit-input, .kit-select, .kit-textarea { box-sizing: border-box; }
+
+  .kit-formsec__inner {
+    display: grid;
+    align-items: start;
+    gap: var(--kit-space-2xl) var(--kit-space-3xl);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 30ch), 1fr));
+  }
+
+  .kit-formsec__intro { display: grid; gap: var(--kit-space-lg); align-content: start; }
+  .kit-formsec__title { max-width: 18ch; }
+  .kit-formsec__intro-text { text-wrap: pretty; }
+
+  .kit-form { display: grid; gap: var(--kit-space-lg); max-width: var(--kit-measure); }
+
+  /* Two fields share a row while there is room for both, one per row when there is not. */
+  .kit-form__row {
+    display: grid;
+    gap: var(--kit-space-lg);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20ch), 1fr));
+  }
+
+  .kit-form__alert {
+    display: grid;
+    gap: var(--kit-space-2xs);
+    padding: var(--kit-space-md);
+    border: var(--kit-border-width) solid var(--kit-error);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-form__alert p { margin: 0; }
+  .kit-form__alert-text { font-weight: var(--kit-weight-strong); color: var(--kit-error); }
+
+  /* The space before "(optional)" is written as &#32; inside the span, not as a space in the
+     markup. A plain space is swallowed when Astro trims the newline before an expression, which is
+     how one label read "Anything else we should know(optional)" while its neighbour read
+     "Photos (optional)". An entity is a character rather than whitespace, so it survives either
+     layout, and unlike a CSS margin it also puts a space in the accessible name. */
+  .kit-field__optional { font-weight: var(--kit-weight-body); }
+
+  /* A file input renders as a button and a filename, so it needs room rather than a fixed height. */
+  .kit-form__file { display: block; padding: var(--kit-space-sm); height: auto; }
+
+  .kit-form__submit { justify-self: start; }
+  .kit-form__fine { font-size: var(--kit-text-sm); margin: 0; max-width: var(--kit-measure); }
+
+  .kit-form__done {
+    display: grid;
+    gap: var(--kit-space-md);
+    justify-items: start;
+    padding: var(--kit-space-xl);
+    border: var(--kit-border-width) solid var(--kit-success);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    max-width: var(--kit-measure);
+  }
+  .kit-form__tick { width: 1.5em; height: auto; color: var(--kit-success); }
+  .kit-form__done p { text-wrap: pretty; }
+
+  .kit-formsec :focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-section--inverse :focus-visible { outline-color: var(--kit-text-inverse); }
+
+  /* THE INVERSE GROUND, AND WHY EVERY ONE OF THESE NEEDS SAYING.
+     foundations pins .kit-field__label to --kit-text and .kit-field__hint to --kit-text-muted,
+     both chosen for a light page. On a dark section that measures 1.06:1 for every label and
+     3.34:1 for every hint, so a form set to tone="inverse" ships with unreadable labels and
+     nothing reports it. The feedback colours have the same shape of problem: --kit-error is a
+     dark red picked to sit on white, and on this ground its border reads 1.8:1. Each is mixed
+     toward the inverse text colour rather than replaced, so an error still looks like an error. */
+  .kit-section--inverse .kit-field__label { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-field__hint {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+  .kit-section--inverse .kit-field__error,
+  .kit-section--inverse .kit-form__alert-text {
+    color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__alert {
+    border-color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__done {
+    border-color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__tick {
+    color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-check input { accent-color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-form__alert-help { color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent); }
+</style>
+
+<script>
+  /**
+   * NOVALIDATE ONLY ONCE THIS SCRIPT IS RUNNING. The form carries a real `action` and `method`,
+   * so with scripts off or before they bind it still posts to the endpoint as form data, and the
+   * browser's own validation stands in for the piece's. The first version wrote `novalidate` into
+   * the markup, which switched native validation off on exactly the path that had nothing else.
+   */
+  const armNovalidate = () => document.querySelectorAll<HTMLFormElement>("form[data-kit-form]").forEach((f) => f.setAttribute("novalidate", ""));
+  armNovalidate();
+  document.addEventListener("astro:page-load", armNovalidate);
+
+  import { initKitForms } from "./form-runtime";
+  initKitForms();
+</script>

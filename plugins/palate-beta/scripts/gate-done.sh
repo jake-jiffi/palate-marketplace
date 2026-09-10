@@ -396,6 +396,42 @@ else
   gate_skipped shipready "$shipready_skip"
 fi
 
+# THE WEBSITE KIT. Four gates, because a forty-five piece section library fails in four ways
+# and every one of them is silent. gate-kit-tokens keeps a shared markup library from homogenising every site
+# built with it (a piece owns structure and states, the brand owns the surface). gate-kit-complete
+# keeps the manifest and the components from drifting, so Compose can never pick a section that
+# cannot render, and a declared state can never go unimplemented. gate-client-imagery catches the
+# build that harvests a client's photographs and then uses none of them, measured at 149 harvested
+# and zero used on a real build with nothing reporting a fault. gate-kit-fixtures reads the BUILT
+# state pages and checks that every sentence a state fixture supplies actually reached one: a
+# fixture is a plain object, so a wrong key name renders nothing, silently, and reads as a broken
+# component. One did, and only this check could have found it.
+# THE NOTES ARE CAPTURED, NOT DISCARDED. Every sub-gate contributes a `name=...` entry to the
+# Passed line, and gate-done.test.sh asserts the headline count equals the number of names in it,
+# because a count that stops describing the line beneath it is how a gate goes quiet. Adding
+# three gates without adding their notes broke exactly that assertion, which is the test working.
+kit_tokens_note="kit-tokens=skipped"
+kit_complete_note="kit-complete=skipped"
+kit_fixtures_note="kit-fixtures=skipped"
+imagery_note="client-imagery=skipped"
+for kit_gate in kit-tokens kit-complete kit-fixtures client-imagery; do
+  KIT_GATE="$HERE/gate-${kit_gate}.mjs"
+  if [ -f "$KIT_GATE" ]; then
+    if kit_err="$(node "$KIT_GATE" "$PROJ" 2>&1)"; then kit_rc=0; else kit_rc=$?; fi
+    gate_classify "$kit_gate" "$kit_rc" "$kit_err"
+    gate_record "$kit_gate" pass "${kit_err}"
+  else
+    gate_skipped "$kit_gate" "gate-${kit_gate}.mjs not present"
+    GATE_NOTE="${kit_gate}=skipped"
+  fi
+  case "$kit_gate" in
+    kit-tokens)     kit_tokens_note="$GATE_NOTE" ;;
+    kit-complete)   kit_complete_note="$GATE_NOTE" ;;
+    kit-fixtures)   kit_fixtures_note="$GATE_NOTE" ;;
+    client-imagery) imagery_note="$GATE_NOTE" ;;
+  esac
+done
+
 # SEO: the crawl surface. A build can be visually perfect, ship-ready and still be
 # undiscoverable: rejected Explore variants indexed, dynamic routes absent from the sitemap,
 # a preview inviting indexing of the client's content at a non-canonical domain. It lived only
@@ -619,5 +655,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
+  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0

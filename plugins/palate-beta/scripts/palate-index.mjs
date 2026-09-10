@@ -504,6 +504,8 @@ export function buildIndex(projectDir) {
 
   return {
     version: 1,
+    // Recorded so blastRadius can read a route's source without being told where the project is.
+    projectDir,
     routes, entries, facts,
     links: { orphans, dead, parsed: linksParsed, files: linkFiles.size, stale: staleRoutes },
     counts: { routes: routes.length, entries: entries.length, drafts: entries.filter((e) => e.draft).length },
@@ -521,6 +523,32 @@ export function buildIndex(projectDir) {
  * that passed the change which broke the site, and only one of those two
  * failures is recoverable.
  */
+/**
+ * Does this route read the content layer at all?
+ *
+ * Read from the source rather than inferred from the path, because a project can name its content
+ * routes anything. The closure is included so a route that reads content through a shared loader
+ * still counts. Unreadable files answer TRUE, which keeps the fail-wide posture: over-checking is
+ * slow, under-checking passes the change that broke the site.
+ */
+const CONTENT_READ = /astro:content|getCollection\s*\(|getEntry\s*\(|loadPage\s*\(|content\.config/;
+const contentReadCache = new Map();
+function routeReadsContent(index, route) {
+  if (contentReadCache.has(route.source)) return contentReadCache.get(route.source);
+  const root = index.projectDir || process.cwd();
+  let answer = false;
+  for (const rel of [route.source, ...route.dependsOn]) {
+    try {
+      if (CONTENT_READ.test(readFileSync(join(root, rel), 'utf8'))) { answer = true; break; }
+    } catch {
+      answer = true; // Cannot read it, so cannot rule it out.
+      break;
+    }
+  }
+  contentReadCache.set(route.source, answer);
+  return answer;
+}
+
 export function blastRadius(index, changed) {
   const all = index.routes.map((r) => r.path);
   const hit = new Set();
@@ -533,9 +561,19 @@ export function blastRadius(index, changed) {
     if (entry) {
       // The entry's own detail route, plus every listing that reaches the
       // collection. A new post changes the post AND the index that lists it.
+      //
+      // A DYNAMIC ROUTE IS ONLY A CONTENT ROUTE IF IT READS CONTENT. The first version
+      // substituted the entry's id into EVERY dynamic route, which was harmless while the only
+      // dynamic routes were the blog's, and stopped being harmless the moment the template grew
+      // section-demo routes: a one-line blog edit then planned /kit/[piece]/welcome and
+      // /kit-frame/[piece]/[variation]/welcome, neither of which any post can change, and the
+      // scope it reported climbed from narrow to moderate for no reason. Routes that read the
+      // content layer say so, in their own source or somewhere in their import closure.
       for (const r of index.routes) {
-        if (r.kind === 'dynamic' && r.path.includes('[')) hit.add(r.path.replace(/\[[^\]]+\]$/, entry.id));
-        else if (r.kind === 'static' && r.dependsOn.some((d) => d.endsWith('content.config.ts'))) hit.add(r.path);
+        const readsContent = r.kind === 'endpoint' ? false : routeReadsContent(index, r);
+        if (r.kind === 'dynamic' && r.path.includes('[')) {
+          if (readsContent) hit.add(r.path.replace(/\[[^\]]+\]$/, entry.id));
+        } else if (r.kind === 'static' && r.dependsOn.some((d) => d.endsWith('content.config.ts'))) hit.add(r.path);
         else if (r.path === '/' + entry.collection || r.path === '/blog') hit.add(r.path);
       }
       continue;

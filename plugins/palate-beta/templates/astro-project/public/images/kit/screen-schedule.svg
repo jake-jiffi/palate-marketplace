@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="The Roundhouse week view: eight jobs across three vans, two marked late">
+  <title>The Roundhouse week view: eight jobs across three vans, two marked late</title>
+  <style>
+    svg{--ink:var(--kit-text,#1b1d21);--muted:var(--kit-text-muted,#6e737b);--paper:var(--kit-bg,#ffffff);--panel:var(--kit-bg-subtle,#f3f4f6);--line:var(--kit-border,#dfe2e6);--steel:#46525d;--sand:#e6dccc;--sage:#dbe4dc;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    text{fill:var(--ink)}
+    .m{fill:var(--muted)}
+    .w{fill:#fff}
+    .lbl{font-size:19px;letter-spacing:.06em;text-transform:uppercase}
+    .sm{font-size:20px}
+    .md{font-size:24px}
+    .lg{font-size:30px;font-weight:600}
+    .xl{font-size:40px;font-weight:600;letter-spacing:-.01em}
+    .num{font-variant-numeric:tabular-nums}
+    .ln{stroke:var(--line);stroke-width:2}
+  </style>
+  <rect x="0" y="0" width="1600" height="1000" fill="var(--paper)"/>
+  <rect x="0" y="0" width="248" height="1000" fill="var(--panel)"/>
+  <line x1="248" y1="0" x2="248" y2="1000" class="ln"/>
+  <rect x="0" y="0" width="1600" height="78" fill="var(--paper)"/>
+  <line x1="0" y1="78" x2="1600" y2="78" class="ln"/>
+  <rect x="40" y="26" width="26" height="26" fill="var(--steel)" rx="6"/>
+  <text x="80" y="48" class="md" font-weight="600">Roundhouse</text>
+  <rect x="640" y="20" width="520" height="40" fill="var(--panel)" rx="20"/>
+  <text x="668" y="47" class="sm m">Search jobs, customers or quotes</text>
+  <rect x="1494" y="22" width="38" height="38" fill="var(--steel)" rx="19"/>
+  <text x="1513" y="48" class="sm w" text-anchor="middle">PR</text>
+  <text x="40" y="122" class="lbl m">Fernbrook depot</text>
+  <rect x="20" y="144" width="208" height="50" fill="var(--paper)" rx="8"/><rect x="40" y="160" width="18" height="18" fill="var(--steel)" rx="4"/><text x="72" y="178" class="sm" font-weight="600">Schedule</text>
+  <rect x="40" y="222" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="240" class="sm m">Jobs</text>
+  <rect x="40" y="284" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="302" class="sm m">Quotes</text>
+  <rect x="40" y="346" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="364" class="sm m">Customers</text>
+  <rect x="40" y="408" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="426" class="sm m">Invoices</text>
+  <line x1="20" y1="470" x2="228" y2="470" class="ln"/>
+  <text x="40" y="512" class="sm m">3 vans on the road</text>
+  <text x="40" y="548" class="sm m">1 unassigned job</text>
+  <text x="280" y="148" class="xl">This week</text>
+  <text x="280" y="190" class="md m">13 to 17 October, Fernbrook depot</text>
+  <rect x="1330" y="116" width="230" height="46" fill="var(--steel)" rx="8"/>
+  <text x="1445" y="146" class="sm w" text-anchor="middle" font-weight="600">Add a job</text>
+  <text x="416" y="218" class="sm" font-weight="600">Mon 13</text>
+  <text x="648" y="218" class="sm" font-weight="600">Tue 14</text>
+  <text x="880" y="218" class="sm" font-weight="600">Wed 15</text>
+  <text x="1112" y="218" class="sm" font-weight="600">Thu 16</text>
+  <text x="1344" y="218" class="sm" font-weight="600">Fri 17</text>
+  
+  <line x1="632" y1="232" x2="632" y2="768" class="ln"/>
+  <line x1="864" y1="232" x2="864" y2="768" class="ln"/>
+  <line x1="1096" y1="232" x2="1096" y2="768" class="ln"/>
+  <line x1="1328" y1="232" x2="1328" y2="768" class="ln"/>
+  <line x1="280" y1="240" x2="1560" y2="240" class="ln"/>
+  <text x="280" y="286" class="md" font-weight="600">Van 1</text>
+  <text x="280" y="318" class="sm m">Priya R.</text>
+  <line x1="280" y1="416" x2="1560" y2="416" class="ln"/>
+  <text x="280" y="462" class="md" font-weight="600">Van 2</text>
+  <text x="280" y="494" class="sm m">Callum W.</text>
+  <line x1="280" y1="592" x2="1560" y2="592" class="ln"/>
+  <text x="280" y="638" class="md" font-weight="600">Van 3</text>
+  <text x="280" y="670" class="sm m">Dee A.</text>
+  <line x1="280" y1="768" x2="1560" y2="768" class="ln"/>
+  <rect x="410" y="262" width="212" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="410" y="262" width="5" height="132" fill="var(--steel)" rx="3"/>
+  <text x="432" y="306" class="sm" font-weight="600">Corbett St Dental</text>
+  <text x="432" y="338" class="sm m">Annual service</text>
+  <text x="432" y="372" class="sm m num" font-size="18">8:00am</text>
+  
+  <rect x="410" y="438" width="444" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="410" y="438" width="5" height="132" fill="var(--steel)" rx="3"/>
+  <text x="432" y="482" class="sm" font-weight="600">Ferndale Housing</text>
+  <text x="432" y="514" class="sm m">Roof, block C</text>
+  <text x="432" y="548" class="sm m num" font-size="18">8:00am to 4:30pm</text>
+  
+  <rect x="642" y="262" width="212" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="642" y="262" width="5" height="132" fill="#a8703a" rx="3"/>
+  <text x="664" y="306" class="sm" font-weight="600">Tumbleweed Coffee</text>
+  <text x="664" y="338" class="sm m">Extraction fault</text>
+  <text x="664" y="372" class="sm m num" font-size="18">8:00am</text>
+  <rect x="782" y="350" width="62" height="28" fill="var(--sand)" rx="14"/><text x="813" y="370" class="lbl" text-anchor="middle" font-size="16">Late</text>
+  <rect x="874" y="262" width="212" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="874" y="262" width="5" height="132" fill="var(--steel)" rx="3"/>
+  <text x="896" y="306" class="sm" font-weight="600">M. Sowden</text>
+  <text x="896" y="338" class="sm m">Gutter repair</text>
+  <text x="896" y="372" class="sm m num" font-size="18">8:00am</text>
+  
+  <rect x="874" y="614" width="444" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="874" y="614" width="5" height="132" fill="var(--steel)" rx="3"/>
+  <text x="896" y="658" class="sm" font-weight="600">Copperline Brewing</text>
+  <text x="896" y="690" class="sm m">Heat exchange</text>
+  <text x="896" y="724" class="sm m num" font-size="18">8:00am to 4:30pm</text>
+  
+  <rect x="1106" y="438" width="212" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="1106" y="438" width="5" height="132" fill="#a8703a" rx="3"/>
+  <text x="1128" y="482" class="sm" font-weight="600">Brindle Vet</text>
+  <text x="1128" y="514" class="sm m">Quote visit</text>
+  <text x="1128" y="548" class="sm m num" font-size="18">8:00am</text>
+  <rect x="1246" y="526" width="62" height="28" fill="var(--sand)" rx="14"/><text x="1277" y="546" class="lbl" text-anchor="middle" font-size="16">Late</text>
+  <rect x="1338" y="262" width="212" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="1338" y="262" width="5" height="132" fill="var(--steel)" rx="3"/>
+  <text x="1360" y="306" class="sm" font-weight="600">Kembla Ridge</text>
+  <text x="1360" y="338" class="sm m">Drainage check</text>
+  <text x="1360" y="372" class="sm m num" font-size="18">8:00am</text>
+  <rect x="1478" y="350" width="62" height="28" fill="var(--sage)" rx="14"/><text x="1509" y="370" class="lbl" text-anchor="middle" font-size="16">Done</text>
+  <rect x="1338" y="614" width="212" height="132" fill="var(--panel)" rx="10"/>
+  <rect x="1338" y="614" width="5" height="132" fill="var(--steel)" rx="3"/>
+  <text x="1360" y="658" class="sm" font-weight="600">Harbourline</text>
+  <text x="1360" y="690" class="sm m">Make good</text>
+  <text x="1360" y="724" class="sm m num" font-size="18">8:00am</text>
+  
+  <text x="280" y="858" class="lbl m">Unassigned</text>
+  <rect x="280" y="880" width="420" height="84" fill="var(--paper)" rx="10" stroke="var(--line)" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="304" y="918" class="sm">Ashgrove, blocked downpipe</text>
+  <text x="304" y="948" class="sm m" font-size="18">Logged 7:42am, no van free</text>
+</svg>

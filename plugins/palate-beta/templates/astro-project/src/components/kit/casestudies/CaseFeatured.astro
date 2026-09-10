@@ -1,0 +1,225 @@
+---
+/**
+ * CaseFeatured: one customer story, given room to be told properly.
+ *
+ * Use this when a single job is the strongest sales asset the business has and the visitor is
+ * making a considered purchase. It is the section that answers "have you done this before, for
+ * someone like me". If you have several stories of similar weight, CaseCards indexes them; if the
+ * evidence is numeric rather than narrative, CaseResults is the honest shape.
+ *
+ * The story is told in three named parts (the situation, what was done, the outcome) because that
+ * is the order a buyer reads it in, and because separating them stops the whole thing collapsing
+ * into one paragraph of self-description. The customer's name is the story's <h3> and each part is
+ * an <h4> beneath it, so somebody navigating by headings gets the outline rather than three
+ * unlabelled paragraphs. The customer name is a heading rather than a small label above one,
+ * because a small label sitting directly above a heading is the eyebrow pattern this kit refuses.
+ *
+ * `outcomeFigures` is optional and deliberately small. Numbers here are the customer's numbers and
+ * should be ones the business can defend if asked. If you cannot cite them, leave them out: the
+ * narrative works without them and an invented figure poisons the rest of the page.
+ *
+ * The image is a real photograph of the job, not a stock scene. It sits beside the story from
+ * tablet up and above it on a phone, where a tall image ahead of the text would push everything
+ * below the fold.
+ */
+interface Figure {
+  value: string;
+  label: string;
+}
+
+interface Props {
+  heading?: string;
+  /** The customer's name, as they have agreed to be named. Never defaulted, never invented. */
+  customer?: string;
+  /** A one-line summary of the job, used as the story's own title. */
+  title?: string;
+  /** What the customer was facing before. */
+  situation?: string;
+  /** What was actually done. Specific beats impressive. */
+  action?: string;
+  /** What changed. The only part most readers finish. */
+  outcome?: string;
+  outcomeFigures?: Figure[];
+  image?: { src: string; alt: string };
+  /** Where the full story lives. */
+  href?: string;
+  linkLabel?: string;
+  situationLabel?: string;
+  actionLabel?: string;
+  outcomeLabel?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+/*
+ * NO IDENTITY FIELD HAS A DEFAULT, and that is a correctness rule rather than a style choice.
+ *
+ * This component's own header already says a role, a company or a location is never added to a
+ * quote that did not come with one. Its destructure then defaulted a company anyway, so a build
+ * passing a real quote, a real name and a real location, and simply not passing `company`,
+ * silently attributed those words to a firm nobody named. That is fabricated testimony produced
+ * by omission, which is the same class this project has already had to correct once, and it is
+ * worse than the original because nothing in the calling code looks wrong.
+ *
+ * Sample COPY is fine: a quote with nothing attached to it attributes nothing to anybody. It is
+ * the ATTRIBUTION that must never be invented.
+ */
+const {
+  heading = "A job like yours",
+  customer,
+  title = "Replacing a failing roof across eleven occupied units, without moving anybody out",
+  situation = "Eleven units, all tenanted, sharing one roof that had been patched four times in six years. Two flats had water coming through the ceiling and the trust had been quoted for a full replacement that assumed every tenant would be rehoused for three weeks.",
+  action = "We surveyed each roof plane separately and found that four of the eleven were sound. The rest were replaced in sections, one building at a time, with temporary covering overnight so no flat was ever open to the weather. Tenants stayed put throughout.",
+  outcome = "The work took nine working days and cost less than the rehousing budget alone in the original quote. Two winters on, there have been no callbacks.",
+  outcomeFigures = [
+    { value: "9 days", label: "On site, start to finish" },
+    { value: "0", label: "Tenants rehoused" },
+  ],
+  /* No default. A defaulted path 404s on every site that does not carry that exact file, so
+     with no image the piece draws its .kit-media ratio box at the right size instead. */
+  image,
+  href = "/case-studies/ferndale-community-housing",
+  linkLabel = "Read the full story",
+  situationLabel = "The situation",
+  actionLabel = "What we did",
+  outcomeLabel = "The outcome",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `cf-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const figures = (outcomeFigures ?? []).filter((f) => f?.value && f?.label);
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container cf">
+    <h2 id={headingId} class="kit-h2">{heading}</h2>
+
+    <div class="cf__body">
+      <div class="cf__media kit-media kit-media--photo">
+        {image?.src && <img src={image.src} alt={image.alt} loading="lazy" decoding="async" />}
+      </div>
+
+      <article class="cf__story">
+        {customer && <h3 class="kit-h3 cf__customer">{customer}</h3>}
+        {title && <p class="cf__title">{title}</p>}
+
+        {situation && (
+          <div class="cf__part">
+            <h4 class="cf__part-heading">{situationLabel}</h4>
+            <p class="kit-body">{situation}</p>
+          </div>
+        )}
+
+        {action && (
+          <div class="cf__part">
+            <h4 class="cf__part-heading">{actionLabel}</h4>
+            <p class="kit-body">{action}</p>
+          </div>
+        )}
+
+        {outcome && (
+          <div class="cf__part">
+            <h4 class="cf__part-heading">{outcomeLabel}</h4>
+            <p class="kit-body">{outcome}</p>
+          </div>
+        )}
+
+        {figures.length > 0 && (
+          <dl class="cf__figures">
+            {figures.map((f) => (
+              <div class="cf__figure">
+                <dt class="cf__figure-value">{f.value}</dt>
+                <dd class="cf__figure-label kit-muted">{f.label}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+
+        {href && (
+          <p class="cf__action">
+            <a class="kit-btn kit-btn--secondary" href={href}>
+              {linkLabel}
+              {customer && <span class="kit-visually-hidden"> about {customer}</span>}
+            </a>
+          </p>
+        )}
+      </article>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cf__body {
+    display: grid;
+    gap: var(--kit-space-xl);
+    margin-block-start: var(--kit-space-2xl);
+    align-items: start;
+  }
+
+  .cf__story { display: grid; gap: var(--kit-space-lg); min-width: 0; }
+
+  /* The customer's name IS the story's heading. An earlier draft set it as a small uppercase
+     label above the job description, which is the eyebrow pattern this kit refuses. */
+  .cf__customer { font-size: var(--kit-text-2xl); }
+
+  /* The job in one sentence. A paragraph, because it is a sentence, not a title. */
+  .cf__title {
+    margin: 0;
+    font-size: var(--kit-text-lg);
+    line-height: var(--kit-leading-body);
+    color: var(--kit-text-muted);
+    text-wrap: pretty;
+    max-width: var(--kit-measure);
+  }
+
+  .cf__part { display: grid; gap: var(--kit-space-xs); }
+  /* A HEADING IS NEVER SMALLER THAN THE COPY IT INTRODUCES.
+     At --kit-text-sm this rendered 15px over a 17px paragraph, so the fourth-level heading was
+     the smallest type in its own block and read as a bolded lead-in rather than a heading.
+     Matched to the body size, with the weight carrying the distinction, which is what a fourth
+     level is for. It is the only inversion of its kind in the kit; the sweep found no other. */
+  .cf__part-heading {
+    margin: 0;
+    font-family: var(--kit-font-body);
+    font-size: var(--kit-text-base);
+    font-weight: var(--kit-weight-strong);
+    line-height: var(--kit-leading-snug);
+  }
+
+  .cf__figures {
+    display: grid;
+    gap: var(--kit-space-lg);
+    margin: 0;
+    padding-block-start: var(--kit-space-lg);
+    border-block-start: var(--kit-border-width) solid var(--kit-border);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16ch), 1fr));
+  }
+  .cf__figure { display: grid; gap: var(--kit-space-2xs); min-width: 0; }
+  .cf__figure-value {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-2xl);
+    line-height: var(--kit-leading-tight);
+    font-variant-numeric: tabular-nums;
+  }
+  .cf__figure-label { margin: 0; font-size: var(--kit-text-sm); line-height: var(--kit-leading-snug); }
+
+  .cf__action { margin: 0; }
+
+  @media (min-width: 48rem) {
+    .cf__body { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--kit-space-2xl); }
+  }
+</style>

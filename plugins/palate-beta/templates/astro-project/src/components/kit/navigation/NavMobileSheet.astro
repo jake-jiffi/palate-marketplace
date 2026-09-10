@@ -1,0 +1,507 @@
+---
+/**
+ * NavMobileSheet: the small-screen behaviour for NavSimple and NavDropdown.
+ *
+ * This is not a second header. Both desktop navs render it inside their own bar and hide their
+ * desktop link list below the same breakpoint (48em), so a page has one header, one set of
+ * destinations, and two presentations of them.
+ *
+ * WHY THE PANEL IS A DISCLOSURE AND NOT A DIALOG. It is tempting to give a full-screen sheet
+ * role="dialog" aria-modal="true". That would be wrong here, because the panel is also the
+ * no-JavaScript fallback: with scripting off it renders as a plain stacked list inside the header,
+ * and an aria-modal region sitting permanently in the page hides the entire rest of the document
+ * from assistive technology. A button with aria-expanded and aria-controls describes what actually
+ * happens and is honest in both modes.
+ *
+ * HOW THE NO-JAVASCRIPT FALLBACK WORKS. An inline script stamps data-kit-js="on" on the root
+ * element before paint. Every rule that hides the panel or shows the burger is written under that
+ * attribute, so if the script never runs the burger is absent and the links are simply visible.
+ * Links are never sealed behind a control that cannot open.
+ *
+ * The script binds once, by delegation on the document, because Astro's ClientRouter swaps the
+ * body without re-running module scripts.
+ */
+export interface NavLink {
+  label: string;
+  href: string;
+}
+export interface NavGroup {
+  label: string;
+  links: NavLink[];
+}
+export interface NavCta {
+  label: string;
+  href: string;
+}
+export interface Props {
+  /** Flat destinations. Rendered above any groups. */
+  links?: NavLink[];
+  /** Grouped destinations, for the NavDropdown pairing. Rendered as headed lists, not disclosures. */
+  groups?: NavGroup[];
+  /** One call to action, repeated here because the desktop bar hides its own on small screens. */
+  cta?: NavCta | null;
+  /** Current path. Defaults to the page being rendered, so aria-current works with no wiring. */
+  current?: string;
+  /**
+   * The panel's id, which the burger's aria-controls points at. NOT DEFAULTED: it used to default
+   * to a constant, so two nav pieces in one document gave two panels the same id and the second
+   * burger controlled the first panel. NavSimple and NavDropdown each pass one derived from their
+   * own, and standalone it falls back to a per-render value.
+   */
+  id?: string;
+  /*
+   * NO `tone` PROP, and it is the only piece in the kit without one.
+   *
+   * The sheet is not a band. It renders inside NavSimple or NavDropdown and takes its ground from
+   * whichever of them holds it, through the tokens those pieces have already flipped. Giving it
+   * its own ground would let the burger sit on one colour while the bar around it sits on
+   * another, which is a way of breaking a header rather than a way of styling one.
+   */
+  /** Accessible name for the panel and the burger. */
+  label?: string;
+  triggerLabel?: string;
+}
+
+const {
+  links = [
+    { label: "Work", href: "/work" },
+    { label: "Services", href: "/services" },
+    { label: "About", href: "/about" },
+    { label: "Contact", href: "/contact" },
+  ],
+  groups = [],
+  cta = { label: "Request a quote", href: "/contact" },
+  current = Astro.url.pathname,
+  id,
+  label = "Site menu",
+  triggerLabel = "Menu",
+} = Astro.props;
+
+const panelId = id || `sheet-${Math.random().toString(36).slice(2, 8)}`;
+
+/** Compare paths without letting a trailing slash, a query or a hash decide the answer. */
+const normalise = (value: string): string => {
+  const path = (value || "").split("?")[0].split("#")[0];
+  return path.length > 1 ? path.replace(/\/+$/, "") : path;
+};
+const here = normalise(current);
+const isCurrent = (href: string): boolean => here !== "" && normalise(href) === here;
+
+const groupsWithLinks = groups.filter((group) => group.links && group.links.length > 0);
+const hasDestinations = links.length > 0 || groupsWithLinks.length > 0;
+---
+
+{hasDestinations && (
+  <div class="kit-sheet">
+    <script is:inline>document.documentElement.dataset.kitJs = "on";</script>
+
+    <button
+      type="button"
+      class="kit-sheet__toggle"
+      data-kit-sheet-toggle
+      aria-expanded="false"
+      aria-controls={panelId}
+    >
+      <svg
+        class="kit-sheet__icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.75"
+        stroke-linecap="round"
+      >
+        <path d="M3 6h18M3 12h18M3 18h18" />
+      </svg>
+      <span class="kit-sheet__toggle-text">{triggerLabel}</span>
+    </button>
+
+    <div id={panelId} class="kit-sheet__panel" data-kit-sheet>
+      <div class="kit-sheet__head">
+        <button type="button" class="kit-sheet__close" data-kit-sheet-close>
+          <svg
+            class="kit-sheet__icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+          >
+            <path d="M5 5 19 19M19 5 5 19" />
+          </svg>
+          <span class="kit-sheet__close-text">Close</span>
+        </button>
+      </div>
+
+      <nav class="kit-sheet__nav" aria-label={label}>
+        {links.length > 0 && (
+          <ul class="kit-sheet__list">
+            {links.map((link) => (
+              <li>
+                <a
+                  class="kit-sheet__link"
+                  href={link.href}
+                  aria-current={isCurrent(link.href) ? "page" : undefined}
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {groupsWithLinks.map((group, index) => (
+          <div class="kit-sheet__group">
+            {/* The group title labels the list rather than being a heading. A heading here would
+                be an h2 sitting in the header, above the page's own h1, which reads as a broken
+                document outline; and a <section> with a name would add a region landmark inside
+                a nav inside a header for every group. */}
+            <p class="kit-sheet__group-title" id={`${panelId}-group-${index}`}>{group.label}</p>
+            <ul class="kit-sheet__list" aria-labelledby={`${panelId}-group-${index}`}>
+              {group.links.map((link) => (
+                <li>
+                  <a
+                    class="kit-sheet__link"
+                    href={link.href}
+                    aria-current={isCurrent(link.href) ? "page" : undefined}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      {cta && (
+        <a class="kit-btn kit-btn--primary kit-sheet__cta" href={cta.href}>{cta.label}</a>
+      )}
+    </div>
+  </div>
+)}
+
+<style>
+  .kit-sheet { display: contents; }
+
+  /* The burger exists only when scripting does. Without it the panel is a plain list, so a
+     control that cannot open is never shown. */
+  .kit-sheet__toggle {
+    display: none;
+    align-items: center;
+    gap: var(--kit-space-xs);
+    min-height: var(--kit-target);
+    min-width: var(--kit-target);
+    padding-inline: var(--kit-space-xs);
+    font: inherit;
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-medium);
+    color: inherit;
+    background: transparent;
+    border: var(--kit-border-width) solid transparent;
+    border-radius: var(--kit-radius);
+    cursor: pointer;
+    /* A long business name wraps the header bar and drops the burger onto a line of its own.
+       Without this it would sit at the leading edge there and at the trailing edge everywhere
+       else, so the control moves depending on how long the name is. */
+    margin-inline-start: auto;
+  }
+  :global(html[data-kit-js="on"]) .kit-sheet__toggle { display: inline-flex; }
+  .kit-sheet__toggle:hover { border-color: var(--kit-border); }
+
+  .kit-sheet__icon {
+    width: var(--kit-space-lg);
+    height: var(--kit-space-lg);
+    flex: none;
+  }
+
+  /* Panel. Static and visible with no scripting; a full-screen sheet once the burger exists. */
+  .kit-sheet__panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-lg);
+    padding-block: var(--kit-space-md);
+    /* With no scripting the panel is a row of the header's own flex bar, so it takes a full
+       line of its own rather than squeezing in beside the brand. */
+    flex-basis: 100%;
+    width: 100%;
+    /* Stated rather than inherited. foundations.css has no reset, so a page that imports the
+       foundations without the project's globals would otherwise put this panel 2 x its padding
+       wider than the viewport. Measured on a narrow screen: two paddings of overhang. */
+    box-sizing: border-box;
+  }
+  .kit-sheet__head { display: none; }
+
+  :global(html[data-kit-js="on"]) .kit-sheet__panel {
+    display: none;
+    position: fixed;
+    inset: 0;
+    /* The insets do the sizing here; the base rule's width: 100% would fight them. */
+    width: auto;
+    z-index: 60;
+    /* The panel owns the viewport, so the scroll goes on the link list rather than the panel:
+       with twenty destinations the close button and the call to action would otherwise scroll
+       out of the top and bottom of a sheet the reader cannot see the edges of. */
+    overflow: hidden;
+    padding: var(--kit-page-pad);
+    background: var(--kit-bg);
+    color: var(--kit-text);
+  }
+  :global(html[data-kit-js="on"]) .kit-sheet__panel[data-open] .kit-sheet__nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  :global(html[data-kit-js="on"]) .kit-sheet__panel[data-open] {
+    display: flex;
+    animation: kit-sheet-in var(--kit-duration) var(--kit-ease) both;
+  }
+  /* The open panel covers the burger, so the close button is the pointer control while it is
+     open. It sits at the same trailing inset as the burger (both use --kit-page-pad), so a tap
+     aimed at the burger lands on Close and does what the reader meant. It stays in the panel
+     rather than raising the burger above it, because a header that is not sticky can be scrolled
+     off screen, and then a raised burger would be the only close control and it would be gone. */
+  :global(html[data-kit-js="on"]) .kit-sheet__head {
+    display: flex;
+    justify-content: flex-end;
+    flex: none;
+  }
+
+  @keyframes kit-sheet-in {
+    from { opacity: 0; transform: translateY(calc(var(--kit-space-md) * -1)); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .kit-sheet__close {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kit-space-xs);
+    min-height: var(--kit-target);
+    min-width: var(--kit-target);
+    padding-inline: var(--kit-space-xs);
+    font: inherit;
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-medium);
+    color: inherit;
+    background: transparent;
+    border: var(--kit-border-width) solid transparent;
+    border-radius: var(--kit-radius);
+    cursor: pointer;
+  }
+  .kit-sheet__close:hover { border-color: var(--kit-border); }
+
+  .kit-sheet__nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-lg);
+  }
+  .kit-sheet__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .kit-sheet__group-title {
+    font-family: var(--kit-font-body);
+    font-size: var(--kit-text-xs);
+    font-weight: var(--kit-weight-strong);
+    letter-spacing: var(--kit-tracking-label);
+    text-transform: uppercase;
+    color: var(--kit-text-muted);
+    margin: 0 0 var(--kit-space-xs);
+  }
+
+  .kit-sheet__link {
+    display: block;
+    padding-block: var(--kit-space-sm);
+    min-height: var(--kit-target);
+    font-size: var(--kit-text-lg);
+    color: inherit;
+    text-decoration: none;
+  }
+  .kit-sheet__link:hover { color: var(--kit-accent-ink); }
+  .kit-sheet__link[aria-current="page"] {
+    color: var(--kit-accent-ink);
+    font-weight: var(--kit-weight-strong);
+  }
+
+  .kit-sheet__cta { width: 100%; flex: none; box-sizing: border-box; }
+
+  .kit-sheet__toggle:focus-visible,
+  .kit-sheet__close:focus-visible,
+  .kit-sheet__link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  /* Above the breakpoint the desktop nav owns the destinations, so the sheet stands down. */
+  @media (min-width: 48em) {
+    :global(html[data-kit-js="on"]) .kit-sheet__toggle { display: none; }
+    :global(html[data-kit-js="on"]) .kit-sheet__panel,
+    :global(html[data-kit-js="on"]) .kit-sheet__panel[data-open] { display: none; }
+    .kit-sheet__panel { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(html[data-kit-js="on"]) .kit-sheet__panel[data-open] { animation: none; }
+  }
+</style>
+
+<script>
+  // Bound once, by delegation, so it survives ClientRouter swapping the document and so two
+  // sheets on one page cannot register two sets of handlers.
+  interface KitSheetWindow extends Window {
+    __kitSheetBound?: boolean;
+  }
+  const scope = window as KitSheetWindow;
+  if (!scope.__kitSheetBound) {
+    scope.__kitSheetBound = true;
+
+    // THE ROOT MARKER HAS TO BE RE-APPLIED AFTER EVERY CLIENT-SIDE NAVIGATION. Astro's
+    // ClientRouter replaces the root element's attributes with the incoming document's, which
+    // wipes data-kit-js, and the inline script that sets it does not run again. Measured: after
+    // one in-page navigation the burger vanished and the sheet's links rendered loose in the
+    // header, on every page the reader visited without a full reload. astro:after-swap fires
+    // before the new document paints, so there is no flash.
+    const markJs = () => { document.documentElement.setAttribute("data-kit-js", "on"); };
+    markJs();
+    document.addEventListener("astro:after-swap", markJs);
+
+    const FOCUSABLE =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    let restoreOverflow = "";
+
+    const panelFor = (trigger: Element): HTMLElement | null => {
+      const id = trigger.getAttribute("aria-controls");
+      return id ? document.getElementById(id) : null;
+    };
+
+    let inertedBySheet: Element[] = [];
+    const setOpen = (trigger: HTMLElement, open: boolean): void => {
+      const panel = panelFor(trigger);
+      if (!panel) return;
+      const alreadyOpen = trigger.getAttribute("aria-expanded") === "true";
+      if (alreadyOpen === open) return;
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      panel.toggleAttribute("data-open", open);
+      /**
+       * THE PAGE BEHIND AN OPEN SHEET IS INERT, and "behind" is structural, not a landmark name.
+       * The first version inerted `main` and `footer`, which is right on a page whose navigation
+       * sits in the header and wrong the moment a sheet is rendered INSIDE main: the kit's own
+       * frame pages do exactly that, and every navigation open state became a menu nobody could
+       * press while the chrome said "press it again to close it". Now every sibling of every
+       * ancestor of the panel (and of its toggle, which Escape returns focus to) is inerted up to
+       * body, so the sheet and the path to it stay live wherever the page put them. The frame's
+       * hidden page heading is left alone: it is demo chrome, and an inert h1 disappears from the
+       * accessibility tree.
+       */
+      const protectedNodes = new Set<Element>();
+      for (const origin of [panel, trigger]) {
+        let node: Element | null = origin;
+        while (node && node !== document.body) {
+          protectedNodes.add(node);
+          node = node.parentElement;
+        }
+      }
+      if (open) {
+        const inerted: Element[] = [];
+        let node: Element | null = panel;
+        while (node && node.parentElement && node !== document.body) {
+          for (const sibling of Array.from(node.parentElement.children)) {
+            if (protectedNodes.has(sibling)) continue;
+            if (sibling.tagName === "SCRIPT" || sibling.tagName === "STYLE") continue;
+            if (sibling.hasAttribute("data-kit-frame-heading") || sibling.hasAttribute("inert")) continue;
+            sibling.setAttribute("inert", "");
+            inerted.push(sibling);
+          }
+          node = node.parentElement;
+        }
+        inertedBySheet = inerted;
+      } else {
+        inertedBySheet.forEach((el) => el.removeAttribute("inert"));
+        inertedBySheet = [];
+      }
+      if (open) {
+        restoreOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        const first = panel.querySelector(FOCUSABLE);
+        if (first instanceof HTMLElement) first.focus();
+      } else {
+        document.body.style.overflow = restoreOverflow;
+      }
+    };
+
+    const closeAll = (returnFocus: boolean): void => {
+      const open = document.querySelectorAll('[data-kit-sheet-toggle][aria-expanded="true"]');
+      open.forEach((trigger) => {
+        if (!(trigger instanceof HTMLElement)) return;
+        setOpen(trigger, false);
+        if (returnFocus) trigger.focus();
+      });
+    };
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const toggle = target.closest("[data-kit-sheet-toggle]");
+      if (toggle instanceof HTMLElement) {
+        setOpen(toggle, toggle.getAttribute("aria-expanded") !== "true");
+        return;
+      }
+      if (target.closest("[data-kit-sheet-close]")) {
+        closeAll(true);
+        return;
+      }
+      // A link inside the sheet navigates, so the sheet must not be left open and the body
+      // must not be left locked on the page that arrives.
+      if (target.closest("[data-kit-sheet]")) {
+        if (target.closest("a[href]")) closeAll(false);
+        return;
+      }
+      closeAll(false);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeAll(true);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const panel = document.querySelector("[data-kit-sheet][data-open]");
+      if (!panel) return;
+      const items = Array.from(panel.querySelectorAll(FOCUSABLE)).filter(
+        (el): el is HTMLElement => el instanceof HTMLElement,
+      );
+      if (items.length === 0) return;
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!panel.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    // Growing past the breakpoint hides the panel in CSS; without this the body would stay locked.
+    const wide = window.matchMedia("(min-width: 48em)");
+    wide.addEventListener("change", (event) => {
+      if (event.matches) closeAll(false);
+    });
+
+    document.addEventListener("astro:before-swap", () => closeAll(false));
+  }
+</script>

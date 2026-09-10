@@ -1,0 +1,163 @@
+---
+/**
+ * THREE-STEP PROCESS.
+ *
+ * Use this when the visitor has stopped asking whether the thing works and started asking what
+ * happens after they get in touch. It is for a process that genuinely is short. Padding a
+ * two-step process out to three, or squeezing a six-stage one down, both read as marketing and
+ * the detailed variation exists for the second case.
+ *
+ * Numbering is real here: the steps happen in that order, so this is an <ol> and the numerals are
+ * visible text rather than decoration. They sit INSIDE the heading, which does two things. It
+ * keeps a small element from sitting directly above a heading, which is a pattern the kit does
+ * not use, and it means the number is announced with the step it belongs to. `role="list"` is on
+ * the <ol> because removing the list marker also removes the list semantics in WebKit, and the
+ * order is the entire point of the piece.
+ *
+ * The rule sits on TOP of each step rather than between steps, so the sequence reads the same
+ * whether the row holds one step or three.
+ *
+ * Content note: the defaults describe a plainly fictional fit-out business. Replace them.
+ */
+
+export interface Step {
+  title: string;
+  /** One or two sentences. Say what happens and who does it. */
+  body: string;
+}
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  /** Three steps. More than four belongs in the detailed variation. */
+  steps?: Step[];
+  /** A qualifier that belongs under the steps rather than inside one. */
+  footnote?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "How a job runs, start to finish",
+  lede = "Three steps, and the only one that needs much from you is the first.",
+  steps = [
+    {
+      title: "Tell us what you need",
+      body: "Fifteen minutes on the phone, or a form if you would rather. We ask what the space is for, who uses it and when you actually need it finished.",
+    },
+    {
+      title: "We price the whole job",
+      body: "A fixed quote with the inclusions written out, so nothing turns up later as a variation. Two working days, usually one.",
+    },
+    {
+      title: "We build it and hand it over",
+      body: "One site contact for the whole job, a photo update each Friday, and a defects walk-through before the final invoice.",
+    },
+  ],
+  footnote,
+  emptyMessage = "The steps for this service are being written up.",
+  tone = "default",
+  class: className,
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `pt-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const list = steps ?? [];
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "pt", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="pt-intro kit-stack">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {list.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ol class="pt-list" role="list">
+        {list.map((step, index) => (
+          <li class="pt-step">
+            <h3 class="kit-h3 pt-heading">
+              {/* The numeral is drawn, the words are read: "1We come and look" was one glued
+                  heading to a screen reader. */}
+              <span class="pt-num" aria-hidden="true">{index + 1}</span>
+              <span class="kit-visually-hidden">Step {index + 1}: </span>
+              <span class="pt-title">{step.title}</span>
+            </h3>
+            <p class="kit-body pt-body">{step.body}</p>
+          </li>
+        ))}
+      </ol>
+    )}
+
+    {footnote && <p class="pt-footnote kit-muted">{footnote}</p>}
+  </div>
+</section>
+
+<style>
+  .pt-intro { margin-block-end: var(--kit-space-2xl); }
+
+  /* One column on a phone, two on a tablet, three on a desktop, with no media query: the track
+     floor is derived from the reading measure, so a step never gets narrower than it can read. */
+  .pt-list {
+    display: grid;
+    gap: var(--kit-gutter);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--kit-measure) / 2.2)), 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .pt-step {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-sm);
+    min-width: 0;
+    padding-block-start: var(--kit-space-md);
+    border-block-start: var(--kit-border-width) solid var(--kit-border-strong);
+  }
+
+  .pt-heading {
+    display: grid;
+    gap: var(--kit-space-xs);
+  }
+
+  .pt-num {
+    font-family: var(--kit-font-display);
+    font-size: var(--kit-text-2xl);
+    font-weight: var(--kit-weight-display);
+    line-height: var(--kit-leading-tight);
+    color: var(--kit-accent-ink);
+  }
+
+  .pt-title { text-wrap: pretty; }
+
+  .pt-body { color: var(--kit-text-muted); text-wrap: pretty; }
+
+  .pt-footnote {
+    margin-block-start: var(--kit-space-xl);
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-body);
+    max-width: var(--kit-measure);
+  }
+
+  .kit-section--inverse .pt-num { color: var(--kit-accent-lift); }
+</style>

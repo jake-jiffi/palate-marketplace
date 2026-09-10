@@ -18,7 +18,6 @@
  * is a working document for one client naming directions they have not chosen yet.
  */
 import BaseLayout from "./BaseLayout.astro";
-import SystemStrip from "../components/SystemStrip.astro";
 import BoardNotes from "../components/BoardNotes.astro";
 import { variants, byAmbition } from "../lib/variants";
 import type { Variant } from "../lib/variants";
@@ -40,8 +39,17 @@ const total = byAmbition(variants).length || undefined;
       and boards-render carries it into the artboard as an @import. Forwarded rather than
       re-declared so a board says it in exactly the place every other page says it. */}
   <slot name="head" slot="head" />
+  {/* THE SPECIMEN STRIP IS GONE, and this comment is why it must not come back. It set the
+      type as an Ag ramp, swatches and a button pair, in the SAME layout on every board, so five
+      directions collapsed to sameness below the hero and showed type displayed rather than type
+      in use. Jake rejected it on sight, 2026-09-09: "they all have different headers but
+      everything else is about the same and its showing font use and stuff, which i thought
+      would just be the actual use of them on the website". A board now carries REAL SECTIONS
+      composed from the website kit, which is what a client can judge. */}
   <slot name="hero" />
-  <SystemStrip />
   <slot name="section" />
+  <slot name="section2" />
+  <slot name="section3" />
+  <slot name="proof" />
   <BoardNotes variant={variant} total={total} />
 </BaseLayout>

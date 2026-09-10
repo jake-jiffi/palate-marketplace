@@ -204,8 +204,25 @@ run_rule() {
     }
     my @lines = <$fh>;
     close($fh);
+    my $inblock = 0;
     for (my $i = 0; $i < @lines; $i++) {
       my $line = $lines[$i];
+      # A line that is only a comment cannot ship markup or a style: the words "img" or "button"
+      # inside a <script> comment, a `<!-- -->` line or a JSX `{/* */}` line are prose about
+      # code, and five kit files were flagged for prose. (Frontmatter comments were already
+      # skipped one release ago; this covers the other three comment forms.) A block comment is
+      # tracked across lines, because the body of a `/* ... */` block need not start with `*`:
+      # the second pass of this fix skipped `*`-led lines only and left three findings standing
+      # on plain-prose continuation lines.
+      if ($inblock) {
+        $inblock = 0 if $line =~ m{\*/|-->};
+        next;
+      }
+      if ($line =~ m{^\s*(/\*|<!--|\{/\*)} && $line !~ m{\*/|-->}) {
+        $inblock = 1;
+        next;
+      }
+      next if $line =~ m{^\s*(//|/\*|\*\s|\*/|<!--|\{/\*)};
       my $disabled_here = ($line =~ /ux-lint-disable\s+\Q$rule\E\b/);
       my $disabled_prev = ($i > 0 && $lines[$i-1] =~ /ux-lint-disable\s+\Q$rule\E\b/);
       if ($requires_reason) {

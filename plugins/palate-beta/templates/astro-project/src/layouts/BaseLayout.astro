@@ -19,8 +19,27 @@ interface Props {
   description?: string;
   image?: string;
   noindex?: boolean;
+  /**
+   * THE HOST CHROME ONLY: the site's own header and footer. False leaves them out, which is what a
+   * section demo, a board and a print view all need: a piece shown underneath the real navigation
+   * is not the piece anybody is reviewing. Everything else about the page is unchanged, view
+   * transitions included, so a demo still runs in the configuration the site ships in.
+   *
+   * IT NEVER SUPPRESSES A HEADER OR FOOTER THE PAGE SUPPLIES ITSELF. The first version gated the
+   * `header` and `footer` slots on this flag as well, so a composed page that passed its own
+   * navigation and footer through the slots AND asked for the host chrome to go away got neither:
+   * three example pages shipped with no navigation and no footer, and a screenshot is what found
+   * it. A slot the page filled is the page's content, and the flag has no say over it.
+   */
+  chrome?: boolean;
 }
-const { title, description = business.description, image = "/og/default.png", noindex = false } = Astro.props;
+const {
+  title,
+  description = business.description,
+  image = "/og/default.png",
+  noindex = false,
+  chrome = true,
+} = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 
 // Is this build the live site? Everything else is a preview, and a preview is a real,
@@ -72,15 +91,24 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
          until an audit months later. -->
     <slot name="head" />
     <!-- Analytics: Humblytics (swap for Plausible via flag). Skipped in preview. -->
-    {!visualEditing && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
+    {/* Skipped while the site id is still the scaffold's placeholder: a demo or proof build would
+        otherwise load a live analytics script with a token that reads "{{HUMBLYTICS_SITE_ID}}". */}
+    {!visualEditing && !"{{HUMBLYTICS_SITE_ID}}".startsWith("{{") && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
     <ClientRouter />
   </head>
   <body>
+    {/* First in the tab order, so the bypass is reachable before the navigation it bypasses. */}
+    <a class="skip-link" href="#main">Skip to content</a>
     <ExploreSwitcher />
     <Motion />
-    <slot name="header" />
-    <main><slot /></main>
-    <slot name="footer" />
+    {/* A slot the page filled always renders; `chrome` governs the host header and footer only,
+        and this template ships none, so a build that adds SiteHeader / SiteFooter renders those
+        under the flag and leaves these two lines alone. */}
+    {Astro.slots.has("header") && <slot name="header" />}
+    {/* The id the skip link points at. Without it the link leads nowhere and axe fails
+        `skip-link` on every page, which is a keyboard user's first control on the site. */}
+    <main id="main"><slot /></main>
+    {Astro.slots.has("footer") && <slot name="footer" />}
     <CmsVisualEditing enabled={visualEditing} />
   </body>
 </html>

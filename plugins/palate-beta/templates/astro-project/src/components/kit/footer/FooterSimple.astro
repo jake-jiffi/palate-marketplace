@@ -1,0 +1,227 @@
+---
+/**
+ * Simple footer.
+ *
+ * For a site with few destinations, where the footer's job is to give the last row of the page a
+ * bottom edge and to answer two questions: how do I get in touch, and what else is here. Reach for
+ * FooterGrouped once the links need headings to make sense, or once the business has registrations
+ * worth showing.
+ *
+ * The contact route is a real link, not a line of text. A phone number that cannot be tapped on a
+ * phone is the commonest small mistake in a small-business footer, and it costs calls.
+ *
+ * The active link is marked with aria-current by comparing the URL being rendered, so it does not
+ * have to be passed in and cannot go stale. The copyright year is stamped at build time: a site
+ * that has not been rebuilt since New Year shows last year, which is a question about how often
+ * the site is deployed rather than something this component can fix from here.
+ */
+export interface FooterLink {
+  label: string;
+  href: string;
+}
+
+export interface Props {
+  businessName?: string;
+  /** One line about what the business does. Optional. */
+  tagline?: string;
+  /** The one way to reach a human. A tel: or mailto: link, not a line of text. */
+  contact?: FooterLink;
+  /** A second route, when the first is a phone and email also matters. */
+  contactSecondary?: FooterLink;
+  links?: FooterLink[];
+  /** Privacy, terms, anything that belongs beside the copyright rather than in the main row. */
+  legalLinks?: FooterLink[];
+  /** Overrides the build year. */
+  year?: number;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  businessName = "",
+  tagline,
+  contact,
+  contactSecondary,
+  links = [
+    { label: "Services", href: "/services" },
+    { label: "Recent work", href: "/work" },
+    { label: "About", href: "/about" },
+    { label: "Contact", href: "/contact" },
+  ],
+  legalLinks = [{ label: "Privacy", href: "/privacy" }],
+  year = new Date().getFullYear(),
+  tone = "subtle",
+  class: className,
+  id,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+/** Trailing slashes differ between a built page and a dev route, so compare without one. */
+const tidy = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
+const here = tidy(Astro.url.pathname);
+const isHere = (href: string) => !/^[a-z]+:/i.test(href) && tidy(href) === here;
+
+const contacts = [contact, contactSecondary].filter(Boolean) as FooterLink[];
+/** With no name, no tagline and no contact route there is nothing to put in the brand column. */
+const hasBrand = Boolean(businessName || tagline || contacts.length);
+---
+
+<footer class:list={["kit-section", "kit-section--tight", toneClass, "kit-foot", className]} id={id || undefined}>
+  <div class="kit-container kit-foot__inner">
+    {hasBrand && (
+      <div class="kit-foot__brand">
+        {businessName && <p class="kit-foot__name">{businessName}</p>}
+        {tagline && <p class="kit-foot__tagline kit-muted">{tagline}</p>}
+        {contacts.length > 0 && (
+          <ul class="kit-foot__contact" role="list">
+            {contacts.map((route) => (
+              <li>
+                <a class="kit-link kit-link--target kit-foot__contact-link" href={route.href}>{route.label}</a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )}
+
+    {links.length > 0 && (
+      <nav class="kit-foot__nav" aria-label={businessName ? `${businessName} footer` : "Footer"}>
+        <ul class="kit-foot__links" role="list">
+          {links.map((link) => (
+            <li>
+              <a
+                class="kit-foot__link"
+                href={link.href}
+                aria-current={isHere(link.href) ? "page" : undefined}
+              >{link.label}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    )}
+  </div>
+
+  <div class="kit-container kit-foot__base">
+    <p class="kit-foot__copy kit-muted">
+      &copy; {year}{businessName ? ` ${businessName}.` : "."} All rights reserved.
+    </p>
+    {legalLinks.length > 0 && (
+      <ul class="kit-foot__legal" role="list">
+        {legalLinks.map((link) => (
+          <li>
+            <a
+              class="kit-foot__link kit-muted"
+              href={link.href}
+              aria-current={isHere(link.href) ? "page" : undefined}
+            >{link.label}</a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</footer>
+
+<style>
+  .kit-foot__inner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: start;
+    gap: var(--kit-space-xl) var(--kit-space-2xl);
+  }
+
+  .kit-foot__brand { display: grid; gap: var(--kit-space-xs); flex: 1 1 28ch; }
+  .kit-foot__name {
+    font-family: var(--kit-font-display);
+    font-size: var(--kit-text-lg);
+    font-weight: var(--kit-weight-strong);
+    line-height: var(--kit-leading-snug);
+    margin: 0;
+  }
+  .kit-foot__tagline { font-size: var(--kit-text-sm); margin: 0; max-width: var(--kit-measure); }
+
+  .kit-foot__contact {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-2xs) var(--kit-space-lg);
+    font-size: var(--kit-text-sm);
+    margin-top: var(--kit-space-2xs);
+  }
+
+  .kit-foot__nav { flex: 0 1 auto; }
+  .kit-foot__links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-sm) var(--kit-space-xl);
+    font-size: var(--kit-text-sm);
+  }
+
+  .kit-foot__link {
+    display: inline-flex;
+    align-items: center;
+    /* Enough of a target to hit on a phone without giving the row the height of a button bar. */
+    min-height: calc(var(--kit-target) * 0.7);
+    color: inherit;
+    text-decoration: none;
+  }
+  .kit-foot__link:hover { text-decoration: underline; text-underline-offset: var(--kit-space-2xs); }
+  /* The current page is marked in weight and a rule, never in colour alone. */
+  .kit-foot__link[aria-current="page"] {
+    font-weight: var(--kit-weight-strong);
+    text-decoration: underline;
+    text-underline-offset: var(--kit-space-2xs);
+  }
+
+  .kit-foot__base {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--kit-space-xs) var(--kit-space-xl);
+    margin-top: var(--kit-space-xl);
+    padding-top: var(--kit-space-md);
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-section--inverse .kit-foot__base {
+    border-top-color: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent);
+  }
+  .kit-foot__copy { font-size: var(--kit-text-xs); margin: 0; }
+  .kit-foot__legal {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-xs) var(--kit-space-lg);
+    font-size: var(--kit-text-xs);
+  }
+
+  .kit-foot a:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  /* .kit-link on an inverse section resolves to --kit-accent-lift, which falls back to
+     the accent a brand picked for a LIGHT ground. Measured at 1.06:1 on the default
+     tokens, which is an invisible phone number in a footer, so the colour is forced to
+     the inverse ink here. The UNDERLINE that used to sit in this rule has gone back to
+     foundations, which now carries it for every .kit-link: written as a shorthand it
+     reset text-decoration-thickness to auto, and being later in source order it beat the
+     kit's own hover, so this footer's phone number was the last link with no hover at all. */
+  .kit-section--inverse .kit-foot__contact-link { color: var(--kit-text-inverse); }
+  .kit-section--inverse a:focus-visible { outline-color: var(--kit-text-inverse); }
+</style>

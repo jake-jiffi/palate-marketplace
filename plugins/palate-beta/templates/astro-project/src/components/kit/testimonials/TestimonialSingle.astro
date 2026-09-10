@@ -1,0 +1,188 @@
+---
+/**
+ * TestimonialSingle: one customer's words given the whole band.
+ *
+ * Reach for this when one quote is plainly stronger than the rest. A grid of nine average quotes
+ * reads as filler; a single good one, set large, reads as evidence. If you have several of equal
+ * weight, use TestimonialGrid instead.
+ *
+ * THESE ARE SOMEBODY ELSE'S WORDS AND THE COMPONENT TREATS THEM THAT WAY.
+ * A quote is transcribed verbatim, or it is cut (trimmed at the ends, or an elision marked in the
+ * middle). It is never tidied, rephrased, lengthened or improved. A name is never attached to
+ * words the person did not say. A role, a company or a location is never added to a quote that
+ * did not come with one: if the customer gave you a first name and nothing else, `name` is the
+ * only attribution field you fill in, and the piece renders correctly that way. Inventing "Sarah,
+ * Operations Manager" because the line looked bare is fabricating a person's job, and it is the
+ * mistake this build has already made once.
+ *
+ * `source` is there so a quote lifted from a public review can point back at the review. If you
+ * have that link, give it. It is the difference between a claim and a citation.
+ *
+ * Markup is <figure> + <blockquote> + <figcaption><cite>, which is the pattern the HTML spec
+ * gives for attributed quotations. <cite> holds the person, not the quote.
+ */
+interface Testimonial {
+  /** The quote, verbatim. Do not include the surrounding quotation marks; the piece draws those. */
+  quote: string;
+  /** However the person is willing to be named. Required: an unattributed quote is not evidence. */
+  name: string;
+  /** Only if the person actually gave one. */
+  role?: string;
+  /** Only if the person actually gave one. */
+  company?: string;
+  /** Useful for trades and local services, where "Pemberton" is more persuasive than a job title. */
+  location?: string;
+  photo?: { src: string; alt: string };
+  /** Where the quote was published, if it was published anywhere. */
+  source?: { label: string; href?: string };
+}
+
+interface Props extends Partial<Testimonial> {
+  /** Optional visible section heading. Left off, the section still gets an accessible name. */
+  heading?: string;
+  /** Screen-reader name for the section when `heading` is not shown. */
+  accessibleName?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+/*
+ * NO IDENTITY FIELD HAS A DEFAULT, and that is a correctness rule rather than a style choice.
+ *
+ * This component's own header already says a role, a company or a location is never added to a
+ * quote that did not come with one. Its destructure then defaulted a company anyway, so a build
+ * passing a real quote, a real name and a real location, and simply not passing `company`,
+ * silently attributed those words to a firm nobody named. That is fabricated testimony produced
+ * by omission, which is the same class this project has already had to correct once, and it is
+ * worse than the original because nothing in the calling code looks wrong.
+ *
+ * Sample COPY is fine: a quote with nothing attached to it attributes nothing to anybody. It is
+ * the ATTRIBUTION that must never be invented.
+ */
+const {
+  quote = "They quoted on the Tuesday, started the Monday after, and finished a day early. The invoice matched the quote to the dollar, which after our last two builders was the part that surprised us.",
+  name,
+  role,
+  company,
+  location,
+  photo,
+  source,
+  heading,
+  accessibleName = "What our customers say",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `ts-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+/* Attribution beyond the name, in the order a reader wants it, with only the parts that exist. */
+const detail = [role, company, location].filter(Boolean).join(", ");
+const hasQuote = Boolean(quote && quote.trim());
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container">
+    <h2 id={headingId} class:list={["kit-h2", !heading && "kit-visually-hidden"]}>
+      {heading ?? accessibleName}
+    </h2>
+
+    {hasQuote ? (
+      <figure class:list={["ts", heading && "ts--after-heading"]}>
+        <blockquote class="ts__quote">
+          <p class="ts__text">{quote}</p>
+        </blockquote>
+
+        <figcaption class="ts__by">
+          {photo?.src && (
+            <span class="ts__avatar kit-media">
+              <img src={photo.src} alt={photo.alt} loading="lazy" decoding="async" />
+            </span>
+          )}
+          <span class="ts__who">
+            <cite class="ts__name">{name}</cite>
+            {detail && <span class="ts__detail kit-muted">{detail}</span>}
+            {source?.label && (
+              <span class="ts__source kit-muted">
+                {source.href
+                  ? <a class="kit-link" href={source.href} rel="nofollow noopener">{source.label}</a>
+                  : source.label}
+              </span>
+            )}
+          </span>
+        </figcaption>
+      </figure>
+    ) : (
+      <p class="kit-empty ts__empty">No testimonial has been supplied for this section yet.</p>
+    )}
+  </div>
+</section>
+
+<style>
+  .ts {
+    margin: 0;
+    display: grid;
+    gap: var(--kit-space-xl);
+    max-width: var(--kit-page-max);
+  }
+  .ts--after-heading { margin-block-start: var(--kit-space-xl); }
+
+  .ts__quote { margin: 0; }
+
+  /* The quote carries the display face because it is the loudest thing in the band. The opening
+     mark is drawn rather than typed, so the text stays copyable and screen readers do not read
+     a stray punctuation glyph as a word. */
+  .ts__text {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-2xl);
+    line-height: var(--kit-leading-snug);
+    letter-spacing: var(--kit-tracking-tight);
+    text-wrap: pretty;
+    margin: 0;
+    /* Long quotes stay readable: a wide measure for a large face, never the full page. */
+    max-width: var(--kit-measure);
+  }
+  .ts__text::before { content: "“"; }
+  .ts__text::after { content: "”"; }
+
+  .ts__by {
+    display: flex;
+    align-items: center;
+    gap: var(--kit-space-md);
+    flex-wrap: wrap;
+    font-size: var(--kit-text-sm);
+  }
+
+  .ts__avatar {
+    width: calc(var(--kit-target) * 1.4);
+    aspect-ratio: 1;
+    flex: none;
+  }
+  .ts__avatar > img { width: 100%; height: 100%; object-fit: cover; }
+
+  .ts__who { display: grid; gap: var(--kit-space-2xs); }
+  .ts__name {
+    font-style: normal;
+    font-weight: var(--kit-weight-strong);
+    color: var(--kit-text);
+  }
+  .ts__detail, .ts__source { font-size: var(--kit-text-sm); }
+
+  .ts__empty { margin-block-start: var(--kit-space-xl); }
+
+  /* From tablet up the quote can run larger without the line length collapsing. */
+  @media (min-width: 48rem) {
+    .ts__text { font-size: var(--kit-text-3xl); }
+  }
+</style>

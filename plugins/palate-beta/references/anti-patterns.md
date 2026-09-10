@@ -559,7 +559,7 @@ framing, therapy-mode openers and the exact stock pricing / free-tier phrases
 - Severity: Medium
 - Mode: always
 - Files: *.astro
-- Pattern: `(?i)^(?![ \t]*(?://|\*|/\*|\{/\*|<!--)).*?(?<![\w@/."])(palate|sanity|cloudflare|vercel|astro|stripe|claude|anthropic)(?![\w/.-])`
+- Pattern: `(?i)^(?![ \t]*(?://|\*|/\*|\{/\*|<!--))(?!.*translate="no").*?(?<![\w@/."])(palate|sanity|cloudflare|vercel|astro|stripe|claude|anthropic)(?![\w/.-])`
 - Fix: Wrap brand names with `<span translate="no">` so machine translators do not mangle them. Apply once per page where the name appears; not every mention needs wrapping in body prose. (Pattern skips import paths, `*.astro` filenames and the `Astro.*` global so it only flags brand names in visible text, not code.) It also skips a line that OPENS with a comment marker: the rule is about text a reader sees, and it was firing on ordinary code comments explaining the very tools it names, which is the one place these words are certain not to be visible. That guard is per line, not a comment parser: a brand name in a trailing comment after code, or inside a block whose continuation lines do not start with `*`, still fires, and that is the honest limit of a line-scoped lint.
 
 ### Rule: useState-for-mouse-coords

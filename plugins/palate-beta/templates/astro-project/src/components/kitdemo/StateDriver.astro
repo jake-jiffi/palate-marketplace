@@ -1,0 +1,411 @@
+---
+/**
+ * DRIVES A PIECE INTO A RUNTIME STATE, USING THE PIECE'S OWN MECHANISM.
+ *
+ * Everything here presses a control the piece already has, or answers the one network call the
+ * piece already makes. Nothing paints a class that merely looks like a loading state, because a
+ * fake loading state passes a screenshot and proves nothing about the code that ships. If a state
+ * cannot be reached this way it is not offered, and the page says why.
+ *
+ * It runs only on the framed demo pages under /kit-frame, which are noindex and removed at
+ * handover along with the rest of the kit surfaces. No client page ever loads it.
+ */
+interface Props {
+  /** The state to drive. `hover` never reaches here: it cannot be forced. */
+  state: string;
+  /** Selector for the control that opens this piece, when the first one is not the right one. */
+  openTarget?: string;
+}
+const { state, openTarget = "" } = Astro.props;
+---
+<div class="sd" data-kit-driver data-state={state} data-open-target={openTarget}></div>
+<style>
+  /* Never in the flow: the piece has to lay out exactly as it does on a real page. */
+  .sd { display: none; }
+</style>
+<script>
+  (() => {
+    const root = document.querySelector<HTMLElement>("[data-kit-driver]");
+    if (!root) return;
+    const state = root.dataset.state || "";
+    const openTarget = root.dataset.openTarget || "";
+
+    /** The piece itself, which is everything the frame page rendered beside this marker. */
+    const scope = (): ParentNode => document.querySelector("main") || document;
+
+    /**
+     * Reports what was actually done to the piece. The frame is loaded inside the viewer page, so
+     * the message goes to the parent and is shown as chrome; opened on its own, it falls back to a
+     * status line on the page itself. Either way the reader is told what was driven and how.
+     */
+    let lastSaid = "";
+    const post = () => {
+      if (!lastSaid) return;
+      window.parent.postMessage({ kitDriver: true, state, message: lastSaid }, window.location.origin);
+    };
+    const say = (message: string) => {
+      /**
+       * ONE PLACE, NEVER TWO. Inside the viewer the chrome shows this sentence, and writing it into
+       * the frame as well put reviewer prose inside the render on every driven state: the frame is
+       * meant to hold the piece and nothing else, and the bare URL is what a screenshot uses.
+       */
+      if (window.parent !== window) {
+        lastSaid = message;
+        post();
+        return;
+      }
+      const box = document.querySelector<HTMLElement>("[data-kit-driver-status]");
+      if (box) box.textContent = message;
+    };
+    // The viewer may bind after this driver has already spoken; when it announces itself, repeat
+    // the last sentence so the chrome is never silent about a state that was driven.
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      if ((event.data as { kitViewerReady?: boolean })?.kitViewerReady) post();
+    });
+
+    const FOCUSABLE =
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+    /** Visible, in the sense that focusing or clicking it would do something a person could see. */
+    const usable = (el: Element): boolean => {
+      const box = (el as HTMLElement).getBoundingClientRect();
+      return box.width > 0 && box.height > 0;
+    };
+
+    const firstUsable = (selector: string): HTMLElement | null => {
+      const all = Array.from(scope().querySelectorAll<HTMLElement>(selector));
+      return all.find(usable) || all[0] || null;
+    };
+
+    /* --- open ------------------------------------------------------------------------------ */
+
+    /**
+     * A control is only worth pressing if it is currently closed. A piece whose first item ships
+     * open, which is a perfectly good default for a FAQ, would otherwise be CLOSED by the open
+     * state and the page would show the reader the opposite of what it promised. Found by driving
+     * it rather than by reading it.
+     */
+    const closed = (el: HTMLElement): boolean => {
+      const details = el.closest("details");
+      if (details) return !details.open;
+      const owner = el.closest("[aria-expanded]") || el;
+      const expanded = owner.getAttribute("aria-expanded");
+      return expanded === null ? true : expanded === "false";
+    };
+
+    /**
+     * WHAT A READER WOULD SEE, WHICH IS THE ONLY THING WORTH CONFIRMING.
+     *
+     * The first readback asked `aria-expanded`, and an attribute is set by a piece's script whether
+     * or not any CSS renders anything. It was wrong in both directions on the same day it shipped:
+     * a mobile sheet whose toggle and panel are both `display: none` above the breakpoint reported
+     * that it had opened, and a lightbox that had genuinely opened a modal reported that nothing
+     * had, because the thumbnail carries no aria-expanded at all. Counting what is actually
+     * rendered cannot make either mistake: a panel that is display:none contributes nothing, and a
+     * dialog in the top layer contributes a great deal.
+     */
+    const rendered = () => {
+      let boxes = 0;
+      let ink = 0;
+      scope().querySelectorAll<HTMLElement>("*").forEach((el) => {
+        const b = el.getBoundingClientRect();
+        if (b.width > 0 && b.height > 0) {
+          boxes += 1;
+          ink += b.width * b.height;
+        }
+      });
+      const main = document.querySelector<HTMLElement>("main");
+      return { boxes, ink, text: (main?.innerText || "").length };
+    };
+    const grew = (before: ReturnType<typeof rendered>) => {
+      const after = rendered();
+      return after.boxes > before.boxes || after.text > before.text || after.ink > before.ink * 1.02;
+    };
+
+    if (state === "open") {
+      const candidates = [
+        ...(openTarget ? Array.from(scope().querySelectorAll<HTMLElement>(openTarget)) : []),
+        ...Array.from(scope().querySelectorAll<HTMLElement>('[aria-expanded="false"]')),
+        ...Array.from(scope().querySelectorAll<HTMLElement>("summary")),
+      ];
+      const target = candidates.find((el) => usable(el) && closed(el)) || candidates.find(closed);
+      if (!target) {
+        const anyOpen = candidates.length > 0;
+        say(
+          anyOpen
+            ? "Everything this piece can open is already open, which is its own resting state."
+            : "This piece offers no control that opens anything, so there is nothing to drive.",
+        );
+        return;
+      }
+      const before = rendered();
+      target.click();
+      // Read the RENDERING back, not an attribute. See `rendered` above for why.
+      if (!grew(before)) {
+        say(
+          `The piece's own control was pressed and nothing became visible at ${window.innerWidth}px. ` +
+            "For a navigation that usually means its panel only exists below the small-screen " +
+            "breakpoint, so try the narrow frame; for anything else it means the control is present " +
+            "and inert at this width.",
+        );
+        return;
+      }
+      /**
+       * WHAT CLOSES IT IS HIT-TESTED, NOT ASSUMED. "Press it again to close it" named the control
+       * that opened the piece, and a sheet that covers the viewport covers that control: at the
+       * viewer's own 390 width the sentence pointed at a button nobody could press, on all three
+       * navigation states, for three rounds. The toggle is hit-tested where it sits, and the close
+       * control inside the opened panel is named when the toggle is covered.
+       */
+      const box = target.getBoundingClientRect();
+      const atToggle = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      const toggleReachable = !!atToggle && (atToggle === target || target.contains(atToggle));
+      const panelId = target.getAttribute("aria-controls");
+      const panel = panelId ? document.getElementById(panelId) : null;
+      const label = (el: Element) => (el.getAttribute("aria-label") || el.textContent || "").replace(/\s+/g, " ").trim();
+      const closer = Array.from((panel || scope()).querySelectorAll<HTMLElement>("button, [role=button]")).find(
+        (el) => el !== target && usable(el) && /\b(close|dismiss)\b/i.test(label(el)),
+      );
+      const closeName = closer ? `"${label(closer).slice(0, 24)}"` : "";
+      if (toggleReachable) {
+        say(`Opened by pressing the piece's own control. Press it again${closeName ? `, or ${closeName},` : ""} to close it.`);
+      } else if (closeName) {
+        say(`Opened by pressing the piece's own control, which its panel now covers at ${window.innerWidth}px. Press ${closeName} inside the panel to close it.`);
+      } else {
+        say(`Opened by pressing the piece's own control, which its panel now covers at ${window.innerWidth}px. Use the piece's own close control to close it.`);
+      }
+      return;
+    }
+
+    /* --- focus ----------------------------------------------------------------------------- */
+
+    if (state === "focus") {
+      const target = firstUsable(FOCUSABLE);
+      // Real focus, moved programmatically. Nothing is styled to imitate a ring. Some browsers
+      // paint the VISIBLE ring only when they believe the last input was a keyboard, and no script
+      // can forge that belief, so the reader is told to press Tab rather than shown a fake.
+      if (target) target.focus({ preventScroll: true });
+
+      /**
+       * CONFIRM, THEN REPORT. The report used to be written whether or not focus moved.
+       *
+       * `firstUsable` falls back to the first MATCH when nothing is visible, and a navigation whose
+       * small-screen toggle is display:none above the breakpoint has exactly one match and it is
+       * hidden. `.focus()` on it does nothing, the guard for "no target" never fired, and the page
+       * asserted that focus had been placed while activeElement was still the body. Reading the
+       * outcome back is the difference between a claim and a fact.
+       */
+      if (!target || document.activeElement !== target) {
+        say(
+          "Focus could not be placed: nothing in this piece takes keyboard focus at this width. " +
+            "A piece whose controls only exist on a small screen has none to give here, so try the narrow frame.",
+        );
+        return;
+      }
+      say(
+        "Focus is on the first thing in the piece that takes it. If your browser is not painting " +
+          "the ring, press Tab once: it only paints one when it believes the last input was a keyboard.",
+      );
+      return;
+    }
+
+    /* --- video loading and error ----------------------------------------------------------- */
+
+    /**
+     * A source that will never become playable, so the element genuinely stays in its loading
+     * state instead of being styled to look like it. An empty MediaSource is exactly that: the
+     * browser attaches, waits for data, and no data ever arrives.
+     */
+    const stalledSource = (): string => {
+      if (typeof MediaSource === "undefined") return "/kit-demo/never-arrives.mp4";
+      const source = new MediaSource();
+      // THE BUFFER IS THE WHOLE POINT, and it was found by driving this rather than reading it.
+      // A MediaSource with no source buffer is one the browser decides it cannot play, so play()
+      // rejects, the piece treats that as "the browser declined to start" and marks itself
+      // PLAYABLE. Adding a buffer and never feeding it leaves the element genuinely waiting for
+      // data, which is the real loading condition and the one worth looking at.
+      source.addEventListener("sourceopen", () => {
+        try {
+          source.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+        } catch {
+          /* A browser that will not take that mime still leaves the element waiting. */
+        }
+      });
+      return URL.createObjectURL(source);
+    };
+
+    /**
+     * MUTED, AND ONLY FOR THE LOADING DEMO. Chrome refuses to start an unmuted video that no
+     * person asked for, and a refused play() is not a media fault, so the piece correctly decides
+     * the visible controls are the way through and clears its own loading overlay. That is right
+     * behaviour and it is not the thing being demonstrated, so the autoplay policy is taken out
+     * of the picture rather than the piece being altered. Nothing about the loading state itself
+     * is changed: the element is still genuinely waiting for data that will never arrive.
+     */
+    const unblockAutoplay = (scopeEl: ParentNode) => {
+      scopeEl.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
+        v.muted = true;
+      });
+    };
+
+    const driveVideo = (fail: boolean) => {
+      const el = scope().querySelector<HTMLElement>("[data-dv]");
+      if (el) {
+        el.dataset.dvSrc = fail ? "" : stalledSource();
+        if (!fail) unblockAutoplay(el);
+        const play = el.querySelector<HTMLElement>("[data-dv-play]");
+        if (play) play.click();
+        say(
+          fail
+            ? "The piece was asked for a source it cannot play, so this is its own error branch."
+            : "The source will never finish arriving, so the piece stays in its own loading state. It is muted only so the browser's autoplay rule stays out of the picture.",
+        );
+        return true;
+      }
+
+      const tv = scope().querySelector<HTMLElement>("[data-kit-tv]");
+      if (tv) {
+        const video = tv.querySelector<HTMLVideoElement>("[data-kit-tv-video]");
+        if (video) {
+          video.src = fail ? "/kit-demo/never-arrives.mp4" : stalledSource();
+          if (!fail) video.muted = true;
+          video.load();
+        }
+        const play = tv.querySelector<HTMLElement>("[data-kit-tv-play]");
+        if (play) play.click();
+        say(
+          fail
+            ? "The piece was asked for a source it cannot play, so this is its own error branch."
+            : "The source will never finish arriving, so the piece stays in its own loading state. It is muted only so the browser's autoplay rule stays out of the picture.",
+        );
+        return true;
+      }
+      return false;
+    };
+
+    /* --- forms ----------------------------------------------------------------------------- */
+
+    /** A plausible answer for one control, chosen from the rules the markup already declares. */
+    const fill = (el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) => {
+      if (el instanceof HTMLSelectElement) {
+        const option = Array.from(el.options).find((o) => o.value);
+        if (option) el.value = option.value;
+        return;
+      }
+      if (el instanceof HTMLInputElement && el.type === "checkbox") {
+        el.checked = true;
+        return;
+      }
+      if (el instanceof HTMLInputElement && el.type === "date") {
+        const min = el.getAttribute("min");
+        const open = (el.getAttribute("data-kit-open-days") || "")
+          .split(",")
+          .map((d) => Number(d.trim()))
+          .filter((d) => !Number.isNaN(d));
+        const start = min ? new Date(`${min}T00:00:00`) : new Date();
+        for (let i = 0; i < 21; i += 1) {
+          const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+          if (open.length && !open.includes(day.getDay())) continue;
+          const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+          const max = el.getAttribute("max");
+          if (max && iso > max) break;
+          el.value = iso;
+          return;
+        }
+        return;
+      }
+      const rules = el.getAttribute("data-kit-validate") || "";
+      const type = el instanceof HTMLInputElement ? el.type : "";
+      if (rules.includes("email") || type === "email") el.value = "sample.visitor@example.com";
+      else if (rules.includes("tel") || type === "tel") el.value = "02 9555 0100";
+      else if (el instanceof HTMLTextAreaElement) {
+        el.value = "Two awning windows on the western side, both stiff to open since a repair a few years ago.";
+      } else el.value = "Sample Visitor";
+    };
+
+    const driveForm = (kind: "loading" | "success" | "error") => {
+      const form = scope().querySelector<HTMLFormElement>("[data-kit-form]");
+      if (!form) return false;
+
+      form.querySelectorAll<HTMLInputElement>("[data-kit-validate], [data-kit-key]").forEach(fill);
+
+      const endpoint = form.getAttribute("data-kit-endpoint") || "/api/contact";
+      const real = window.fetch.bind(window);
+      window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (!url.includes(endpoint)) return real(input as RequestInfo, init);
+        // Held open on purpose. The piece decides what in-flight looks like, and it stays there.
+        if (kind === "loading") return new Promise<Response>(() => {});
+        if (kind === "success") {
+          return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: false, error: "The workshop mailbox did not answer." }), { status: 500 }),
+        );
+      }) as typeof window.fetch;
+
+      // A spam widget that is not present on a demo build would otherwise stop the submission
+      // before the request is made, and the state under test would never be reached.
+      form.querySelectorAll(".cf-turnstile[data-sitekey]").forEach((el) => el.removeAttribute("data-sitekey"));
+
+      form.requestSubmit();
+      say(
+        kind === "loading"
+          ? "The form was filled in and sent, and the request is being held open, so what you see is the piece's own in-flight state."
+          : kind === "success"
+            ? "The form was filled in and sent, and the request was answered as a success."
+            : "The form was filled in and sent, and the request was answered as a server fault.",
+      );
+      return true;
+    };
+
+    /* --- coverage check -------------------------------------------------------------------- */
+
+    /**
+     * THE COVERAGE CHECKER MAKES NO NETWORK CALL, so there is nothing to answer and it is driven
+     * the way a visitor drives it: type a place, press Check. `success` types a place the piece's
+     * own baked-in list covers, read from the markup rather than guessed; `error` types one that
+     * is on nobody's list. The outcome is read back from what rendered, never from the state
+     * attribute the piece's script sets, for the reason `rendered` gives above.
+     */
+    const driveCoverage = (kind: "success" | "error") => {
+      const box = scope().querySelector<HTMLElement>("[data-kit-coverage]");
+      if (!box) return false;
+      const form = box.querySelector<HTMLFormElement>("[data-kit-coverage-form]");
+      const input = box.querySelector<HTMLInputElement>("[data-kit-coverage-input]");
+      if (!form || !input) return false;
+      const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
+      // SUCCESS types a covered place (a name reads better than a postcode). ERROR types a postcode
+      // the list does NOT carry: a NO answer is only ever given to a postcode the piece can verify
+      // is uncovered, because a suburb name it does not list is sent to the postcode path, not
+      // refused (a covered suburb it happens not to list must not be told "we do not work there").
+      const notCovered = ["3000", "4000", "6000", "7000", "0800", "9999"].find((c) => !covered.includes(c)) || "3000";
+      const place = kind === "success" ? covered.find((c) => /[a-z]/i.test(c)) || covered[0] || "" : notCovered;
+      input.value = place;
+      const before = rendered();
+      form.requestSubmit();
+      const shown = box.querySelector<HTMLElement>(kind === "success" ? "[data-kit-coverage-yes]" : "[data-kit-coverage-no]");
+      if (!shown || !usable(shown) || !grew(before)) {
+        say(
+          `"${place}" was typed and Check was pressed, and the piece rendered no ` +
+            `${kind === "success" ? "covered" : "uncovered"} answer, so this state could not be reached.`,
+        );
+        return true;
+      }
+      say(
+        kind === "success"
+          ? `"${place}" was typed, which the piece's own list covers, and Check was pressed: this is its covered answer.`
+          : `"${place}" was typed, which is on nobody's list, and Check was pressed: this is its uncovered answer.`,
+      );
+      return true;
+    };
+
+    if (state === "loading" || state === "error" || state === "success") {
+      if (state !== "loading" && driveCoverage(state as "success" | "error")) return;
+      if (driveForm(state as "loading" | "success" | "error")) return;
+      if (state !== "success" && driveVideo(state === "error")) return;
+      say("This piece has no runtime this state could be driven through.");
+    }
+  })();
+</script>

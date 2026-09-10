@@ -1,0 +1,206 @@
+---
+/**
+ * CompareBeforeAfter: the current way of doing it against the improved way.
+ *
+ * The competitor is usually the status quo rather than another company, and this is the section
+ * for that. Use it late, near pricing, when the visitor has understood the offer and is deciding
+ * whether it is worth changing anything at all. Pair the statements honestly: each "after" answers
+ * the "before" beside it, and a pair where the second half does not actually answer the first is
+ * the fastest way to lose a reader who is already sceptical.
+ *
+ * It is a list of pairs, not a table, because a pair has to survive a 390px screen. On a phone
+ * each pair stacks with its own two visible labels so you never lose track of which half you are
+ * reading; from tablet up those labels are lifted into a single header row. A screen-reader copy
+ * of each label sits inside every pair at EVERY width, so somebody listening hears "How it works
+ * now: ... How it works with us: ..." on each pair rather than two unlabelled sentences, and the
+ * visible label is aria-hidden so it is never announced twice.
+ *
+ * Neither column uses the error or success colour. The status quo is not a failure and the reader
+ * has usually chosen it for reasons; painting it red argues with them instead of with the problem.
+ * The improved column takes a surface tint and a heavier rule, which is enough to separate them.
+ *
+ * The lists carry an explicit `role="list"` beside `list-style: none`. A strict validator calls
+ * that redundant, and it is not: Safari with VoiceOver drops list semantics from a list whose
+ * markers have been removed, so without it the items stop being announced as a list at all. Do
+ * not strip it to quieten a linter.
+ */
+interface Pair {
+  before: string;
+  after: string;
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  beforeLabel?: string;
+  afterLabel?: string;
+  pairs?: Pair[];
+  /** Anything that qualifies the comparison. Shown under the list. */
+  note?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "What changes",
+  lede,
+  beforeLabel = "How it works now",
+  afterLabel = "How it works with us",
+  pairs = [
+    {
+      before: "You ring round three trades and two of them never call back.",
+      after: "One number, answered by somebody who can book the visit while you are on the phone.",
+    },
+    {
+      before: "The quote arrives as a single figure with no working shown.",
+      after: "The quote is itemised, and it says which lines are optional so you can choose.",
+    },
+    {
+      before: "Parts are marked up and you have no way of knowing by how much.",
+      after: "Parts are at cost, with the supplier invoice attached to yours.",
+    },
+    {
+      before: "Something fails in February and you start the whole process again.",
+      after: "You ring the same engineer who fitted it, and they already know the building.",
+    },
+    {
+      before: "Nobody writes anything down, so the next trade starts from scratch.",
+      after: "Every visit ends with a short written record and photographs, kept on your account.",
+    },
+  ],
+  note,
+  emptyMessage = "The comparison will appear here once the statements have been written.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `cb-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const items = (pairs ?? []).filter((p) => p?.before && p?.after);
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container cb">
+    <div class="cb__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {items.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <div class="cb__body">
+        <div class="cb__columns" aria-hidden="true">
+          {/* No ids here. They existed and nothing referenced them, which read as wiring
+              somebody meant to finish; it was not. This row is aria-hidden by design, and
+              naming a hidden element from a visible one is a way to lose the name entirely.
+              Each pair below carries its own "Before: " / "After: " prefix instead. */}
+          <p class="cb__column-label">{beforeLabel}</p>
+          <p class="cb__column-label cb__column-label--after">{afterLabel}</p>
+        </div>
+
+        <ul class="cb__list" role="list">
+          {items.map((pair) => (
+            <li class="cb__pair">
+              <div class="cb__side cb__side--before">
+                <span class="kit-visually-hidden">{beforeLabel}: </span>
+                <p class="cb__label kit-label" aria-hidden="true">{beforeLabel}</p>
+                <p class="cb__text">{pair.before}</p>
+              </div>
+              <div class="cb__side cb__side--after">
+                <span class="kit-visually-hidden">{afterLabel}: </span>
+                <p class="cb__label kit-label" aria-hidden="true">{afterLabel}</p>
+                <p class="cb__text">{pair.after}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {note && <p class="cb__note kit-muted">{note}</p>}
+  </div>
+</section>
+
+<style>
+  .cb__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
+
+  /* The header row exists only from tablet up, where the per-pair labels are hidden. It is
+     aria-hidden because the per-pair labels stay in the accessible tree at every width. */
+  .cb__columns { display: none; }
+
+  .cb__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--kit-space-lg); }
+
+  .cb__pair { display: grid; gap: var(--kit-space-md); }
+
+  .cb__side {
+    display: grid;
+    gap: var(--kit-space-xs);
+    padding: var(--kit-space-md);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    align-content: start;
+    min-width: 0;
+  }
+  .cb__side--after {
+    background: var(--kit-bg-subtle);
+    border-color: var(--kit-border-strong);
+  }
+
+  .cb__text {
+    margin: 0;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    text-wrap: pretty;
+  }
+
+  .cb__note {
+    margin: 0;
+    margin-block-start: var(--kit-space-xl);
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-body);
+    max-width: var(--kit-measure);
+  }
+
+  @media (min-width: 48rem) {
+    .cb__columns {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--kit-gutter);
+      margin-block-end: var(--kit-space-md);
+    }
+    .cb__column-label {
+      margin: 0;
+      padding-block-end: var(--kit-space-sm);
+      border-block-end: var(--kit-border-width) solid var(--kit-border);
+      font-size: var(--kit-text-sm);
+      font-weight: var(--kit-weight-strong);
+      letter-spacing: var(--kit-tracking-label);
+      text-transform: uppercase;
+      color: var(--kit-text-muted);
+    }
+    .cb__column-label--after {
+      color: var(--kit-text);
+      border-block-end-color: var(--kit-border-strong);
+    }
+
+    .cb__pair { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--kit-gutter); }
+
+    /* The visible per-pair labels go, because the header row above says the same thing once. The
+       screen-reader copies beside them stay at every width, so a pair is never two unlabelled
+       sentences no matter how the page is being read. */
+    .cb__label { display: none; }
+  }
+</style>

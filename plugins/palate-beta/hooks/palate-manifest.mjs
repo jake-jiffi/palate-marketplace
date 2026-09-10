@@ -316,6 +316,49 @@ function collectFromMcpResult(result, out) {
   }
 }
 
+// WHAT A DEEP READ ACTUALLY CARRIED, per reference and note section. A record the library answers
+// for can still hold an untouched template on the section that was asked for (headings and HTML
+// comments, no notes), and three of the kit's forty-two cited references did exactly that while
+// `returned` said they had been read. Only the substantive character count of each section is
+// kept, never the notes themselves, so the survey can tell a read that found notes from a read
+// that found a stub.
+function substantiveLength(text) {
+  return String(text)
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/^\s*#+.*$/gm, " ")
+    .replace(/\s+/g, " ")
+    .trim().length;
+}
+function readContent(result) {
+  const bodies = [];
+  if (result && typeof result === "object") {
+    if (result.structuredContent && typeof result.structuredContent === "object") bodies.push(result.structuredContent);
+    for (const b of Array.isArray(result.content) ? result.content : []) {
+      if (b && b.type === "text" && typeof b.text === "string") {
+        try {
+          bodies.push(JSON.parse(b.text));
+        } catch {
+          /* not JSON; nothing to read */
+        }
+      }
+    }
+  }
+  const out = {};
+  const take = (rec) => {
+    if (!rec || typeof rec !== "object") return;
+    const slug = rec.record && typeof rec.record.slug === "string" ? rec.record.slug : null;
+    if (!slug || !rec.sections || typeof rec.sections !== "object") return;
+    const per = out[slug] || (out[slug] = {});
+    for (const [section, text] of Object.entries(rec.sections)) per[section] = substantiveLength(text);
+  };
+  for (const j of bodies) {
+    if (!j || typeof j !== "object") continue;
+    if (Array.isArray(j.records)) j.records.forEach(take);
+    else take(j);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 // A parsed JSON body that carried nothing to read. `{"results":[]}` and `{"ok":true}` are
 // well-formed responses that surveyed no reference, and counting them as grounding is how a
 // build with an empty library search can report that it drew on the library.
@@ -788,10 +831,16 @@ function main() {
 
     const slugs = new Set();
     collectFromMcpResult(result, slugs);
+    // What the library actually ANSWERED WITH, kept apart from what was asked for: a batched read
+    // under a shared token budget can return fewer references than it was asked for, and a slug
+    // that was requested and never came back was not read. The survey snapshot reads `returned`
+    // where it exists and falls back to `slugs` on older entries.
+    const returned = [...slugs];
+    const content = readContent(result);
     if (typeof input.slug === "string") slugs.add(input.slug);
     if (Array.isArray(input.slugs)) for (const s of input.slugs) if (typeof s === "string") slugs.add(s);
     const slugList = [...slugs];
-    const entry = { tool, args: input, slugs: slugList, evidence, ts: new Date().toISOString() };
+    const entry = { tool, args: input, slugs: slugList, returned, ...(content ? { content } : {}), evidence, ts: new Date().toISOString() };
     m.mcp_calls.push(entry);
     // The journal is written FIRST-class, beside the manifest, on the same call. If the manifest
     // write below fails, or the file is later blanked, moved or symlinked away, this line is

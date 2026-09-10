@@ -47,7 +47,7 @@ CTA labels to choose between, and the reference the craft came from.
    board is a real `.astro` page: its hero and its one inner section live as
    components in `src/components/sections/`, each wrapped in `<SectionMark
    id="bN-..."/>`, composed through `src/layouts/BoardFrame.astro`, which adds
-   `SystemStrip.astro` and `BoardNotes.astro` and sets `noindex`. Each
+   `BoardNotes.astro` and sets `noindex`. Each
    reproduces a named reference donor's craft from the MCP (see
    `reference-library-usage.md`), one distinct donor per rung.
 

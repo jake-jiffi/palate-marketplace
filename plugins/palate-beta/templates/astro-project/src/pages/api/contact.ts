@@ -100,16 +100,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ? { ...import.meta.env, ...process.env }
       : import.meta.env);
   try {
-    const data = await request.json();
-    const { name, email, message, turnstileToken } = (data ?? {}) as Record<string, unknown>;
+    /**
+     * JSON FROM THE PIECE'S SCRIPT, FORM DATA FROM A PLAIN SUBMIT. Every kit form posts JSON when
+     * its script has bound and ordinary form data when it has not (scripts off, or a submit before
+     * hydration), so both are read, and a form post is answered with a page rather than a JSON body
+     * a person would otherwise be shown raw.
+     */
+    const contentType = request.headers.get("content-type") || "";
+    const formPost = !contentType.includes("application/json");
+    let data: Record<string, unknown> = {};
+    if (formPost) {
+      const fd = await request.formData();
+      for (const [k, v] of fd.entries()) if (typeof v === "string") data[k] = v;
+      if (data["cf-turnstile-response"] && !data.turnstileToken) data.turnstileToken = data["cf-turnstile-response"];
+    } else {
+      data = ((await request.json()) ?? {}) as Record<string, unknown>;
+    }
+    const answer = (body: Record<string, unknown>, status: number) => {
+      if (!formPost) return json(body, status);
+      if (status < 300) return Response.redirect(new URL("/thanks", request.url), 303);
+      const why = typeof body.error === "string" ? body.error : "submission failed";
+      return new Response(
+        `<!doctype html><meta charset="utf-8"><title>Not sent</title><p>Your message was not sent: ${why.replace(/[<>&]/g, "")}.</p><p><a href="javascript:history.back()">Go back and try again</a></p>`,
+        { status, headers: { "content-type": "text/html; charset=utf-8" } },
+      );
+    };
+    const { name, email, message, turnstileToken } = data;
 
     // Validation runs BEFORE both paths on purpose. A validator only the smoke request meets
     // is a validator nothing in production ever runs, so the round-trip test would be proving
     // a code path no visitor reaches. It also means a malformed body costs no Turnstile call.
     const invalid = validate({ name, email, message });
-    if (invalid) return json({ error: invalid }, 400);
+    if (invalid) return answer({ error: invalid }, 400);
 
-    if (smokeAllowed(request, env)) return json({ ok: true, smoke: true }, 200);
+    if (smokeAllowed(request, env)) return answer({ ok: true, smoke: true }, 200);
 
     // 1. Verify Turnstile
     const verify = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
@@ -117,13 +141,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ secret: env.TURNSTILE_SECRET, response: turnstileToken }),
     }).then((r) => r.json());
-    if (!verify.success) return json({ error: "verification failed" }, 400);
+    if (!verify.success) return answer({ error: "verification failed" }, 400);
 
     // 2. Notify via Resend. This is the only destination, so a failure here is
     //    a lost enquiry: report it rather than returning ok.
     if (!env.RESEND_API_KEY) {
       console.error("[contact] RESEND_API_KEY is not set; the enquiry has nowhere to go");
-      return json({ error: "submission failed" }, 500);
+      return answer({ error: "submission failed" }, 500);
     }
     const sent = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -137,11 +161,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
     if (!sent.ok) {
       console.error("[contact] Resend rejected the notification:", sent.status, await sent.text());
-      return json({ error: "submission failed" }, 500);
+      return answer({ error: "submission failed" }, 500);
     }
-    return json({ ok: true }, 200);
+    return answer({ ok: true }, 200);
   } catch (e) {
-    return json({ error: "submission failed" }, 500);
+    return answer({ error: "submission failed" }, 500);
   }
 };
 

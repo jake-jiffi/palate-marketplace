@@ -1,0 +1,11 @@
+<!-- A deliberately empty image.
+
+     Every piece now degrades on its own: with no asset it draws the .kit-media ratio box, or its
+     .kit-empty message, rather than a broken-image marker. This file is what the kit's own example
+     and demo pages point at so a reader sees a correctly sized frame instead of nothing at all. It
+     has no fill, so the .kit-media background shows through and the frame reads as waiting for a
+     real photograph.
+
+     No colour, no size, nothing to inherit from a brand. Swap the paths for real assets on any
+     site that ships. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9" role="presentation" aria-hidden="true"></svg>

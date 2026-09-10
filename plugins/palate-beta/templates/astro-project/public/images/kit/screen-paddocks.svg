@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="A paddock map shaded by days since last grazed, with two mobs pinned">
+  <title>A paddock map shaded by days since last grazed, with two mobs pinned</title>
+  <style>
+    svg{--ink:var(--kit-text,#1b1d21);--muted:var(--kit-text-muted,#6e737b);--paper:var(--kit-bg,#ffffff);--panel:var(--kit-bg-subtle,#f3f4f6);--line:var(--kit-border,#dfe2e6);--steel:#46525d;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    text{fill:var(--ink)}
+    .m{fill:var(--muted)}
+    .w{fill:#fff}
+    .lbl{font-size:19px;letter-spacing:.06em;text-transform:uppercase}
+    .sm{font-size:20px}
+    .md{font-size:24px}
+    .lg{font-size:30px;font-weight:600}
+    .xl{font-size:40px;font-weight:600;letter-spacing:-.01em}
+    .num{font-variant-numeric:tabular-nums}
+    .ln{stroke:var(--line);stroke-width:2}
+  </style>
+  <rect x="0" y="0" width="1600" height="1000" fill="var(--paper)"/>
+  <rect x="0" y="0" width="248" height="1000" fill="var(--panel)"/>
+  <line x1="248" y1="0" x2="248" y2="1000" class="ln"/>
+  <rect x="0" y="0" width="1600" height="78" fill="var(--paper)"/>
+  <line x1="0" y1="78" x2="1600" y2="78" class="ln"/>
+  <rect x="40" y="26" width="26" height="26" fill="var(--steel)" rx="6"/>
+  <text x="80" y="48" class="md" font-weight="600">Paddockline</text>
+  <rect x="1494" y="22" width="38" height="38" fill="var(--steel)" rx="19"/>
+  <text x="1513" y="48" class="sm w" text-anchor="middle">RB</text>
+  <text x="40" y="122" class="lbl m">Nine Mile</text>
+  <rect x="20" y="144" width="208" height="50" fill="var(--paper)" rx="8"/><rect x="40" y="160" width="18" height="18" fill="var(--steel)" rx="4"/><text x="72" y="178" class="sm" font-weight="600">Map</text>
+  <rect x="40" y="222" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="240" class="sm m">Mobs</text>
+  <rect x="40" y="284" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="302" class="sm m">Treatments</text>
+  <rect x="40" y="346" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="364" class="sm m">Rainfall</text>
+  <rect x="40" y="408" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="426" class="sm m">Reports</text>
+  <line x1="20" y1="500" x2="228" y2="500" class="ln"/>
+  <text x="40" y="542" class="sm m">2 mobs on farm</text>
+  <text x="40" y="578" class="sm m">911 head counted</text>
+  <text x="280" y="148" class="xl">Nine Mile Merino</text>
+  <text x="280" y="190" class="md m">Shaded by days since the paddock was last grazed</text>
+  <rect x="1330" y="116" width="230" height="46" fill="var(--steel)" rx="8"/>
+  <text x="1445" y="146" class="sm w" text-anchor="middle" font-weight="600">Move a mob</text>
+  <rect x="280" y="230" width="1290" height="640" fill="#eef1ea" rx="12"/>
+  <polygon points="300,267 592,252 623,396 318,411" fill="#7d9a6b" stroke="#ffffff" stroke-width="4"/>
+  <text x="458" y="332" class="sm" text-anchor="middle" font-size="18" fill="#ffffff">Top Ridge</text>
+  <polygon points="318,411 623,396 641,526 345,541" fill="#b6c5aa" stroke="#ffffff" stroke-width="4"/>
+  <text x="482" y="469" class="sm" text-anchor="middle" font-size="18">Long Flat</text>
+  <polygon points="345,541 641,526 659,678 363,692" fill="#e4e9df" stroke="#ffffff" stroke-width="4"/>
+  <text x="502" y="609" class="sm" text-anchor="middle" font-size="18">Creek</text>
+  <polygon points="363,692 659,678 677,849 381,863" fill="#9ab189" stroke="#ffffff" stroke-width="4"/>
+  <text x="520" y="771" class="sm" text-anchor="middle" font-size="18" fill="#ffffff">Nine Mile</text>
+  <polygon points="592,252 917,261 935,401 623,396" fill="#cfd9c7" stroke="#ffffff" stroke-width="4"/>
+  <text x="767" y="328" class="sm" text-anchor="middle" font-size="18">Stony</text>
+  <polygon points="623,396 935,401 949,534 641,526" fill="#7d9a6b" stroke="#ffffff" stroke-width="4"/>
+  <text x="787" y="464" class="sm" text-anchor="middle" font-size="18" fill="#ffffff">Bore</text>
+  <polygon points="641,526 949,534 962,682 659,678" fill="#9ab189" stroke="#ffffff" stroke-width="4"/>
+  <text x="803" y="605" class="sm" text-anchor="middle" font-size="18" fill="#ffffff">Middle</text>
+  <polygon points="659,678 962,682 973,856 677,849" fill="#b6c5aa" stroke="#ffffff" stroke-width="4"/>
+  <text x="818" y="766" class="sm" text-anchor="middle" font-size="18">Yards</text>
+  <polygon points="917,261 1231,276 1245,411 935,401" fill="#e4e9df" stroke="#ffffff" stroke-width="4"/>
+  <text x="1082" y="337" class="sm" text-anchor="middle" font-size="18">North Hut</text>
+  <polygon points="935,401 1245,411 1254,541 949,534" fill="#b6c5aa" stroke="#ffffff" stroke-width="4"/>
+  <text x="1096" y="472" class="sm" text-anchor="middle" font-size="18">Wattle</text>
+  <polygon points="949,534 1254,541 1263,687 962,682" fill="#7d9a6b" stroke="#ffffff" stroke-width="4"/>
+  <text x="1107" y="611" class="sm" text-anchor="middle" font-size="18" fill="#ffffff">Dam</text>
+  <polygon points="962,682 1263,687 1269,860 973,856" fill="#cfd9c7" stroke="#ffffff" stroke-width="4"/>
+  <text x="1117" y="771" class="sm" text-anchor="middle" font-size="18">Lane</text>
+  <polygon points="1231,276 1534,290 1543,541 1254,541" fill="#9ab189" stroke="#ffffff" stroke-width="4"/>
+  <text x="1391" y="412" class="sm" text-anchor="middle" font-size="18" fill="#ffffff">Far East</text>
+  <polygon points="1254,541 1543,541 1550,863 1269,860" fill="#cfd9c7" stroke="#ffffff" stroke-width="4"/>
+  <text x="1404" y="701" class="sm" text-anchor="middle" font-size="18">River</text>
+  <path d="M300 541 C546 567 815 507 1086 567 C1310 618 1444 583 1549 617" fill="none" stroke="#a9c3d4" stroke-width="14" stroke-linecap="round" opacity=".85"/>
+  <circle cx="392" cy="660" r="26" fill="var(--steel)"/><circle cx="392" cy="660" r="9" fill="#ffffff"/>
+  <rect x="426" y="632" width="216" height="56" fill="var(--paper)" rx="8" stroke="var(--line)" stroke-width="2"/>
+  <text x="444" y="656" class="sm" font-weight="600" font-size="18">Ewes and lambs</text>
+  <text x="444" y="678" class="sm m num" font-size="17">612 head, in 4 days</text>
+  <circle cx="1044" cy="700" r="26" fill="var(--steel)"/><circle cx="1044" cy="700" r="9" fill="#ffffff"/>
+  <rect x="1078" y="672" width="216" height="56" fill="var(--paper)" rx="8" stroke="var(--line)" stroke-width="2"/>
+  <text x="1096" y="696" class="sm" font-weight="600" font-size="18">Weaners</text>
+  <text x="1096" y="718" class="sm m num" font-size="17">299 head, in 11 days</text>
+  <text x="300" y="921" class="lbl m">Days since grazed</text>
+  <rect x="600" y="900" width="26" height="26" fill="#e4e9df" rx="5"/><text x="636" y="921" class="sm m num" font-size="18">0-3</text>
+  <rect x="718" y="900" width="26" height="26" fill="#cfd9c7" rx="5"/><text x="754" y="921" class="sm m num" font-size="18">4-10</text>
+  <rect x="836" y="900" width="26" height="26" fill="#b6c5aa" rx="5"/><text x="872" y="921" class="sm m num" font-size="18">11-20</text>
+  <rect x="954" y="900" width="26" height="26" fill="#9ab189" rx="5"/><text x="990" y="921" class="sm m num" font-size="18">21-35</text>
+  <rect x="1072" y="900" width="26" height="26" fill="#7d9a6b" rx="5"/><text x="1108" y="921" class="sm m num" font-size="18">36+</text>
+</svg>

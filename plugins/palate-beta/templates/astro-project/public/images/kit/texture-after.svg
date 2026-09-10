@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" role="img" aria-label="An abstract stand-in for the after photograph, with the edges made good">
+<title>An abstract stand-in for the after photograph, with the edges made good</title>
+<rect width="1200" height="900" fill="#d8cfc2"/>
+<rect width="1200" height="900" fill="url(#wash5)"/>
+<path d="M216,0 L552,0 L1080,900 L600,900 Z" fill="#f2ebe0" opacity=".22"/>
+<path d="M0,900 L0.0,378.0 L240.0,418.1 L480.0,414.4 L720.0,370.9 L960.0,335.2 L1200.0,346.3 L1200,900 Z" fill="#b9ad9c"/>
+<path d="M0,900 L0.0,532.9 L240.0,533.8 L480.0,492.4 L720.0,453.8 L960.0,460.2 L1200.0,504.7 L1200,900 Z" fill="#9a8f7f"/>
+<path d="M0,900 L0.0,652.9 L240.0,613.9 L480.0,572.8 L720.0,574.5 L960.0,617.2 L1200.0,654.2 L1200,900 Z" fill="#7b7264"/>
+<path d="M0,900 L0.0,735.4 L240.0,692.2 L480.0,689.2 L720.0,729.8 L960.0,769.4 L1200.0,764.9 L1200,900 Z" fill="#5c554b"/>
+<defs><linearGradient id="wash5" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f2ebe0" stop-opacity=".45"/><stop offset="1" stop-color="#f2ebe0" stop-opacity="0"/>
+</linearGradient></defs>
+</svg>

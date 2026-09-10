@@ -1,0 +1,217 @@
+---
+/**
+ * USE CASES, ORGANISED BY INDUSTRY.
+ *
+ * Reach for this one when the product does not change by sector but the vocabulary does, and the
+ * visitor's real question is "do you already know what my words mean". The reader is scanning for
+ * their own sector, so this is built as an INDEX rather than a set of cards: a narrow column of
+ * sector names against a wider column of plain description, hairline rules, tight rhythm, nothing
+ * boxed. Cards would slow that scan down, which is why the audience variation uses them and this
+ * one does not.
+ *
+ * It is a description list, because that is what it is: a term and its description. The caption
+ * above the list is a caption for the list, not a label above a heading.
+ *
+ * LINKS ARE OPTIONAL AND HONEST. A sector with a page behind it gets a link, the hover and focus
+ * states that go with it, and a target stretched across the whole row, because a sector name on
+ * its own is about twenty pixels tall and nobody hits that with a thumb. A sector without a page
+ * gets no hover affordance at all, because a row that lights up under the pointer and then does
+ * nothing is a small lie told on exactly the section meant to build trust. The cost of the
+ * stretched target is that a linked row's text cannot be selected by dragging, which is the right
+ * trade here and the wrong one on anything holding a price or a number worth copying.
+ *
+ * Content note: the defaults describe a plainly fictional scheduling product. Replace them.
+ */
+
+export interface Industry {
+  /** The sector, in the words that sector uses. */
+  name: string;
+  /** One line on how the product is used there. Concrete, not a benefit. */
+  application: string;
+  /** A deeper page, if one exists. Omit it rather than link to the home page. */
+  href?: string;
+}
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  /** Three to eight sectors. Order them by how many of your buyers are in each. */
+  industries?: Industry[];
+  /** Caption above the index. Describes both columns in one line so it reads the same stacked. */
+  indexLabel?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "How it is used, sector by sector",
+  lede = "The same system with a different vocabulary. Find the row that sounds like what you do.",
+  industries = [
+    {
+      name: "Allied health",
+      application: "Recurring appointments, funding rules and a clinician list that changes every week.",
+      href: "/sectors/allied-health",
+    },
+    {
+      name: "Trades and maintenance",
+      application: "Jobs that move, vans that do not, and quotes written standing in someone's kitchen.",
+      href: "/sectors/trades",
+    },
+    {
+      name: "Veterinary",
+      application: "Consults, surgery lists and stock all coming off the same booking.",
+      href: "/sectors/veterinary",
+    },
+    {
+      name: "Community services",
+      application: "Rosters costed against funded hours, with reporting your funder already accepts.",
+      href: "/sectors/community-services",
+    },
+    {
+      name: "Training providers",
+      application: "Cohorts, room capacity and casual trainer availability in one calendar.",
+      href: "/sectors/training",
+    },
+    {
+      name: "Property services",
+      application: "Recurring visits across a few hundred addresses, with proof that each one happened.",
+      href: "/sectors/property-services",
+    },
+  ],
+  indexLabel = "Sector, and how it is used",
+  emptyMessage = "Sector pages are being written.",
+  tone = "default",
+  class: className,
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `ui-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const list = industries ?? [];
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "ui", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="ui-intro kit-stack">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {list.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <div class="ui-index">
+        {indexLabel && <p class="kit-label ui-caption">{indexLabel}</p>}
+
+        <dl class="ui-list">
+          {list.map((industry) => (
+            <div class="ui-row" data-linked={industry.href ? "true" : "false"}>
+              <dt class="ui-name">
+                {industry.href ? (
+                  <a class="ui-link" href={industry.href}>{industry.name}</a>
+                ) : (
+                  industry.name
+                )}
+              </dt>
+              <dd class="ui-app">{industry.application}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    )}
+  </div>
+</section>
+
+<style>
+  .ui-intro { margin-block-end: var(--kit-space-2xl); }
+
+  .ui-index { max-width: var(--kit-page-max); }
+
+  .ui-caption { margin-block-end: var(--kit-space-sm); }
+
+  .ui-list { margin: 0; }
+
+  /* Two columns once there is room for both bases, stacked when there is not, so the index reads
+     as a table on a laptop and as a list on a phone without a media query deciding it. */
+  .ui-row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-2xs) var(--kit-gutter);
+    padding-block: var(--kit-space-md);
+    border-block-start: var(--kit-border-width) solid var(--kit-border);
+    transition: border-color var(--kit-duration) var(--kit-ease);
+  }
+
+  .ui-row:last-child { border-block-end: var(--kit-border-width) solid var(--kit-border); }
+
+  .ui-name {
+    flex: 1 1 calc(var(--kit-measure) / 3);
+    min-width: 0;
+    font-size: var(--kit-text-base);
+    font-weight: var(--kit-weight-strong);
+    line-height: var(--kit-leading-snug);
+    text-wrap: pretty;
+  }
+
+  .ui-app {
+    flex: 2 1 calc(var(--kit-measure) / 1.6);
+    min-width: 0;
+    margin: 0;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    color: var(--kit-text-muted);
+    text-wrap: pretty;
+  }
+
+  .ui-link {
+    color: var(--kit-text);
+    text-decoration: none;
+    /* The row is the target (below), and the link's own box clears 24px as well, so a sweep that
+       measures the anchor rather than the row reads the truth. */
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
+  }
+
+  /* The sector name on its own is a line of text about twenty pixels tall, which is under the
+     minimum target size and miserable on a phone. The link is stretched across its row instead,
+     so the whole row is the target. Measured at 390, 768 and 1440. */
+  .ui-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Hover and focus belong only to rows that actually go somewhere. */
+  .ui-row[data-linked="true"]:hover { border-color: var(--kit-border-strong); }
+  .ui-row[data-linked="true"]:hover .ui-link {
+    color: var(--kit-accent-ink);
+    text-decoration: underline;
+  }
+
+  .ui-link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .ui-row:has(.ui-link:focus-visible) { border-color: var(--kit-border-strong); }
+
+  .kit-section--inverse .ui-link { color: var(--kit-text-inverse); }
+</style>

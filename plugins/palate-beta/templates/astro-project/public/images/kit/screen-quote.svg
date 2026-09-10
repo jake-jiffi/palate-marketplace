@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="A Roundhouse quote being built on a phone: four line items and a running total">
+  <title>A Roundhouse quote being built on a phone: four line items and a running total</title>
+  <style>
+    svg{--ink:var(--kit-text,#1b1d21);--muted:var(--kit-text-muted,#6e737b);--paper:var(--kit-bg,#ffffff);--panel:var(--kit-bg-subtle,#f3f4f6);--line:var(--kit-border,#dfe2e6);--steel:#46525d;--sand:#e6dccc;--sage:#dbe4dc;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    text{fill:var(--ink)}
+    .m{fill:var(--muted)}
+    .w{fill:#fff}
+    .lbl{font-size:19px;letter-spacing:.06em;text-transform:uppercase}
+    .sm{font-size:20px}
+    .md{font-size:24px}
+    .lg{font-size:30px;font-weight:600}
+    .xl{font-size:40px;font-weight:600;letter-spacing:-.01em}
+    .num{font-variant-numeric:tabular-nums}
+    .ln{stroke:var(--line);stroke-width:2}
+  </style>
+  <rect x="0" y="0" width="1600" height="1000" fill="var(--panel)"/>
+  <text x="120" y="150" class="xl">Quoting from the van</text>
+  <text x="120" y="238" class="md m">Four line items and a running total,</text>
+  <text x="120" y="276" class="md m">without going back to the office.</text>
+  <text x="120" y="372" class="lbl m">Started</text>
+  <text x="120" y="412" class="lg num">9:52am</text>
+  <text x="120" y="480" class="lbl m">Sent</text>
+  <text x="120" y="520" class="lg num">9:56am</text>
+  <rect x="560" y="60" width="480" height="880" fill="var(--ink)" rx="44"/>
+  <rect x="576" y="76" width="448" height="848" fill="var(--paper)" rx="34"/>
+  <rect x="736" y="96" width="128" height="10" fill="var(--line)" rx="5"/>
+  <text x="628" y="176" class="sm num" font-size="18">9:56</text>
+  <text x="972" y="176" class="sm num" text-anchor="end" font-size="18">82%</text>
+  <line x1="576" y1="204" x2="1024" y2="204" class="ln"/>
+  <text x="628" y="258" class="lg">New quote</text>
+  <text x="628" y="296" class="sm m">M. Sowden · 12 Ashgrove Rise</text>
+  <text x="628" y="380" class="lbl m">Line items</text>
+  <text x="972" y="380" class="lbl m num" text-anchor="end">4</text>
+  <line x1="628" y1="400" x2="972" y2="400" class="ln"/>
+  <text x="628" y="466" class="sm">Callout and first hour</text>
+  <text x="972" y="466" class="sm num" text-anchor="end">$180.00</text>
+  <line x1="628" y1="492" x2="972" y2="492" class="ln"/>
+  <text x="628" y="540" class="sm">Thermostatic mixer, supply</text>
+  <text x="972" y="540" class="sm num" text-anchor="end">$248.00</text>
+  <line x1="628" y1="566" x2="972" y2="566" class="ln"/>
+  <text x="628" y="614" class="sm">Labour, 2.5 hours</text>
+  <text x="972" y="614" class="sm num" text-anchor="end">$375.00</text>
+  <line x1="628" y1="640" x2="972" y2="640" class="ln"/>
+  <text x="628" y="688" class="sm">Old unit removal</text>
+  <text x="972" y="688" class="sm num" text-anchor="end">$60.00</text>
+  <line x1="628" y1="714" x2="972" y2="714" class="ln"/>
+  <rect x="628" y="776" width="344" height="2" fill="var(--ink)"/>
+  <text x="628" y="816" class="md" font-weight="600">Total inc GST</text>
+  <text x="972" y="816" class="md num" text-anchor="end" font-weight="600">$863.00</text>
+  <rect x="628" y="846" width="344" height="58" fill="var(--steel)" rx="10"/>
+  <text x="800" y="883" class="sm w" text-anchor="middle" font-weight="600">Send to customer</text>
+  <text x="628" y="752" class="sm m" font-size="18">Mixer in stock. Can go in Thursday.</text>
+</svg>

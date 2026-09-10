@@ -1,0 +1,524 @@
+---
+/**
+ * NavDropdown: a header whose destinations group, plus any flat links that do not.
+ *
+ * Reach for this when there are more than six destinations, or when they group naturally
+ * (services, products, locations). Under six ungrouped links, NavSimple is the better piece.
+ *
+ * WHAT THE PANELS ARE, AND WHAT THEY ARE NOT. Each group is a disclosure: a button with
+ * aria-expanded and aria-controls, revealing a list of links. It is deliberately not an ARIA
+ * menu. A menu takes over the arrow keys and promises application semantics that a list of page
+ * links does not have, and it is the commonest way a site nav becomes harder to use with a
+ * keyboard rather than easier. Tab moves through the links, Escape closes and returns focus to
+ * the group button, and nothing is trapped.
+ *
+ * HOVER AND FOCUS BOTH OPEN IT. Pointer users get the panel on hover, but only on devices that
+ * genuinely hover: on a touch screen hover-open makes the first tap open and the click close
+ * again, so hover is gated behind (hover: hover) and touch uses the button. Keyboard users get
+ * the panel on focus, which is why focusin opens and focusout closes.
+ *
+ * WITHOUT JAVASCRIPT the panels open on :hover and :focus-within, so every link stays reachable
+ * by pointer and by Tab. The only thing lost is Escape and the accuracy of aria-expanded, which
+ * is a fair trade against sealing the destinations shut.
+ */
+import NavMobileSheet from "./NavMobileSheet.astro";
+
+export interface NavLink {
+  label: string;
+  href: string;
+}
+export interface NavGroup {
+  label: string;
+  links: NavLink[];
+}
+export interface NavCta {
+  label: string;
+  href: string;
+}
+export interface Props {
+  /**
+   * Text wordmark, and the image alt when logoSrc is set. NO DEFAULT ON PURPOSE: a nav that
+   * defaults a name puts an invented firm in the header of every page of a real client's site
+   * the moment somebody forgets to pass it. With neither a name nor a logo the brand link is
+   * simply not rendered.
+   */
+  siteName?: string;
+  logoSrc?: string;
+  homeHref?: string;
+  /** Two to five groups, each with two to ten links. Groups with no links are dropped. */
+  groups?: NavGroup[];
+  /** Destinations that do not group, shown after the groups. */
+  links?: NavLink[];
+  cta?: NavCta | null;
+  /** Current path. Defaults to the page being rendered, so aria-current needs no wiring. */
+  current?: string;
+  sticky?: boolean;
+  /**
+   * Which ground the bar sits on. One name and one vocabulary across the whole kit, so a page can
+   * alternate grounds without having to remember which piece calls it what. Every semantic token
+   * flips with the ground in foundations.css, and the mobile sheet inherits them, so neither this
+   * piece nor the sheet restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  label?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  siteName = "",
+  logoSrc,
+  homeHref = "/",
+  groups = [
+    {
+      label: "Services",
+      links: [
+        { label: "Site survey", href: "/services/site-survey" },
+        { label: "Fit-out", href: "/services/fit-out" },
+        { label: "Maintenance", href: "/services/maintenance" },
+        { label: "Compliance checks", href: "/services/compliance" },
+      ],
+    },
+    {
+      label: "Sectors",
+      links: [
+        { label: "Hospitality", href: "/sectors/hospitality" },
+        { label: "Education", href: "/sectors/education" },
+        { label: "Health", href: "/sectors/health" },
+      ],
+    },
+  ],
+  links = [
+    { label: "About", href: "/about" },
+    { label: "Contact", href: "/contact" },
+  ],
+  cta = { label: "Book a survey", href: "/contact" },
+  current = Astro.url.pathname,
+  sticky = true,
+  label = "Primary",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/** Compare paths without letting a trailing slash, a query or a hash decide the answer. */
+const normalise = (value: string): string => {
+  const path = (value || "").split("?")[0].split("#")[0];
+  return path.length > 1 ? path.replace(/\/+$/, "") : path;
+};
+const here = normalise(current);
+const isCurrent = (href: string): boolean => here !== "" && normalise(href) === here;
+
+const groupsWithLinks = groups.filter((group) => group.links && group.links.length > 0);
+/** A group whose own page is open should read as current on the button too. */
+const groupHasCurrent = (group: NavGroup): boolean => group.links.some((link) => isCurrent(link.href));
+
+const brand = Boolean(logoSrc || siteName);
+const sheetId = `${id || `nav-${Math.random().toString(36).slice(2, 8)}`}-sheet`;
+const sheetLabel = siteName ? `${siteName} menu` : "Site menu";
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<header class:list={["kit-navdd", toneClass, sticky && "kit-navdd--sticky"]} id={id || undefined}>
+  <div class:list={["kit-container", "kit-navdd__bar", !brand && "kit-navdd__bar--nobrand"]}>
+    {brand && (
+      <a class="kit-navdd__brand" href={homeHref}>
+        {logoSrc
+          ? <img class="kit-navdd__logo" src={logoSrc} alt={siteName} width="160" height="40" />
+          : <span class="kit-navdd__wordmark">{siteName}</span>}
+      </a>
+    )}
+
+    {(groupsWithLinks.length > 0 || links.length > 0) && (
+      <nav class="kit-navdd__desktop" aria-label={label} data-kit-nav>
+        <ul class="kit-navdd__list">
+          {groupsWithLinks.map((group, index) => (
+            <li class="kit-navdd__item" data-kit-dd>
+              <button
+                type="button"
+                class="kit-navdd__trigger"
+                id={`kit-navdd-trigger-${index}`}
+                data-kit-dd-trigger
+                aria-expanded="false"
+                aria-controls={`kit-navdd-panel-${index}`}
+                data-section-current={groupHasCurrent(group) ? "true" : undefined}
+              >
+                <span>{group.label}</span>
+                <svg
+                  class="kit-navdd__chevron"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+
+              <div class="kit-navdd__panel" id={`kit-navdd-panel-${index}`}>
+                <ul class="kit-navdd__panel-list" aria-labelledby={`kit-navdd-trigger-${index}`}>
+                  {group.links.map((link) => (
+                    <li>
+                      <a
+                        class="kit-navdd__panel-link"
+                        href={link.href}
+                        aria-current={isCurrent(link.href) ? "page" : undefined}
+                      >
+                        {link.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </li>
+          ))}
+
+          {links.map((link) => (
+            <li class="kit-navdd__item">
+              <a
+                class="kit-navdd__link"
+                href={link.href}
+                aria-current={isCurrent(link.href) ? "page" : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    )}
+
+    {cta && (
+      <a class="kit-btn kit-btn--primary kit-navdd__cta" href={cta.href}>{cta.label}</a>
+    )}
+
+    <NavMobileSheet
+      links={links}
+      groups={groupsWithLinks}
+      cta={cta}
+      current={current}
+      id="kit-navdd-sheet"
+      id={sheetId}
+      label={sheetLabel}
+    />
+  </div>
+</header>
+
+<style>
+  .kit-navdd {
+    background: var(--kit-bg);
+    color: var(--kit-text);
+    border-bottom: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-navdd--sticky {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .kit-navdd__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kit-space-md);
+    padding-block: var(--kit-space-sm);
+  }
+  /* With no wordmark nothing carries the auto margin that pushes the rest to the trailing edge,
+     so the bar has to do it. */
+  .kit-navdd__bar--nobrand { justify-content: flex-end; }
+
+  .kit-navdd__brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--kit-target);
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+    /* Everything else sits to the trailing edge. The sheet is a direct child of the bar so its
+       no-JavaScript panel can take a full line of its own when the bar wraps. */
+    margin-inline-end: auto;
+  }
+  .kit-navdd__wordmark {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-lg);
+    letter-spacing: var(--kit-tracking-tight);
+  }
+  .kit-navdd__logo {
+    display: block;
+    width: auto;
+    height: var(--kit-space-xl);
+    max-width: 100%;
+  }
+
+  .kit-navdd__desktop { display: none; min-width: 0; }
+  .kit-navdd__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kit-space-2xs) var(--kit-space-lg);
+  }
+  .kit-navdd__item { position: relative; }
+
+  .kit-navdd__trigger,
+  .kit-navdd__link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kit-space-2xs);
+    min-height: var(--kit-target);
+    font-family: var(--kit-font-body);
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-medium);
+    color: inherit;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .kit-navdd__trigger:hover,
+  .kit-navdd__link:hover { color: var(--kit-accent-ink); }
+  .kit-navdd__link[aria-current="page"],
+  .kit-navdd__trigger[data-section-current="true"] {
+    color: var(--kit-accent-ink);
+    /* Colour alone would carry the whole signal, so the current section is underlined too. */
+    text-decoration: underline;
+    text-underline-offset: var(--kit-space-2xs);
+  }
+
+  .kit-navdd__chevron {
+    width: var(--kit-space-md);
+    height: var(--kit-space-md);
+    flex: none;
+    transition: transform var(--kit-duration-fast) var(--kit-ease);
+  }
+  .kit-navdd__item[data-open] .kit-navdd__chevron { transform: rotate(180deg); }
+
+  .kit-navdd__panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    inset-inline-start: 0;
+    z-index: 40;
+    width: max-content;
+    /* Wide enough for a real service name, never wide enough to leave the viewport. */
+    min-width: 100%;
+    max-width: min(80vw, calc(var(--kit-page-max) / 3));
+    /* Stated rather than inherited: foundations.css carries no reset, so the padding must not
+       be allowed to push the panel past the width the max-width just set. */
+    box-sizing: border-box;
+    padding: var(--kit-space-sm);
+    background: var(--kit-bg);
+    color: var(--kit-text);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    box-shadow: var(--kit-shadow-raised);
+  }
+  .kit-navdd__item[data-open] > .kit-navdd__panel { display: block; }
+
+  /* With no scripting, hover and focus do the opening, so nothing is unreachable. Gated on a
+     device that really hovers, for the same reason the script is. */
+  @media (hover: hover) {
+    :global(html:not([data-kit-js="on"])) .kit-navdd__item:hover > .kit-navdd__panel { display: block; }
+  }
+  :global(html:not([data-kit-js="on"])) .kit-navdd__item:focus-within > .kit-navdd__panel { display: block; }
+
+  .kit-navdd__panel-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .kit-navdd__panel-link {
+    display: block;
+    padding: var(--kit-space-xs) var(--kit-space-sm);
+    min-height: var(--kit-target);
+    font-size: var(--kit-text-sm);
+    color: inherit;
+    text-decoration: none;
+    border-radius: var(--kit-radius-sm);
+  }
+  .kit-navdd__panel-link:hover {
+    background: var(--kit-bg-subtle);
+    color: var(--kit-accent-ink);
+  }
+  .kit-navdd__panel-link[aria-current="page"] {
+    color: var(--kit-accent-ink);
+    font-weight: var(--kit-weight-strong);
+  }
+
+  .kit-navdd__cta { display: none; }
+
+  /* The wordmark is a link home and answered a pointer with nothing at all, while every
+     other link in the same bar changed. Underlined rather than recoloured, because the
+     bar is tone-aware and a colour shift disappears on an inverse ground. */
+  .kit-navdd__brand:hover { text-decoration: underline; text-underline-offset: var(--kit-underline-offset);
+    text-decoration-thickness: var(--kit-underline-hover); }
+
+  .kit-navdd__brand:focus-visible,
+  .kit-navdd__trigger:focus-visible,
+  .kit-navdd__link:focus-visible,
+  .kit-navdd__panel-link:focus-visible,
+  .kit-navdd__cta:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  @media (min-width: 48em) {
+    .kit-navdd__desktop { display: block; }
+    .kit-navdd__cta { display: inline-flex; }
+    .kit-navdd__bar { padding-block: var(--kit-space-md); }
+  }
+
+  /* The last group would otherwise open off the trailing edge of a narrow desktop window. */
+  @media (min-width: 48em) {
+    .kit-navdd__item:last-of-type .kit-navdd__panel {
+      inset-inline-start: auto;
+      inset-inline-end: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-navdd__chevron { transition: none; }
+  }
+</style>
+
+<script>
+  // Bound once, by delegation, so it survives ClientRouter swapping the document.
+  interface KitDropdownWindow extends Window {
+    __kitDropdownBound?: boolean;
+  }
+  const scope = window as KitDropdownWindow;
+  if (!scope.__kitDropdownBound) {
+    scope.__kitDropdownBound = true;
+
+    // THE ROOT MARKER HAS TO BE RE-APPLIED AFTER EVERY CLIENT-SIDE NAVIGATION. Astro's
+    // ClientRouter replaces the root element's attributes with the incoming document's, which
+    // wipes data-kit-js, and the inline script that sets it does not run again. Measured: after
+    // one in-page navigation the no-JavaScript hover rules came back alongside
+    // the scripted ones, on every page the reader visited without a full reload. astro:after-swap fires
+    // before the new document paints, so there is no flash.
+    const markJs = () => { document.documentElement.setAttribute("data-kit-js", "on"); };
+    markJs();
+    document.addEventListener("astro:after-swap", markJs);
+
+    const canHover = window.matchMedia("(hover: hover) and (pointer: fine)");
+
+    // Escape closes the panel and puts focus back on the group button. That focus call fires
+    // focusin, and a keyboard user's focus is focus-visible, so without this flag the handler
+    // below would reopen the panel it was just told to close and Escape would need pressing
+    // twice. focusin is dispatched synchronously by focus(), so a flag around the call is
+    // enough; nothing has to be scheduled or timed.
+    let returningFocus = false;
+
+    const setOpen = (item: Element, open: boolean): void => {
+      item.toggleAttribute("data-open", open);
+      if (!open) item.removeAttribute("data-dd-hover");
+      const trigger = item.querySelector("[data-kit-dd-trigger]");
+      if (trigger) trigger.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+
+    const closeAll = (except: Element | null): void => {
+      document.querySelectorAll("[data-kit-dd][data-open]").forEach((item) => {
+        if (item !== except) setOpen(item, false);
+      });
+    };
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const trigger = target.closest("[data-kit-dd-trigger]");
+      if (trigger) {
+        const item = trigger.closest("[data-kit-dd]");
+        if (!item) return;
+        closeAll(item);
+        // If hover already opened this one, the click makes it stay rather than shutting the
+        // panel the pointer just revealed. A second click then closes it.
+        if (item.hasAttribute("data-dd-hover")) {
+          item.removeAttribute("data-dd-hover");
+          return;
+        }
+        setOpen(item, !item.hasAttribute("data-open"));
+        return;
+      }
+      // A click on a panel link navigates; a click anywhere else dismisses.
+      closeAll(null);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      const active = document.activeElement;
+      const item =
+        active instanceof Element ? active.closest("[data-kit-dd][data-open]") : null;
+      if (item) {
+        setOpen(item, false);
+        const trigger = item.querySelector("[data-kit-dd-trigger]");
+        if (trigger instanceof HTMLElement) {
+          returningFocus = true;
+          trigger.focus();
+          returningFocus = false;
+        }
+        return;
+      }
+      closeAll(null);
+    });
+
+    document.addEventListener("focusin", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const item = target.closest("[data-kit-dd]");
+      closeAll(item);
+      if (!item) return;
+      // Opening on focus is for keyboard arrivals only. A pointer press also focuses the button,
+      // and opening here would make the click that follows read as "close", so a tap on a touch
+      // screen would appear to do nothing at all.
+      if (!returningFocus && target.matches(":focus-visible")) setOpen(item, true);
+    });
+
+    document.addEventListener("mouseover", (event) => {
+      if (!canHover.matches) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const item = target.closest("[data-kit-dd]");
+      if (item) {
+        closeAll(item);
+        if (!item.hasAttribute("data-open")) {
+          setOpen(item, true);
+          item.setAttribute("data-dd-hover", "");
+        }
+      } else if (target.closest("[data-kit-nav]")) {
+        closeAll(null);
+      }
+    });
+
+    document.addEventListener("mouseout", (event) => {
+      if (!canHover.matches) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const item = target.closest("[data-kit-dd]");
+      // Only a panel the pointer opened closes when the pointer leaves. One opened by a click or
+      // by the keyboard stays until it is dismissed deliberately.
+      if (!item || !item.hasAttribute("data-dd-hover")) return;
+      const to = event.relatedTarget;
+      if (to instanceof Node && item.contains(to)) return;
+      if (item.contains(document.activeElement)) return;
+      setOpen(item, false);
+    });
+
+    document.addEventListener("astro:before-swap", () => closeAll(null));
+  }
+</script>

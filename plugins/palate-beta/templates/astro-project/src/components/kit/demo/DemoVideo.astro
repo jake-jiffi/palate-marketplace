@@ -1,0 +1,465 @@
+---
+/**
+ * VIDEO PREVIEW.
+ *
+ * Use this when a real recording exists and a still frame plus a caption would undersell it.
+ * If there is no video, or no decent poster frame, use the screenshot showcase instead: a play
+ * button over a generic image is worse than an honest set of stills.
+ *
+ * Decisions worth explaining.
+ *
+ * NOTHING IS FETCHED UNTIL THE VISITOR ASKS. The <video> ships with no `src` and `preload="none"`,
+ * so the page costs one poster image. The source is attached on the first activation. The element
+ * is in the markup rather than created by the script so that it carries this component's scoped
+ * styles; an element built in JavaScript would not.
+ *
+ * PLAYBACK IS NEVER AUTOMATIC. There is no `autoplay` attribute anywhere. Sound only ever arrives
+ * because someone pressed play, which is also why the video is not muted: muting a video the
+ * visitor deliberately started is its own annoyance.
+ *
+ * THE FAILURE PATH IS VISIBLE. A video that will not load shows a message and a link to the file,
+ * not a dead frame with a spinner on it forever. There are two failures worth telling apart: the
+ * element reported an error (broken URL, unsupported codec), and it simply has not become playable
+ * inside a generous window (a slow connection). The second leaves the video in place, so if it
+ * does arrive late it still plays and the message clears itself.
+ *
+ * Content note: the defaults describe a plainly fictional product tour. Replace them.
+ */
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  /**
+   * The video file or URL. Attached to the element on first play, never before. NO DEFAULT: a
+   * defaulted path 404s on every site that does not happen to carry that exact file, so with no
+   * src the piece renders the empty .kit-media frame and no play control.
+   */
+  src?: string;
+  /** Poster frame. Shown at rest and kept on screen while the video loads. No default, as above. */
+  poster?: string;
+  /** What the poster frame shows. Empty is correct when the caption already describes it. */
+  posterAlt?: string;
+  /** One line naming what the video covers. */
+  caption?: string;
+  /** How long it runs, as a person would say it. Shown as a caption, never as a claim. */
+  duration?: string;
+  /** Where the fallback link goes when playback fails. Defaults to the video itself. */
+  fallbackHref?: string;
+  fallbackLabel?: string;
+  /** A phone number the error copy may promise ("or ring us"): rendered as a tel: link beside the
+   *  fallback, so the copy never names a route the overlay does not carry. */
+  fallbackPhone?: string;
+  fallbackPhoneLabel?: string;
+  /** A captions track. A product video without one is an accessibility gap, so supply it. */
+  captionsSrc?: string;
+  captionsLang?: string;
+  captionsLabel?: string;
+  playLabel?: string;
+  loadingLabel?: string;
+  errorMessage?: string;
+  slowMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "Watch it run through a real job",
+  lede = "One recording, start to finish, with nothing sped up and nothing edited out.",
+  src = "",
+  poster = "",
+  posterAlt = "",
+  caption = "A booking taken, quoted and scheduled without leaving the one screen.",
+  duration = "2 min 40 sec",
+  fallbackHref,
+  fallbackLabel = "Open the video directly",
+  fallbackPhone = "",
+  fallbackPhoneLabel = "",
+  captionsSrc,
+  captionsLang = "en",
+  captionsLabel = "English captions",
+  playLabel = "Play the tour",
+  loadingLabel = "Loading the video",
+  errorMessage = "The video could not be loaded. You can open the file directly instead.",
+  slowMessage = "The video is taking longer than it should. You can open the file directly instead.",
+  tone = "default",
+  class: className,
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `dv-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const fallback = fallbackHref || src;
+const phoneHref = fallbackPhone ? `tel:${fallbackPhone.replace(/[^0-9+]/g, "")}` : "";
+const phoneLabel = fallbackPhoneLabel || (fallbackPhone ? `Ring ${fallbackPhone}` : "");
+/**
+ * WITHOUT A FILE THERE IS NOTHING TO PLAY, and offering a play button that cannot play is worse
+ * than offering none. The frame is still drawn at the right ratio, so the hole a build has to
+ * fill is visible and correctly sized before the video arrives.
+ */
+const playable = Boolean(src);
+const playAccessibleLabel = duration ? `${playLabel}, ${duration}` : playLabel;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "dv-section", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="dv-intro kit-stack">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    <figure
+      class="dv"
+      data-dv
+      data-state="idle"
+      data-dv-src={src}
+      data-dv-error-message={errorMessage}
+      data-dv-slow-message={slowMessage}
+      data-dv-loading-label={loadingLabel}
+    >
+      <div class="kit-media kit-media--wide dv-frame">
+        {poster && <img class="dv-poster" src={poster} alt={posterAlt} loading="lazy" decoding="async" />}
+
+        <video class="dv-video" data-dv-video controls playsinline preload="none" hidden>
+          {captionsSrc && (
+            <track kind="captions" src={captionsSrc} srclang={captionsLang} label={captionsLabel} default />
+          )}
+        </video>
+
+        {playable && (
+          <button type="button" class="dv-play" data-dv-play aria-label={playAccessibleLabel}>
+            <span class="dv-play__chip">
+              <svg class="dv-play__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M8 5v14l11-7z" fill="currentColor" />
+              </svg>
+              <span class="dv-play__text">{playLabel}</span>
+            </span>
+          </button>
+        )}
+
+        <div class="dv-overlay dv-overlay--loading" data-dv-loading hidden>
+          <span class="kit-spinner" aria-hidden="true"></span>
+          <span class="dv-overlay__text">{loadingLabel}</span>
+        </div>
+
+        <div class="dv-overlay dv-overlay--error" data-dv-error hidden>
+          <p class="dv-overlay__text" data-dv-error-text>{errorMessage}</p>
+          {fallback && <a class="kit-btn dv-fallback" href={fallback}>{fallbackLabel}</a>}
+          {phoneHref && <a class="kit-btn dv-fallback" href={phoneHref} data-dv-phone>{phoneLabel}</a>}
+        </div>
+
+        {fallback && (
+          <noscript>
+            <div class="dv-overlay dv-overlay--error">
+              <a class="kit-btn dv-fallback" href={fallback}>{fallbackLabel}</a>
+            </div>
+          </noscript>
+        )}
+      </div>
+
+      <p class="kit-visually-hidden" role="status" aria-live="polite" data-dv-status></p>
+
+      <figcaption class="dv-caption">
+        <span class="dv-caption__text">{caption}</span>
+        {duration && <span class="dv-caption__meta kit-label">{duration}</span>}
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<style>
+  .dv-intro { margin-block-end: var(--kit-space-2xl); }
+
+  .dv { margin: 0; }
+
+  .dv-frame { position: relative; }
+
+  .dv-poster,
+  .dv-video {
+    position: absolute;
+    inset: 0;
+  }
+
+  .dv-video { background: var(--kit-bg-inverse); object-fit: contain; }
+
+  .dv[data-state="idle"] .dv-video,
+  .dv[data-state="loading"] .dv-video,
+  .dv[data-state="error"] .dv-video { display: none; }
+
+  .dv[data-state="active"] .dv-poster,
+  .dv[data-state="active"] .dv-play,
+  .dv[data-state="loading"] .dv-play,
+  .dv[data-state="error"] .dv-play { display: none; }
+
+  /* The whole poster is the target, so the press is easy on a phone and forgiving on a desktop. */
+  .dv-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: var(--kit-space-md);
+    background: color-mix(in srgb, var(--kit-bg-inverse) 18%, transparent);
+    border: 0;
+    cursor: pointer;
+    transition: background-color var(--kit-duration) var(--kit-ease);
+  }
+
+  .dv-play:hover { background: color-mix(in srgb, var(--kit-bg-inverse) 34%, transparent); }
+
+  .dv-play__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kit-space-sm);
+    min-height: var(--kit-target);
+    padding-inline: var(--kit-space-lg);
+    background: var(--kit-accent);
+    color: var(--kit-text-inverse);
+    font-family: var(--kit-font-body);
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-strong);
+    border-radius: var(--kit-radius);
+    transition: background-color var(--kit-duration) var(--kit-ease);
+  }
+
+  .dv-play:hover .dv-play__chip { background: var(--kit-accent-ink); }
+
+  .dv-play:focus-visible { outline: 0; }
+  .dv-play:focus-visible .dv-play__chip {
+  /* A RING PAINTED IN A FIXED COLOUR CANNOT KNOW ITS GROUND. This was hardcoded to the inverse
+     text colour, which is white, and the play chip sits over a poster image: with no poster
+     shipped the placeholder tint shows through the scrim and the ring measured 1.64:1. A dark
+     poster would have rescued it, which is exactly why a fixed colour is unreliable here.
+     --kit-focus-ring is defined per ground in foundations and is what every other piece uses. */
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .dv-play__icon {
+    width: var(--kit-text-lg);
+    height: var(--kit-text-lg);
+    flex: none;
+  }
+
+  .dv-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kit-space-md);
+    padding: var(--kit-space-lg);
+    text-align: center;
+    background: color-mix(in srgb, var(--kit-bg-inverse) 78%, transparent);
+    color: var(--kit-text-inverse);
+  }
+
+  .dv-overlay__text {
+    margin: 0;
+    max-width: var(--kit-measure);
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-body);
+  }
+
+  .dv-fallback {
+    background: transparent;
+    color: var(--kit-text-inverse);
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 45%, transparent);
+  }
+
+  .dv-fallback:hover { background: color-mix(in srgb, var(--kit-text-inverse) 14%, transparent); }
+
+  .dv-fallback:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .dv-caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--kit-space-sm) var(--kit-gutter);
+    margin-block-start: var(--kit-space-md);
+  }
+
+  .dv-caption__text {
+    flex: 1 1 calc(var(--kit-measure) / 2);
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    color: var(--kit-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* IT MAY NOT SHRINK BELOW THE LINE, BUT IT MAY NOT WIDEN THE PAGE EITHER.
+     `flex: none` held the running time on one line, which is right for "2 min 10 sec" and wrong
+     for anything a caller actually passes: a flex item that cannot shrink is laid out at its
+     max-content width no matter what wrapping the text is allowed, so a long value took the
+     figure 667px past a 390px viewport even with the kit's own break rule applied to it. The row
+     already wraps, so `0 1 auto` puts a long value on its own line and then lets it break. */
+  .dv-caption__meta { flex: 0 1 auto; min-width: 0; font-family: var(--kit-font-mono); }
+
+  /* LAST, AND MORE SPECIFIC THAN THE RULES ABOVE, ON PURPOSE. `.dv-overlay { display: flex }` is
+     an author rule and the browser's own `[hidden] { display: none }` is not, so the overlay wins
+     and BOTH overlays sit on top of the poster from the moment the page loads. Found by looking
+     at the rendered page, not by reading this file. Two class selectors beat one, and being last
+     settles it even where the specificity ties. */
+  .dv [hidden] { display: none; }
+</style>
+
+<script>
+  // Delegated from `document` and bound once, because Astro's ClientRouter swaps the body and this
+  // module does not run again after the first load. Media events (`error`, `playing`, `waiting`)
+  // do not bubble, so those are caught in the capture phase instead.
+  (() => {
+    const store = window as unknown as Record<string, boolean | undefined>;
+    if (store.__kitDemoVideoBound) return;
+    store.__kitDemoVideoBound = true;
+
+    const WATCHDOG_MS = 20000;
+    const timers = new WeakMap<HTMLElement, number>();
+
+    const rootOf = (node: Element | null): HTMLElement | null => {
+      const root = node ? node.closest("[data-dv]") : null;
+      return root instanceof HTMLElement ? root : null;
+    };
+
+    const part = (root: HTMLElement, selector: string): HTMLElement | null => {
+      const found = root.querySelector(selector);
+      return found instanceof HTMLElement ? found : null;
+    };
+
+    const announce = (root: HTMLElement, message: string) => {
+      const status = part(root, "[data-dv-status]");
+      if (status) status.textContent = message;
+    };
+
+    const stopWatchdog = (root: HTMLElement) => {
+      const timer = timers.get(root);
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timers.delete(root);
+      }
+    };
+
+    const showProblem = (root: HTMLElement, message: string, fatal: boolean) => {
+      stopWatchdog(root);
+      const loading = part(root, "[data-dv-loading]");
+      if (loading) loading.hidden = true;
+      const text = part(root, "[data-dv-error-text]");
+      if (text) text.textContent = message;
+      const overlay = part(root, "[data-dv-error]");
+      if (overlay) overlay.hidden = false;
+      if (fatal) root.dataset.state = "error";
+      announce(root, message);
+    };
+
+    const markPlayable = (root: HTMLElement) => {
+      stopWatchdog(root);
+      root.dataset.state = "active";
+      const loading = part(root, "[data-dv-loading]");
+      if (loading) loading.hidden = true;
+      const overlay = part(root, "[data-dv-error]");
+      if (overlay) overlay.hidden = true;
+      announce(root, "");
+    };
+
+    document.addEventListener("click", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      const button = origin ? origin.closest("[data-dv-play]") : null;
+      if (!button) return;
+
+      const root = rootOf(button);
+      if (!root) return;
+
+      const video = root.querySelector("[data-dv-video]");
+      const source = root.dataset.dvSrc;
+      if (!(video instanceof HTMLVideoElement) || !source) {
+        showProblem(root, root.dataset.dvErrorMessage || "The video is unavailable.", true);
+        return;
+      }
+
+      root.dataset.state = "loading";
+      const loading = part(root, "[data-dv-loading]");
+      if (loading) loading.hidden = false;
+      const overlay = part(root, "[data-dv-error]");
+      if (overlay) overlay.hidden = true;
+      announce(root, root.dataset.dvLoadingLabel || "Loading the video");
+
+      video.hidden = false;
+      if (!video.getAttribute("src")) {
+        video.setAttribute("src", source);
+        video.load();
+      }
+
+      stopWatchdog(root);
+      timers.set(
+        root,
+        window.setTimeout(() => {
+          if (video.readyState < 3 && root.dataset.state !== "active") {
+            showProblem(root, root.dataset.dvSlowMessage || "The video is taking longer than it should.", false);
+          }
+        }, WATCHDOG_MS),
+      );
+
+      const started = video.play();
+      if (started && typeof started.catch === "function") {
+        started.catch(() => {
+          // A rejected play() is only fatal if the element itself failed. Otherwise the browser
+          // simply declined to start it, and the visible controls are the way through.
+          if (video.error) {
+            showProblem(root, root.dataset.dvErrorMessage || "The video could not be loaded.", true);
+          } else {
+            markPlayable(root);
+          }
+        });
+      }
+    });
+
+    document.addEventListener(
+      "playing",
+      (event) => {
+        const root = rootOf(event.target instanceof Element ? event.target : null);
+        if (root) markPlayable(root);
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "canplay",
+      (event) => {
+        const root = rootOf(event.target instanceof Element ? event.target : null);
+        if (root && root.dataset.state === "loading") markPlayable(root);
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "error",
+      (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLVideoElement)) return;
+        const root = rootOf(target);
+        if (root) showProblem(root, root.dataset.dvErrorMessage || "The video could not be loaded.", true);
+      },
+      true,
+    );
+  })();
+</script>

@@ -1,0 +1,215 @@
+---
+/**
+ * Call to action with the proof beside it.
+ *
+ * Use this at the moment of deciding, when the reader needs one more reason rather than one more
+ * paragraph. It carries a quote, two or three figures, both, or neither, and lays itself out
+ * correctly in all four cases: with no proof it collapses to a plain closing call to action
+ * rather than leaving a hole where a column should be.
+ *
+ * THE QUOTE DEFAULTS TO NOTHING ON PURPOSE. A testimonial is somebody's actual words and there is
+ * no acceptable way to invent one, so the placeholder here is a pair of figures a business can
+ * check against its own terms of trade, not a fabricated customer. Pass a real quote or pass none.
+ * The same applies to the figures: replace them with numbers the business can defend, or delete
+ * them.
+ */
+export interface ProofFigure {
+  /** Short: "6 years", "Same day", "1,400". A sentence here breaks the rhythm. */
+  value: string;
+  label: string;
+  /** Where the number comes from. A figure with no source is a claim, not proof. */
+  note?: string;
+}
+
+export interface Props {
+  headline?: string;
+  body?: string;
+  primary?: { label: string; href: string };
+  secondary?: { label: string; href: string };
+  /** Verbatim customer words. Never written by the build. */
+  quote?: { text: string; name: string; role?: string };
+  /** Two or three. Four starts reading as a statistics band rather than as support for the action. */
+  figures?: ProofFigure[];
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  headline = "Get a written quote this week",
+  body = "Send us the job and we will come and look at it. No charge, no obligation, and the price is fixed before anyone starts.",
+  primary = { label: "Request a quote", href: "/contact" },
+  secondary,
+  quote,
+  figures = [
+    { value: "6 years", label: "Workmanship guarantee", note: "Written on every quote" },
+    { value: "Same day", label: "Emergency callouts", note: "Inside the service area" },
+  ],
+  tone = "subtle",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const slug = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "cta";
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `cta-proof-${slug(headline)}`;
+const headingId = `${uid}-heading`;
+
+const shownFigures = figures ?? [];
+const hasProof = Boolean(quote) || shownFigures.length > 0;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "kit-ctap", hasProof && "kit-ctap--split", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container kit-ctap__inner">
+    <div class="kit-ctap__ask">
+      <h2 class="kit-h2 kit-ctap__headline" id={headingId}>{headline}</h2>
+      {body && <p class="kit-lede kit-ctap__body">{body}</p>}
+      <div class="kit-ctap__actions">
+        <a class="kit-btn kit-btn--primary" href={primary.href}>
+          <span class="kit-btn__label">{primary.label}</span>
+        </a>
+        {secondary && (
+          <a class="kit-btn kit-btn--secondary" href={secondary.href}>
+            <span class="kit-btn__label">{secondary.label}</span>
+          </a>
+        )}
+      </div>
+    </div>
+
+    {hasProof && (
+      <div class="kit-ctap__proof">
+        {quote && (
+          <figure class="kit-ctap__quote">
+            <blockquote class="kit-ctap__quote-text">
+              <p class="kit-body">{quote.text}</p>
+            </blockquote>
+            <figcaption class="kit-ctap__cite">
+              <span class="kit-ctap__cite-name">{quote.name}</span>
+              {quote.role && <span class="kit-muted">{quote.role}</span>}
+            </figcaption>
+          </figure>
+        )}
+
+        {shownFigures.length > 0 && (
+          <dl class="kit-ctap__figures">
+            {shownFigures.map((figure) => (
+              <div class="kit-ctap__figure">
+                <dt class="kit-ctap__figure-value">{figure.value}</dt>
+                <dd class="kit-ctap__figure-label">
+                  {figure.label}
+                  {figure.note && <span class="kit-ctap__figure-note kit-muted">{figure.note}</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    )}
+  </div>
+</section>
+
+<style>
+  .kit-ctap__inner { display: grid; gap: var(--kit-space-2xl); align-items: start; }
+
+  /* Two columns when there is proof to put beside the ask, one when there is not. The columns
+     collapse on the width the text needs, so no breakpoint has to guess. */
+  .kit-ctap--split .kit-ctap__inner {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 32ch), 1fr));
+    gap: var(--kit-space-2xl) var(--kit-space-3xl);
+  }
+
+  .kit-ctap__ask { display: grid; justify-items: start; gap: var(--kit-space-lg); }
+  .kit-ctap__headline { max-width: 20ch; }
+  .kit-ctap__body { text-wrap: pretty; }
+
+  .kit-ctap__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-md);
+    margin-top: var(--kit-space-xs);
+  }
+  .kit-ctap .kit-btn { max-width: 100%; }
+  .kit-ctap .kit-btn:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-section--inverse .kit-btn:focus-visible { outline-color: var(--kit-text-inverse); }
+  /* On a dark ground the primary button is drawn in the inverse text colour rather than in the
+     accent. --kit-accent-lift falls back to --kit-accent, which a brand chooses for a LIGHT
+     ground, so on the default token set an accent button is a near-invisible shape carrying
+     legible text. A brand that wants its own colour here overrides .kit-btn--primary inside
+     .kit-section--inverse in its own layer. */
+  /* .kit-lede pins its own colour to --kit-text, so on a dark ground it lands as
+     near-black on near-black. Measured at 1.06:1 before this line existed. */
+  .kit-section--inverse .kit-ctap__body { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-btn--primary {
+    background: var(--kit-text-inverse);
+    color: var(--kit-bg-inverse);
+  }
+  .kit-section--inverse .kit-btn--primary:hover {
+    background: color-mix(in srgb, var(--kit-text-inverse) 86%, var(--kit-bg-inverse));
+  }
+
+  .kit-ctap__proof { display: grid; gap: var(--kit-space-xl); align-content: start; }
+
+  .kit-ctap__quote { margin: 0; display: grid; gap: var(--kit-space-md); }
+  .kit-ctap__quote-text { margin: 0; padding-left: var(--kit-space-lg);
+    border-left: calc(var(--kit-border-width) * 3) solid var(--kit-accent); }
+  .kit-section--inverse .kit-ctap__quote-text {
+    border-left-color: color-mix(in srgb, var(--kit-text-inverse) 55%, transparent);
+  }
+  .kit-ctap__quote-text p { text-wrap: pretty; }
+  .kit-ctap__cite {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-2xs) var(--kit-space-sm);
+    padding-left: var(--kit-space-lg);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-ctap__cite-name { font-weight: var(--kit-weight-strong); }
+
+  .kit-ctap__figures {
+    display: grid;
+    gap: var(--kit-space-lg);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16ch), 1fr));
+    margin: 0;
+  }
+  .kit-ctap__figure {
+    display: grid;
+    gap: var(--kit-space-2xs);
+    padding-top: var(--kit-space-md);
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-section--inverse .kit-ctap__figure {
+    border-top-color: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent);
+  }
+  .kit-ctap__figure-value {
+    font-family: var(--kit-font-display);
+    font-size: var(--kit-text-2xl);
+    line-height: var(--kit-leading-tight);
+    letter-spacing: var(--kit-tracking-tight);
+  }
+  .kit-ctap__figure-label {
+    display: grid;
+    gap: var(--kit-space-2xs);
+    margin: 0;
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-snug);
+  }
+  .kit-ctap__figure-note { font-size: var(--kit-text-xs); }
+</style>

@@ -1,0 +1,374 @@
+---
+/**
+ * PricingTable: plans compared across many attributes, for somebody comparing carefully.
+ *
+ * Use this when the plans differ on more than a handful of things and the visitor is deciding
+ * between them rather than deciding whether to buy at all. Two or three plans with four
+ * differences each belong in PricingCards; this shape earns its weight from about six attributes
+ * upward.
+ *
+ * IT IS A REAL TABLE. Attribute rows are `<th scope="row">`, plan columns are `<th scope="col">`,
+ * and the whole thing carries a `<caption>`. That is what lets a screen reader announce "Managed,
+ * Response time, same day" instead of reading a wall of disconnected cells, and no grid of divs
+ * does it. The caption is visible: it says what is being compared, which the heading above cannot
+ * because the heading is selling.
+ *
+ * ON A PHONE IT SCROLLS RATHER THAN SQUASHING. Twenty attributes across four plans cannot be made
+ * legible at 390px by shrinking type, so the table sits in its own `overflow-x` container which is
+ * focusable and labelled, meaning a keyboard user can scroll it without a pointer (WCAG 2.1.1).
+ * The attribute column is sticky, so you never lose track of which row you are reading. That is
+ * done with `position: sticky`, no JavaScript.
+ *
+ * Boolean values render as a neutral mark plus text that is read out ("Included" / "Not
+ * included"), never as a bare tick. A tick and a cross carry no meaning to a screen reader and
+ * carry the wrong meaning to anyone who cannot separate the two colours they are usually drawn in.
+ */
+type Cell = string | boolean;
+
+interface Plan {
+  name: string;
+  price?: string;
+  cadence?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  /** At most one. Marked in the column heading, in words. */
+  recommended?: boolean;
+  recommendedLabel?: string;
+}
+
+interface Attribute {
+  name: string;
+  /** One value per plan, in the same order as `plans`. */
+  values: Cell[];
+  /** Optional clarification shown under the attribute name. */
+  note?: string;
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  /** Visible table caption. Say what is being compared. */
+  caption?: string;
+  plans?: Plan[];
+  attributes?: Attribute[];
+  includedLabel?: string;
+  excludedLabel?: string;
+  /** Shown when a plan simply has no value for an attribute. Never guessed at as "not included". */
+  notStatedLabel?: string;
+  footnote?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "Compare the plans",
+  lede,
+  caption = "What each plan includes, compared attribute by attribute.",
+  plans = [
+    { name: "Callout", price: "$180", cadence: "per visit", ctaLabel: "Book", ctaHref: "/contact?service=callout" },
+    { name: "Maintenance", price: "$140", cadence: "per month", ctaLabel: "Start", ctaHref: "/contact?service=maintenance", recommended: true, recommendedLabel: "most sites choose this" },
+    { name: "Managed", price: "$420", cadence: "per month", ctaLabel: "Enquire", ctaHref: "/contact?service=managed" },
+  ],
+  attributes = [
+    { name: "Inspection", values: ["On request", "Quarterly", "Monthly"] },
+    { name: "Response time", values: ["Next available", "Two working days", "Same day, seven days"] },
+    { name: "Remedial work included", values: ["None", "Two hours a quarter", "Eight hours a month"] },
+    { name: "Parts", values: ["At cost", "At cost", "At cost, held in stock"], note: "We do not mark up parts on any plan." },
+    { name: "Named engineer", values: [false, false, true] },
+    { name: "Condition report for insurers", values: [false, true, true], note: "Issued annually." },
+    { name: "Out of hours cover", values: [false, false, true] },
+    { name: "Quarterly review meeting", values: [false, false, true] },
+    { name: "Minimum term", values: ["None", "Twelve months", "Twelve months"] },
+  ],
+  includedLabel = "Included",
+  excludedLabel = "Not included",
+  notStatedLabel = "Not stated",
+  footnote = "Prices exclude GST. Nothing is charged until the work is agreed in writing.",
+  emptyMessage = "The comparison will be published here once the plans are confirmed.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `pt-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const scrollId = `${uid}-scroll`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const cols = (plans ?? []).filter((p) => p?.name);
+/* Rows are padded or trimmed to the column count, so a content mistake shifts nothing sideways. */
+const rows = (attributes ?? [])
+  .filter((a) => a?.name)
+  .map((a) => ({
+    ...a,
+    values: cols.map((_, i) => (a.values?.[i] ?? "")) as Cell[],
+  }));
+const recommendedIndex = cols.findIndex((p) => p.recommended);
+const hasTable = cols.length > 0 && rows.length > 0;
+const hasCtas = cols.some((p) => p.ctaLabel && p.ctaHref);
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container">
+    <div class="pt__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+  </div>
+
+  {!hasTable ? (
+    <div class="kit-container">
+      <p class="kit-empty">{emptyMessage}</p>
+    </div>
+  ) : (
+    <div class="kit-container kit-container--wide pt">
+      <section
+        class="pt__scroll kit-scroll-x"
+        id={scrollId}
+        aria-label={caption}
+        tabindex="0"
+        data-kit-scroll-region
+      >
+        <table class="pt__table">
+          <caption class="pt__caption">{caption}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pt__corner">
+                <span class="kit-visually-hidden">Attribute</span>
+              </th>
+              {cols.map((plan, index) => (
+                <th scope="col" class:list={["pt__plan", index === recommendedIndex && "pt__plan--pick"]}>
+                  <span class="pt__plan-name">{plan.name}</span>
+                  {index === recommendedIndex && (
+                    <span class="pt__plan-pick">{plan.recommendedLabel ?? "most chosen"}</span>
+                  )}
+                  {plan.price && (
+                    <span class="pt__plan-price">
+                      <span class="pt__plan-amount">{plan.price}</span>
+                      {plan.cadence && <span class="pt__plan-cadence kit-muted">{plan.cadence}</span>}
+                    </span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.map((row) => (
+              <tr>
+                <th scope="row" class="pt__attr">
+                  <span class="pt__attr-name">{row.name}</span>
+                  {row.note && <span class="pt__attr-note kit-muted">{row.note}</span>}
+                </th>
+                {row.values.map((value, index) => (
+                  <td class:list={["pt__cell", index === recommendedIndex && "pt__cell--pick"]}>
+                    {typeof value === "boolean" ? (
+                      <>
+                        <span class:list={["pt__mark", value ? "pt__mark--on" : "pt__mark--off"]} aria-hidden="true"></span>
+                        <span class="pt__cell-text">{value ? includedLabel : excludedLabel}</span>
+                      </>
+                    ) : (
+                      <span class:list={["pt__cell-text", value === "" && "kit-muted"]}>
+                        {value === "" ? notStatedLabel : value}
+                      </span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+
+          {hasCtas && (
+            <tfoot>
+              <tr>
+                <th scope="row" class="pt__attr">
+                  <span class="kit-visually-hidden">Choose a plan</span>
+                </th>
+                {cols.map((plan, index) => (
+                  <td class:list={["pt__cell", index === recommendedIndex && "pt__cell--pick"]}>
+                    {plan.ctaLabel && plan.ctaHref && (
+                      <a
+                        class:list={["kit-btn", index === recommendedIndex ? "kit-btn--primary" : "kit-btn--secondary", "pt__cta"]}
+                        href={plan.ctaHref}
+                      >
+                        {plan.ctaLabel}
+                        <span class="kit-visually-hidden"> the {plan.name} plan</span>
+                      </a>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </section>
+    </div>
+  )}
+
+  {footnote && (
+    <div class="kit-container">
+      <p class="pt__footnote kit-muted">{footnote}</p>
+    </div>
+  )}
+</section>
+
+<script>
+  import { initKitScrollRegions } from "../scroll-region";
+  initKitScrollRegions();
+</script>
+
+<style>
+  /* ONLY THE TABLE GETS THE EXTRA ROOM. The heading, the lede and the footnote sit in the ordinary
+     container, so on a composed page this section's heading lines up with every other section's
+     heading instead of starting 130px further out and reading as a different page. */
+
+  .pt__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
+
+  /* Focusable so it can be scrolled from the keyboard, and named so the focus stop makes sense.
+     It is a <section>, which foundations' shared focus rule does not cover, so the ring is set
+     here from the shared tokens rather than invented.
+
+     `position: relative` is load-bearing, not tidiness: `.kit-visually-hidden` is absolutely
+     positioned with auto insets, so without a positioned ancestor its containing block is the
+     viewport. One hidden span inside a button in the table footer was then laid out at the
+     table's scrolled-out coordinates and widened the DOCUMENT to 684px at a 390px viewport,
+     giving the whole page a horizontal scrollbar. `clip` hides the paint, not the layout. */
+  .pt__scroll { position: relative; overflow-x: auto; }
+  .pt__scroll:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+
+  .pt__table {
+    /* `separate` rather than `collapse`: with collapsed borders a browser drops the borders on a
+       position:sticky cell once it detaches, so the attribute column loses its right-hand rule at
+       exactly the moment it is doing its job. Spacing is zeroed and each cell paints one edge, so
+       nothing doubles up. */
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    /* A floor only. The real width comes from the per-column minimums below, so five plans widen
+       the table (and scroll) instead of squeezing every column to illegibility. */
+    min-width: 44ch;
+    font-size: var(--kit-text-sm);
+    text-align: start;
+  }
+
+  .pt__caption {
+    caption-side: top;
+    text-align: start;
+    padding-block-end: var(--kit-space-md);
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+    max-width: var(--kit-measure);
+  }
+
+  .pt__corner, .pt__attr, .pt__plan, .pt__cell {
+    padding: var(--kit-space-md);
+    border-block-end: var(--kit-border-width) solid var(--kit-border);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  /* The attribute column stays put while the plans scroll under it. */
+  .pt__corner, .pt__attr {
+    position: sticky;
+    inset-inline-start: 0;
+    background: var(--kit-bg);
+    border-inline-end: var(--kit-border-width) solid var(--kit-border);
+    /* THE MINIMUM IS THE PADDING PLUS A READABLE MEASURE, NOT A MEASURE.
+       These cells are border-box, so 12ch had to cover 2rem of padding as well as the text, which
+       left about 5ch of column: measured at 390px, "straightforward" and "Maintenance" both broke
+       across two lines inside a table that was already free to scroll sideways. A scroll container
+       exists so a column can keep its width; squeezing the column to avoid using it gives away the
+       only thing it bought. */
+    min-width: 18ch;
+    max-width: 26ch;
+    z-index: 1;
+  }
+
+  .pt__plan {
+    vertical-align: bottom;
+    border-block-end-width: calc(var(--kit-border-width) * 2);
+    border-block-end-color: var(--kit-border-strong);
+    min-width: 18ch;
+  }
+
+  .pt__plan-name {
+    display: block;
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-strong);
+    font-size: var(--kit-text-lg);
+    line-height: var(--kit-leading-snug);
+  }
+  .pt__plan-pick {
+    display: block;
+    margin-block-start: var(--kit-space-2xs);
+    font-size: var(--kit-text-xs);
+    font-weight: var(--kit-weight-medium);
+    line-height: var(--kit-leading-snug);
+    color: var(--kit-text-muted);
+  }
+  .pt__plan-price { display: block; margin-block-start: var(--kit-space-xs); }
+  .pt__plan-amount {
+    font-weight: var(--kit-weight-strong);
+    font-variant-numeric: tabular-nums;
+  }
+  .pt__plan-cadence { font-size: var(--kit-text-xs); margin-inline-start: var(--kit-space-2xs); }
+
+  .pt__attr-name { display: block; font-weight: var(--kit-weight-medium); }
+  .pt__attr-note {
+    display: block;
+    margin-block-start: var(--kit-space-2xs);
+    font-size: var(--kit-text-xs);
+    font-weight: var(--kit-weight-body);
+    line-height: var(--kit-leading-snug);
+  }
+
+  .pt__cell { font-variant-numeric: tabular-nums; }
+  /* The recommended column is tinted so the eye can hold it while scanning across. It is a
+     neutral surface tint, not a colour that says "better": the content argues, the tint locates. */
+  .pt__plan--pick, .pt__cell--pick { background: var(--kit-bg-subtle); }
+
+  .pt__cell-text { display: inline-block; }
+
+  /* Row hover, including the sticky attribute cell, which has to stay opaque or the columns
+     scrolling underneath show through it. Mixed from the text token, so it works on any ground. */
+  tbody tr:hover .pt__attr,
+  tbody tr:hover .pt__cell {
+    background: color-mix(in srgb, var(--kit-text) 6%, var(--kit-bg));
+  }
+
+  /* Neutral marks. Filled for included, hollow for not, and the words are there either way. */
+  .pt__mark {
+    display: inline-block;
+    width: var(--kit-space-xs);
+    height: var(--kit-space-xs);
+    margin-inline-end: var(--kit-space-xs);
+    border-radius: var(--kit-radius-pill);
+    border: var(--kit-border-width) solid var(--kit-border-strong);
+    vertical-align: baseline;
+  }
+  .pt__mark--on { background: var(--kit-border-strong); }
+  .pt__mark--off { background: transparent; }
+
+  tfoot .pt__cell, tfoot .pt__attr { border-block-end: 0; padding-block-start: var(--kit-space-lg); }
+  .pt__cta { width: 100%; }
+
+  .pt__footnote {
+    margin: 0;
+    margin-block-start: var(--kit-space-xl);
+    font-size: var(--kit-text-xs);
+    max-width: var(--kit-measure);
+  }
+</style>

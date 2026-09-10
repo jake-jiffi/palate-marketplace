@@ -1,0 +1,300 @@
+---
+/**
+ * TrustRatings: an aggregate rating, or several, each tied to the platform it came from.
+ *
+ * A rating is only worth printing if a reader can go and check it, so `sourceName` is required
+ * and a rating that arrives without one renders a visible "source not stated" in the error
+ * colour rather than quietly printing a number that nobody can verify. That is the whole point
+ * of this piece: it should be easier to cite a rating than to invent one.
+ *
+ * The stars are decoration and are hidden from assistive technology. The rating itself is read
+ * as text ("4.8 out of 5"), because a screen reader user needs the value, not the picture of it.
+ * Partial stars come from a clipped overlay sized in percent, so a 4.3 shows as 4.3 rather than
+ * being rounded up to flatter the business.
+ *
+ * Figures use tabular numerals so a column of ratings lines up on the decimal point.
+ */
+export interface TrustRating {
+  /** The aggregate score, e.g. 4.8. */
+  value: number;
+  /** The top of the scale. Five unless the platform says otherwise. */
+  outOf?: number;
+  /** How many reviews the score is drawn from. */
+  count: number;
+  /** The platform. Required: an uncited rating is flagged rather than printed plainly. */
+  sourceName: string;
+  /** Where a reader can go and check it. */
+  sourceUrl?: string;
+  /** Anything a reader needs in order to read the number correctly. */
+  note?: string;
+}
+
+export interface Props {
+  /** Section heading. Pass an empty string to keep it for assistive technology only. */
+  heading?: string;
+  ratings?: TrustRating[];
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  /**
+   * Which ground this section sits on. One name and one vocabulary across the whole kit, so a
+   * page can alternate grounds without having to remember which piece calls it what. Every
+   * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  emptyMessage?: string;
+}
+
+const {
+  heading = "What customers have said elsewhere",
+  /* Empty by default. These name real people and real firms, so an omitted prop must render the empty state rather than an invented one; the demo pages pass samples from src/lib/kit-sample.ts. */
+  ratings = [],
+  id,
+  tone = "default",
+  emptyMessage = "Ratings appear here once a review platform has enough verified reviews to report.",
+} = Astro.props;
+
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `trt-${Math.random().toString(36).slice(2, 8)}`;
+const titleId = `${uid}-title`;
+const headingText = heading?.trim() || "Customer ratings";
+const headingHidden = !heading?.trim();
+
+const STAR_PATH =
+  "M12 2.5l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.32l-5.8 3.05 1.1-6.46-4.69-4.58 6.49-.95L12 2.5z";
+
+/** Grouped thousands without leaning on ICU, which is not guaranteed in every build image. */
+const groupDigits = (n: number) => String(Math.max(0, Math.round(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+/** Trailing zeros on a whole score read as false precision, so 5 stays 5 and 4.8 stays 4.8. */
+const formatValue = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
+
+const items = (Array.isArray(ratings) ? ratings : [])
+  .filter((r) => r && typeof r.value === "number" && Number.isFinite(r.value))
+  .map((r) => {
+    const outOf = Math.min(Math.max(Math.round(r.outOf ?? 5), 1), 10);
+    const value = Math.min(Math.max(r.value, 0), outOf);
+    return {
+      ...r,
+      outOf,
+      value,
+      stars: Array.from({ length: outOf }, (_, i) => i),
+      fillPercent: (value / outOf) * 100,
+      valueText: formatValue(value),
+      countText: groupDigits(r.count ?? 0),
+      sourced: Boolean(r.sourceName && r.sourceName.trim()),
+    };
+  });
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    "kit-section--tight",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+  ]}
+  aria-labelledby={titleId}
+>
+  <div class="kit-container">
+    <h2 id={titleId} class:list={["kit-h2", "tr__heading", headingHidden && "kit-visually-hidden"]}>
+      {headingText}
+    </h2>
+
+    {items.length === 0 ? (
+      <p class="kit-empty tr__empty">{emptyMessage}</p>
+    ) : (
+      <ul class="tr__list" role="list">
+        {items.map((r) => (
+          <li class="tr__item">
+            <p class="tr__figure">
+              <span class="tr__value">{r.valueText}</span>
+              <span class="tr__scale kit-muted">out of {r.outOf}</span>
+            </p>
+
+            <span class="tr__stars" aria-hidden="true" style={`--tr-fill: ${r.fillPercent}%`}>
+              <span class="tr__stars-row">
+                {r.stars.map(() => (
+                  <svg class="tr__star" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d={STAR_PATH} />
+                  </svg>
+                ))}
+              </span>
+              <span class="tr__stars-row tr__stars-row--fill">
+                {r.stars.map(() => (
+                  <svg class="tr__star" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d={STAR_PATH} />
+                  </svg>
+                ))}
+              </span>
+            </span>
+
+            <p class="tr__count kit-muted">Based on {r.countText} reviews</p>
+
+            <p class="tr__source">
+              {r.sourced ? (
+                r.sourceUrl ? (
+                  <a class="kit-link tr__source-link" href={r.sourceUrl}>{r.sourceName}</a>
+                ) : (
+                  <span>{r.sourceName}</span>
+                )
+              ) : (
+                <span class="tr__unsourced">Source not stated</span>
+              )}
+            </p>
+
+            {r.note && <p class="tr__note kit-muted">{r.note}</p>}
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  /* --kit-accent-lift is the variant meant for dark grounds, but its fallback chain ends at
+     --kit-accent, which is near-black by default and therefore invisible on --kit-bg-inverse.
+     That takes the accent text, the stars and every focus ring down with it. Re-resolving it
+     here reads the brand's own lifted accent when there is one and falls back to the inverse
+     text colour, which the same ground already guarantees. Delete this once foundations gives
+     the token a fallback suited to the ground it exists for. */
+  .kit-section--inverse {
+  }
+
+  .tr__heading {
+    max-width: var(--kit-measure);
+  }
+
+  .tr__empty,
+  .tr__list {
+    margin-block-start: var(--kit-space-xl);
+  }
+
+  .tr__list {
+    list-style: none;
+    margin-inline: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-xl) var(--kit-space-2xl);
+  }
+
+  .tr__item {
+    /* A third of the reading measure is about the width of "Based on 1,240 reviews", so two or
+       three ratings sit in a row on a wide page and stack cleanly on a phone. */
+    flex: 1 1 calc(var(--kit-measure) / 3);
+    min-width: 0;
+    max-width: var(--kit-measure);
+    border-block-start: var(--kit-border-width) solid var(--kit-border-strong);
+    padding-block-start: var(--kit-space-md);
+  }
+
+  .tr__figure {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--kit-space-xs);
+    margin: 0;
+  }
+
+  .tr__value {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-3xl);
+    line-height: var(--kit-leading-tight);
+    letter-spacing: var(--kit-tracking-tight);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tr__scale {
+    font-size: var(--kit-text-sm);
+  }
+
+  .tr__stars {
+    position: relative;
+    display: inline-block;
+    margin-block-start: var(--kit-space-xs);
+    font-size: var(--kit-text-lg);
+  }
+
+  .tr__stars-row {
+    display: flex;
+    gap: var(--kit-space-2xs);
+    color: var(--kit-border);
+  }
+
+  .tr__stars-row--fill {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    width: var(--tr-fill);
+    overflow: hidden;
+    color: var(--kit-accent-ink);
+  }
+
+  .tr__stars-row--fill .tr__star {
+    flex: none;
+  }
+
+  .kit-section--inverse .tr__stars-row {
+    color: color-mix(in srgb, var(--kit-text-inverse) 30%, transparent);
+  }
+
+  .kit-section--inverse .tr__stars-row--fill {
+    color: var(--kit-accent-lift);
+  }
+
+  .tr__star {
+    width: 1em;
+    height: 1em;
+    fill: currentColor;
+    flex: none;
+  }
+
+  .tr__count {
+    font-size: var(--kit-text-sm);
+    font-variant-numeric: tabular-nums;
+    margin: var(--kit-space-sm) 0 0;
+  }
+
+  .tr__source {
+    font-size: var(--kit-text-sm);
+    margin: var(--kit-space-2xs) 0 0;
+  }
+
+  /* An unsourced figure is a defect, so it is allowed to look like one. */
+  .tr__unsourced {
+    color: var(--kit-error);
+    font-weight: var(--kit-weight-medium);
+  }
+
+  .tr__note {
+    font-size: var(--kit-text-xs);
+    line-height: var(--kit-leading-body);
+    margin: var(--kit-space-xs) 0 0;
+    max-width: var(--kit-measure);
+  }
+
+  /* The whole point of this link is that a reader can go and check the number, so it gets a real
+     target rather than the line box a bare inline link at this size would give it. */
+  .tr__source-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--kit-target);
+  }
+
+  .tr__source-link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .kit-section--inverse .tr__source-link:focus-visible {
+    outline-color: var(--kit-accent-lift);
+  }
+</style>

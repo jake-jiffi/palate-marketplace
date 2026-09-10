@@ -78,23 +78,22 @@ done
 [ -n "$HTML" ] || { bad "the board route did not build to boards/b1/index.html"; echo "passed=$pass failed=$fail"; exit 1; }
 ok "the board route builds to boards/b1/index.html"
 
-# --- the system strip: the tokens, shown rather than described -------------------------
-# Each label is asserted individually. A single grep for "the type ramp" would pass on a
-# strip that had lost four of its five rows.
-for label in "Display" "Heading 1" "Heading 2" "Body" "Small"; do
-  has "the type ramp shows the $label step" ">$label<"
-done
-for label in "Ground" "Ink" "Muted" "Accent" "Accent on dark"; do
-  has "the palette shows $label" ">$label<"
-done
-has "the strip renders a primary control"   'data-strip="primary"'
-has "the strip renders a secondary control" 'data-strip="secondary"'
-has "the strip renders a card"              'data-strip="card"'
-has "the strip renders the nav"             'data-strip="nav"'
-# THE ACCENT ON DARK IS A FILL, NEVER SMALL TEXT. Setting the accent as a 12px label on the
-# dark ground measured 2.29:1 through axe at all three viewports, on every board: a strip whose
-# job is to demonstrate craft, failing AA on the page the client sees first.
-has "the accent on dark is shown as a fill"  'ss-chip-fill'
+# --- THE SYSTEM STRIP IS GONE, AND SO ARE ITS FIFTEEN ASSERTIONS ------------------------
+#
+# This block asserted that every board renders a type ramp (Display / Heading 1 / Heading 2 /
+# Body / Small), a palette (Ground / Ink / Muted / Accent / Accent on dark), a control pair, a
+# card and a nav. Those assertions were correct about the code and wrong about the product: the
+# strip was identical in layout on every board, so five directions collapsed to sameness below
+# the hero, and it showed type DISPLAYED rather than type IN USE.
+#
+# Jake rejected it on sight, 2026-09-09: "they all have different headers but everything else is
+# about the same and its showing font use and stuff, which i thought would just be the actual use
+# of them on the website". A test that asserts a rejected feature is not a safety net, it is the
+# feature's last defender, and leaving it here is how the strip came back after being removed
+# from one project by hand.
+#
+# A board now carries real sections composed from the website kit, which is what a client can
+# actually judge. The kit has its own gates: gate-kit-tokens.mjs and gate-kit-complete.mjs.
 
 # --- the notes: the argument the rung makes for itself ---------------------------------
 has "the notes carry the name"    "The Quiet Room"
