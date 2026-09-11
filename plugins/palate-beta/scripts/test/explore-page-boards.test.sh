@@ -153,7 +153,11 @@ const req = createRequire(process.argv[1] + "/scripts/reference-capture/");
 const sharp = req("sharp");
 const out = process.argv[2];
 (async () => {
-  for (const [name, w, h] of [["ref1.jpg",720,450],["ref2.jpg",720,450],["ref3.jpg",720,450]]) {
+  // The donor heroes too: boards-render writes `<id>-donor.jpg` beside every board still, and
+  // the card renders it whenever the registry names a donor. A real JPEG rather than a PNG under
+  // a .jpg name, so the browser pass measures the picture the client actually gets.
+  for (const [name, w, h] of [["ref1.jpg",720,450],["ref2.jpg",720,450],["ref3.jpg",720,450],
+                              ["b1-donor.jpg",720,450],["b2-donor.jpg",720,450]]) {
     const buf = await sharp({ create: { width: w, height: h, channels: 3, background: { r: 236, g: 233, b: 222 } } })
       .jpeg().toBuffer();
     require("node:fs").writeFileSync(out + "/" + name, buf);
@@ -178,6 +182,38 @@ cat > "$SITE/build-manifest.json" <<'JSON'
 }
 JSON
 
+# --- FIRST, the run that DREW NO DONOR ROW ----------------------------------------------
+# Every registry entry names a donor, so the card used to render `<id>-donor.jpg` on that alone
+# and a `--no-donors` build shipped a broken image on the page the client opens. The manifest is
+# the only thing that knows whether the row was ever drawn.
+setrow() { # <json fragment or "none">
+  node -e '
+    const { readFileSync, writeFileSync } = require("node:fs");
+    const f = process.argv[1], m = JSON.parse(readFileSync(f, "utf8"));
+    if (process.argv[2] === "none") delete m.explore.donor_row;
+    else m.explore.donor_row = JSON.parse(process.argv[2]);
+    writeFileSync(f, JSON.stringify(m, null, 2));
+  ' "$SITE/build-manifest.json" "$1"
+}
+build_explore() { # <log name> -> sets HTML, or returns 1
+  ( cd "$SITE" && PUBLIC_EXPLORE_MODE=true ./node_modules/.bin/astro build ) > "$TMP/$1.log" 2>&1 || {
+    echo "explore-page-boards: the site did not build, so /explore is UNPROVEN. Last lines:" >&2
+    tail -15 "$TMP/$1.log" >&2; return 1; }
+  HTML=""
+  for cand in "$SITE/dist/client/explore/index.html" "$SITE/dist/explore/index.html"; do
+    [ -f "$cand" ] && { HTML="$cand"; break; }
+  done
+  [ -n "$HTML" ]
+}
+
+setrow '{"skipped":true}' || { echo "explore-page-boards: could not write the skipped-row manifest. NOT a pass." >&2; exit 2; }
+build_explore build-skipped || exit 2
+hasnt "a build whose donor row was skipped shows no donor image" '-donor.jpg'
+has   "and the board stills are unaffected by the skip"          '/_explore/b1.png'
+rm -rf "$SITE/dist"
+
+# --- then the ordinary run, which DID draw one ------------------------------------------
+setrow none || { echo "explore-page-boards: could not restore the manifest. NOT a pass." >&2; exit 2; }
 ( cd "$SITE" && PUBLIC_EXPLORE_MODE=true ./node_modules/.bin/astro build ) > "$TMP/build.log" 2>&1 || {
   echo "explore-page-boards: the site did not build, so /explore is UNPROVEN. Last lines:" >&2
   tail -15 "$TMP/build.log" >&2; exit 2; }
@@ -211,6 +247,11 @@ has "the notes carry what moves"              'What moves'
 has "the motion plan is the registry's"       'the photograph fades in once it is scrolled to'
 has "the CTA options are offered"             'Book a first visit / Ask a question'
 has "the donor travels"                       'the-modern-house'
+# THE DONOR SITS BESIDE THE BOARD. A rung claims it reproduces a library reference; without its
+# hero on the page that claim is a slug in a registry the client never opens.
+has "the b1 card shows its donor's hero"      'src="/_explore/b1-donor.jpg"'
+has "the b2 card shows its donor's hero"      'src="/_explore/b2-donor.jpg"'
+has "the donor still is captioned"            'Drawn from the-modern-house'
 
 # --- the calibration row, above the ladder ----------------------------------------------
 has "the calibration question is asked"       'how bold you want to be'

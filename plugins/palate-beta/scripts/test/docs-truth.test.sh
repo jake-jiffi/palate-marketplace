@@ -41,6 +41,14 @@ present() { # <desc> <file> <literal string that MUST appear>
   [ -f "$f" ] || { bad "$1 ($2 does not exist, so nothing was checked)"; return; }
   grep -qF -- "$3" "$f" && ok "$1" || bad "$1 ($2 does not say '$3')"
 }
+# Same as `present`, with a PATTERN rather than a literal, for the one thing a literal cannot
+# say: that a string is at the start of its own line, i.e. that a step heading is a step and not
+# a mention of one inside somebody else's paragraph.
+matches() { # <desc> <file> <basic regex that MUST match>
+  local f="$ROOT/$2"
+  [ -f "$f" ] || { bad "$1 ($2 does not exist, so nothing was checked)"; return; }
+  grep -q -- "$3" "$f" && ok "$1" || bad "$1 ($2 has no line matching '$3')"
+}
 
 # ============ 1. LIGHTHOUSE. Nothing in this plugin runs it. =============================
 absent "testing.md does not promise a Lighthouse baseline" \
@@ -502,6 +510,74 @@ present "pick.md names the question round flags" \
   "commands/pick.md" "--answer motion="
 present "explore-stage.md names the question round" \
   "references/explore-stage.md" "question_round"
+
+# The donor half. The surveyor writes the file, boards-render draws from it, and the judge reads
+# what boards-render wrote, so a doctrine that never names the file describes a board drawn from
+# a slug.
+present "explore-stage.md names the file the drawing brief is read from" \
+  "references/explore-stage.md" "donor-heroes.json"
+present "explore-stage.md names the flag that draws the donor row" \
+  "references/explore-stage.md" "--donors"
+present "explore-stage.md names the gate that judges a board against its donor" \
+  "references/explore-stage.md" "gate-board-judge.mjs"
+present "explore-stage.md names the rung a board is refused at" \
+  "references/explore-stage.md" "clearly_worse"
+present "SKILL.md A.4 names the judge that runs before the canvas" \
+  "SKILL.md" "gate-board-judge.mjs"
+# `^2c\.` and not any "2c." substring: the point is the STEP HEADING, and a mention of the step
+# inside another paragraph would satisfy a loose grep while the step itself had been deleted.
+matches "palate-verifier.md carries the judging step as a step" \
+  "agents/palate-verifier.md" "^2c\."
+present "palate-verifier.md names the file the judgements are collected into" \
+  "agents/palate-verifier.md" "judgements.json"
+# THE VERIFIER HAS NO Agent TOOL (its frontmatter is Bash, Read, Grep, Glob, Write, mcp__palate),
+# so a doctrine telling it to dispatch a subagent describes a thing it cannot do. The main build
+# agent dispatches, exactly as it does for the site ladder.
+absent "palate-verifier.md never tells the verifier to dispatch a subagent" \
+  "agents/palate-verifier.md" "ispatch"
+present "SKILL.md A.4 says the main agent dispatches the judging subagents" \
+  "SKILL.md" "YOU dispatch the judging subagents"
+present "explore-stage.md owns the dispatch, one fresh subagent per comparison" \
+  "references/explore-stage.md" "ONE FRESH general-purpose subagent per comparison"
+present "build-manifest.md records what the judge wrote" \
+  "references/build-manifest.md" "board_judgements"
+# The release valve is in both scripts, so it is named where a build would reach for it.
+present "explore-stage.md names the release valve for the judge" \
+  "references/explore-stage.md" "PALATE_GATE_JUDGE=0"
+present "palate-verifier.md names the release valve for the judge" \
+  "agents/palate-verifier.md" "PALATE_GATE_JUDGE=0"
+present "explore-stage.md names the deliberate skip of the donor row" \
+  "references/explore-stage.md" "--no-donors"
+present "explore-stage.md names the record a skipped donor row leaves" \
+  "references/explore-stage.md" "donor_row"
+present "explore-stage.md says two judgements are owed per pair" \
+  "references/explore-stage.md" "two per pair"
+
+# ================= THE TWO TOOL RULINGS, PINNED ==========================================
+# The surveyor WRITES its packet's two files (.palate/explore/refs.json and donor-heroes.json)
+# and saves the reference stills beside them, so a frontmatter of read-only tools describes an
+# agent that cannot do its own step 6 and step 7. The verifier is the opposite ruling: it has
+# no Agent tool on purpose, because the judging subagents must know nothing about this build,
+# so it STATES the comparisons and the main build agent dispatches them.
+matches "palate-surveyor.md may write the packet files it is told to write" \
+  "agents/palate-surveyor.md" "^tools:.*Write"
+absent "palate-verifier.md is not given an Agent tool" \
+  "agents/palate-verifier.md" "tools: Bash, Read, Grep, Glob, Write, mcp__palate, Agent"
+matches "palate-verifier.md's tools line carries no Agent or Task tool" \
+  "agents/palate-verifier.md" "^tools:[^A-Za-z]*\(Bash\|Read\|Grep\|Glob\|Write\|mcp__palate\|, \)*$"
+present "explore-stage.md publishes the canvas only once the judge has passed" \
+  "references/explore-stage.md" "once the board judge"
+
+# THE ANSWER SHAPE THE JUDGE ACTUALLY VALIDATES. `scoreBoardPair` REQUIRES `candidate_is`, so a
+# surface that still asks for `[{ id, verdict }]` sends every judgement back in a shape the gate
+# refuses, after the subagents have been paid for. The old shape must appear nowhere.
+for f in SKILL.md references/explore-stage.md agents/palate-verifier.md; do
+  absent "$f asks for no judgement shape the judge refuses" "$f" "[{ id, verdict }]"
+done
+present "SKILL.md A.4 asks for the shape the judge validates" \
+  "SKILL.md" "[{ id, candidate_is, verdict }]"
+present "SKILL.md A.4 tells the subagent which letter is the candidate" \
+  "SKILL.md" "candidate_is"
 
 echo "---"
 echo "passed=$pass failed=$fail"

@@ -32,19 +32,28 @@ public/_explore/b1-hero.png
 .palate/explore/seed/canvas.json
 .palate/explore/seed/README.md
 .palate/explore/seed/Ref1.dc.html
-.palate/explore/seed/ref1.jpg"
+.palate/explore/seed/ref1.jpg
+.palate/explore/seed/D1.dc.html
+.palate/explore/seed/d1-hero.jpg
+.palate/explore/judge-request.json
+.palate/explore/judgements.json"
 
 # MEASURED state in the same directories. Ignoring these is the opposite failure: the
 # adoption record and the baselines are judgement, and cannot be recomputed.
 # The Explore SEED artboards belong here too: they are hand-drawn, they are the record of the
 # directions a client was shown, and `boards-render.mjs` validates them rather than writing
 # them, so an ignore rule over the directory would drop the one artefact Explore produces.
+# `dune-hero.jpg` is in here for the pattern, not for the dune: the donor cards are `d<rung>-`,
+# so `d*-hero.jpg` swallowed every hand-placed board image whose name happened to start with a
+# d, and the rung is a NUMBER.
 KEEP=".palate/adoption/report.json
 .palate/adoption/routes.json
 .palate/baselines/home.json
 .palate/assets.json
 .palate/explore/seed/B1.dc.html
 .palate/explore/seed/b1-hero.jpg
+.palate/explore/seed/dune-hero.jpg
+.palate/explore/donor-heroes.json
 public/logo.png"
 
 # ============ 1. THE WORKSPACE LAYOUT: the script writes the rules at the repo root ========

@@ -47,6 +47,14 @@ verify-report.json
 .palate/explore/seed/README.md
 .palate/explore/seed/Ref*.dc.html
 .palate/explore/seed/ref*.jpg
+# The donor row and the board judge are generated the same way: one `D<rung>.dc.html` card and
+# one `d<rung>-hero.jpg` per rung, re-fetched from donor-heroes.json on every run, and the
+# judge's request and answers, restated on every run and refused once stale. donor-heroes.json
+# itself is MEASURED state (the surveyor paid for it) and stays committed.
+.palate/explore/seed/D*.dc.html
+.palate/explore/seed/d[0-9]*-hero.jpg
+.palate/explore/judge-request.json
+.palate/explore/judgements.json
 public/_explore/
 *.palate-bak
 .palate-devserver.log

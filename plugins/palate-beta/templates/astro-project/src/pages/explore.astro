@@ -76,6 +76,17 @@ const canvasUrl =
   : null;
 const asked = Number(manifest?.commission?.intensity_asked) || null;
 
+/**
+ * DID THE DONOR ROW ACTUALLY RUN? The card used to render `<id>-donor.jpg` on the registry's
+ * `donor` alone, and the registry names a donor on every board, so a build run with
+ * `--no-donors` (or one whose donor row never ran at all) shipped a broken image on the page
+ * the client opens. `boards-render.mjs` records `explore.donor_row = { skipped: true }` for
+ * exactly that run and `{ skipped: false }` when it drew the row; an older manifest records
+ * neither, and those builds DID write the files, so absence reads as present.
+ */
+const donorRow = manifest?.explore?.donor_row;
+const donorsDrawn = !donorRow || donorRow.skipped !== true;
+
 const refs = (readArtefact(".palate/explore/refs.json") || [])
   .filter((r) => r && r.position && r.name)
   .sort((a, b) => a.position - b.position);
@@ -189,9 +200,22 @@ const askedRung = (() => {
               </h3>
               <p class="ex-feeling">{v.feeling} <span class="ex-of">&middot; rung {v.ambition} of {maxAmbition}</span></p>
             </div>
-            <a class="ex-shot" href={`/_explore/${v.id}-full.png`} data-board-shot={v.id}>
-              <img src={`/_explore/${v.id}.png`} alt={`The entrance of ${v.name}`} width="1440" height="900" loading="lazy" />
-            </a>
+            {/* THE BOARD AND THE REFERENCE IT REPRODUCES, SIDE BY SIDE. A rung's donor was a
+                slug in a registry the client never opens, so the claim that the direction is
+                drawn from real published work could not be checked by the one person it is
+                made to. boards-render writes `<id>-donor.jpg` beside every board still, for
+                every board that names a donor. */}
+            <div class="ex-shots">
+              <a class="ex-shot" href={`/_explore/${v.id}-full.png`} data-board-shot={v.id}>
+                <img src={`/_explore/${v.id}.png`} alt={`The entrance of ${v.name}`} width="1440" height="900" loading="lazy" />
+              </a>
+              {v.donor && donorsDrawn && (
+                <figure class="ex-donor">
+                  <img src={`/_explore/${v.id}-donor.jpg`} alt={`The entrance of ${v.donor}, the published site this direction is drawn from`} width="720" height="450" loading="lazy" />
+                  <figcaption>Drawn from {v.donor}</figcaption>
+                </figure>
+              )}
+            </div>
             <dl class="ex-dl">
               <div><dt>What it is</dt><dd>{v.what}</dd></div>
               <div><dt>Why</dt><dd>{v.why}</dd></div>
@@ -386,11 +410,23 @@ const askedRung = (() => {
   .ex-card h3 a { color: inherit; text-decoration: none; }
   .ex-card h3 a:hover, .ex-card h3 a:focus-visible { text-decoration: underline; }
   .ex-feeling { font-style: italic; opacity: 0.82; margin: 0 0 1.5rem; }
-  .ex-shot { display: block; margin: 0 0 1.5rem; }
+  .ex-shots {
+    display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: start;
+    margin: 0 0 1.5rem;
+  }
+  .ex-shot { display: block; }
   .ex-shot img {
     display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
     object-position: top; border: 1px solid currentColor;
   }
+  .ex-donor { margin: 0; display: grid; gap: 0.5rem; }
+  .ex-donor img {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
+    object-position: top; border: 1px solid currentColor;
+  }
+  /* 0.78 rather than a lighter grey: opacity is a contrast decision, and brand ink at 0.5 on
+     paper composites to about 4.17:1, which this page has failed before. */
+  .ex-donor figcaption { font-size: 0.8125rem; line-height: 1.5; opacity: 0.78; }
   .ex-dl { margin: 0 0 1.5rem; display: grid; gap: 1rem; }
   .ex-dl > div { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; align-items: baseline; }
   .ex-dl dt {
@@ -408,6 +444,7 @@ const askedRung = (() => {
 
   @media (max-width: 46rem) {
     .ex-dl > div { grid-template-columns: 1fr; gap: 0.25rem; }
+    .ex-shots { grid-template-columns: 1fr; }
   }
   @media (max-width: 40rem) {
     .ex { padding: 2.5rem 1.25rem 4rem; }

@@ -185,7 +185,7 @@ function blank() {
     // pick) + the accept/edit signal, with the surface context propensity correction
     // needs. Agent-set DESCRIPTIVE block (like variants[]); persisted to builds.log.json
     // by palate-stop.mjs. Nullable + additive: absence never blocks (calm/edit builds).
-    explore: null, // { ran, shown:[{ id, name, donor_slug, hero_pattern, position }], picks:[{ surface, variant_id }], edits:[{ surface, variant_id, note }] }
+    explore: null, // { ran, shown:[{ id, name, donor_slug, position }], picks:[{ surface, variant_id }], edits:[{ surface, variant_id, note }] }
     visual: null, // { ran, pass, iterations:[{i, shots:{desktop_full,mobile_full,sections:{}}, axes:{philosophy..variety}, defects:[{type,location}], score}], console_errors:int }
     novelty: null, // { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
     verifier: null, // { ran, pass, verdict, report_path }

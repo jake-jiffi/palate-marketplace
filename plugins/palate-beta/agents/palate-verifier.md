@@ -69,6 +69,42 @@ never held to the bold bar.
    block, and never a pass. Read that line before reporting anything. Report its findings verbatim: they name the entry, and the fix is
    always in `src/lib/variants.ts`.
 
+2c. **The board judge** (every board is compared with the library reference it was drawn
+   from, at EVERY intensity - the visual rubric a board already clears measures hygiene, and
+   a board can clear it and still be bland):
+
+   **YOU STATE THE COMPARISONS; YOU DO NOT JUDGE THEM AND YOU DO NOT RUN THEM.** You have no
+   Agent tool, and the judging has to happen in subagents that know nothing about this build,
+   so it belongs to the main build agent in its own session, exactly as the site ladder's
+   comparisons do (`references/local-grade.md`).
+
+   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir>`. It writes
+      `<projectDir>/.palate/explore/judge-request.json` and prints its path. A first stderr line
+      reading `gate-board-judge: skipped (<reason>)` with exit 2 is a SKIP, never a block and
+      never a pass: report the reason. The commonest is a board with no `hero.png` or no
+      `donor.jpg` on disk, which means `node "${CLAUDE_PLUGIN_ROOT}/scripts/boards-render.mjs"
+      <projectDir>` has not run with `<projectDir>/.palate/explore/donor-heroes.json` present,
+      and the skip names that.
+   2. **Hand the request path back in your report, and say what is owed on it.** The request
+      carries `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`, `comparable`,
+      `better`) and, per board, TWO `comparisons`, the same pair with the images swapped, so the
+      main agent owes two judgements per pair, one fresh general-purpose subagent each, collected
+      into `<projectDir>/.palate/explore/judgements.json` as `[{ id, candidate_is, verdict }]`
+      (`candidate_is` is the letter, `A` or `B`, the comparison named as the candidate, echoed back
+      by the subagent; the gate refuses a pair without it) and scored by
+      `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir> --judgements
+      <projectDir>/.palate/explore/judgements.json` before the canvas is published. The
+      procedure is `references/explore-stage.md`; do not run it here.
+   3. **On your NEXT round, the judgements are already a fact and you read them as one.**
+      `node scripts/gate-explore.mjs <projectDir>` (step 2b) blocks a shown build whose
+      registered boards have no entry in `manifest.explore.board_judgements` or carry
+      `clearly_worse`, which is where a board that was never compared, or was compared and
+      lost, becomes a refusal. Report those findings verbatim: the fix is a redraw from the
+      donor's hero, not an argument.
+
+   `PALATE_GATE_JUDGE=0` releases the judge and that half of the Explore gate, and a build that
+   set it is reported as RELEASED, never as passed.
+
 3. **Anti-default / slop lint** (no Claude-default shapes or AI-tell copy):
    `bash scripts/ux-lint.sh <built file(s)>` and read `references/anti-patterns.md` (and
    the full tell catalogue it links, `references/ai-slop-tells.md`). Flag a gradient hero,

@@ -38,6 +38,7 @@
  * Usage:
  *   node scripts/boards-render.mjs <projectDir> [--out .palate/explore]
  *                                  [--refs .palate/explore/refs.json]
+ *                                  [--donors .palate/explore/donor-heroes.json | --no-donors]
  * Exit: 0 validated and measured, 2 could not (with the reason and the board named).
  */
 import {
@@ -108,7 +109,7 @@ const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] 
 // Only these flags take a value, so a positional is anything not a flag and not one of their
 // values. `--port` is obsolete (nothing is served any more) and stays in the list ONLY so an
 // old invocation does not read the port number as the project directory.
-const VALUE_FLAGS = new Set(["--out", "--refs", "--port"]);
+const VALUE_FLAGS = new Set(["--out", "--refs", "--donors", "--port"]);
 const positional = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i].startsWith("--")) { if (VALUE_FLAGS.has(args[i])) i++; continue; }
@@ -440,7 +441,7 @@ export function toArtboard({ html, css, fonts = "", imports = [], script = "", n
  * here may round them. 80 px between frames in a row, 120 px between rows, per the canvas's
  * own layout rules.
  */
-export function writeCanvasJson({ boards, refs = [], out }) {
+export function writeCanvasJson({ boards, refs = [], donors = [], out }) {
   const artboards = [];
   const annotations = [];
 
@@ -479,7 +480,33 @@ export function writeCanvasJson({ boards, refs = [], out }) {
       w: 420,
       text: `${b.name} - rung ${b.ambition} of ${boards.length}. ${b.feeling}. ${b.what}`,
     });
-    bx += FRAME_WIDTH + FRAME_GAP;
+    /**
+     * THE DONOR SITS BESIDE ITS OWN BOARD, on the board's row, and the next board steps PAST
+     * it. A donor card laid without stepping bx lands exactly where the next board lands and
+     * covers it, which a canvas reports as nothing at all: one frame on top of another reads
+     * as a board that was never drawn.
+     */
+    const d = donors.find((x) => x && Number(x.rung) === Number(b.ambition));
+    if (d) {
+      artboards.push({
+        file: `D${d.rung}.dc.html`,
+        x: bx + FRAME_WIDTH + FRAME_GAP,
+        y: boardY,
+        w: REF_WIDTH,
+        h: REF_HEIGHT,
+        title: `Donor for rung ${d.rung}: ${d.name}`,
+      });
+      annotations.push({
+        id: `donor-${String(b.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 34)}`,
+        x: bx + FRAME_WIDTH + FRAME_GAP,
+        y: boardY + REF_HEIGHT + 24,
+        w: 420,
+        text: `Drawn from ${d.slug}: ${d.signature_move}`,
+      });
+      bx += FRAME_WIDTH + FRAME_GAP + REF_WIDTH + FRAME_GAP;
+    } else {
+      bx += FRAME_WIDTH + FRAME_GAP;
+    }
   }
 
   const doc = { artboards, annotations, launch: { view: "canvas" } };
@@ -494,6 +521,15 @@ async function main() {
   const seedDir = join(outDir, "seed");
   const shotsDir = join(outDir, "shots");
   const refsPath = opt("--refs", null);
+  /**
+   * THE DONOR ROW IS ON BY DEFAULT WHEN ITS FILE EXISTS, and its absence is printed rather
+   * than passed over. `--donors <path>` names it explicitly (and a named file that does not
+   * exist is a refusal, because it was asked for); `--no-donors` is the deliberate skip, and
+   * that skip is recorded in the manifest so a run with no donor row cannot be mistaken for a
+   * run with one.
+   */
+  const donorsAsked = opt("--donors", null);
+  const donorsPath = donorsAsked || join(".palate/explore", "donor-heroes.json");
   if (flag("--no-build")) {
     process.stderr.write("boards-render: --no-build is obsolete; boards are artboards and nothing is built here.\n");
   }
@@ -520,6 +556,23 @@ async function main() {
   const refs = refsPath ? loadRefs(projectDir, refsPath) : [];
   const lines = [];
   if (refs.length) lines.push(...await writeRefs(refs, seedDir, projectDir));
+
+  // The donor row goes the same way and for the same reason: it needs sharp and the network,
+  // not a page, and a refusal here must not have to step over an open browser to exit.
+  let donors = [];
+  let donorRow = { skipped: true, reason: "--no-donors" };
+  if (flag("--no-donors")) {
+    lines.push("  donor row: skipped (--no-donors). The boards are shown without the references they reproduce.");
+  } else if (!donorsAsked && !existsSync(resolve(projectDir, donorsPath))) {
+    donorRow = { skipped: true, reason: "no donor-heroes.json" };
+    lines.push(`  donor row: skipped, there is no ${donorsPath}. The surveyor writes it; without it no board sits beside the reference it reproduces.`);
+  } else {
+    try { donors = loadDonors(projectDir, donorsPath, boards); }
+    catch (e) { die(`${e.message}`); }
+    mkdirSync(shotsDir, { recursive: true });
+    lines.push(...await writeDonors(donors, boards, seedDir, shotsDir, projectDir));
+    donorRow = { skipped: false, count: donors.length, slugs: donors.map((d) => d.slug) };
+  }
 
   let playwright;
   try { playwright = engineRequire("playwright"); }
@@ -589,9 +642,9 @@ async function main() {
     await browser.close().catch(() => {});
   }
 
-  writeCanvasJson({ boards: measured, refs, out: join(seedDir, "canvas.json") });
-  writeFileSync(join(seedDir, "README.md"), seedReadme(measured, refs));
-  recordShown(projectDir, boards);
+  writeCanvasJson({ boards: measured, refs, donors, out: join(seedDir, "canvas.json") });
+  writeFileSync(join(seedDir, "README.md"), seedReadme(measured, refs, donors));
+  recordShown(projectDir, boards, donorRow);
 
   process.stdout.write(`boards-render: ${measured.length} artboard(s) validated, keyed, measured and archived under ${outDir}\n`);
   for (const l of lines) process.stdout.write(`${l}\n`);
@@ -645,6 +698,172 @@ async function writeRefs(refs, seedDir, projectDir) {
     writeFileSync(join(pubRefs, img), buf);
     writeFileSync(join(seedDir, `Ref${r.position}.dc.html`), refArtboard(r, img));
     lines.push(`  reference ${r.position} ${r.slug}: Ref${r.position}.dc.html, ${img} ${Math.round(buf.length / 1024)} KB`);
+  }
+  return lines;
+}
+
+/**
+ * The donor row, validated before a single byte is fetched.
+ *
+ * A rung's donor is the library reference the board REPRODUCES, and until now it was a bare
+ * slug in a registry: its hero never reached the canvas, and its signature move, component
+ * prompts and copy voice never reached the drawing. `.palate/explore/donor-heroes.json` is the
+ * surveyor's record of all of it, written from the `refs_get_screenshot` response the survey
+ * already paid for, so nothing here costs a metered call.
+ *
+ * IT THROWS RATHER THAN EXITING, so the suite can hold it to its own contract without spawning
+ * a process; `main` turns the message into the file's usual refusal. A registered board with no
+ * entry is a refusal and never a silence: half a donor row on a canvas reads as the whole one,
+ * and the rung that is missing its reference is the one nobody asks about.
+ */
+export function loadDonors(projectDir, donorsPath, boards = []) {
+  const p = resolve(projectDir, donorsPath);
+  if (!existsSync(p)) throw new Error(`--donors ${donorsPath} does not exist. The donor row cannot be drawn.`);
+  let donors;
+  try { donors = JSON.parse(readFileSync(p, "utf8")); }
+  catch (e) { throw new Error(`--donors ${donorsPath} is not readable JSON: ${e.message}`); }
+  if (!Array.isArray(donors) || !donors.length) {
+    throw new Error(`--donors ${donorsPath} holds no donors. The donor row cannot be drawn.`);
+  }
+
+  const seen = new Map();
+  for (const d of donors) {
+    const where = JSON.stringify(d).slice(0, 120);
+    if (!Number.isInteger(Number(d && d.rung))) throw new Error(`a donor has no whole-number rung (${where}).`);
+    const rung = Number(d.rung);
+    d.rung = rung;
+    for (const f of ["slug", "name", "signature_move", "copy_voice", "hero_url"]) {
+      if (!d[f] || typeof d[f] !== "string") throw new Error(`the donor for rung ${rung} has no ${f}; every field is what the board is drawn from.`);
+    }
+    for (const f of ["component_prompts", "do_dont"]) {
+      if (!Array.isArray(d[f]) || !d[f].length) throw new Error(`the donor for rung ${rung} has no ${f}; the board is drawn from those lines, so an empty one is a board drawn from a slug.`);
+    }
+    /**
+     * A reference screenshot is a PUBLIC OBJECT over https. http is allowed on loopback alone,
+     * which is how the suite serves a fixture hero without reaching the library; anything else
+     * over plain http is refused rather than fetched.
+     */
+    let url;
+    try { url = new URL(d.hero_url); } catch { throw new Error(`the donor for rung ${rung} has an unreadable hero_url (${d.hero_url}).`); }
+    const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+    if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+      throw new Error(`the donor for rung ${rung} (${d.slug}) has a hero_url that is not https (${d.hero_url}).`);
+    }
+    if (seen.has(rung)) throw new Error(`two donors claim rung ${rung} (${seen.get(rung)} and ${d.slug}); one rung reproduces one reference.`);
+    seen.set(rung, d.slug);
+  }
+
+  /**
+   * THE ROW IS MATCHED BY RUNG AND CHECKED BY SLUG.
+   *
+   * The registry names the donor a board REPRODUCES and this file names the donor a rung's card
+   * SHOWS, and the two were only ever joined on the rung number. A registry entry reading
+   * `donor: "linear"` at rung 2 beside a rung-2 entry for `aesop` passed every gate downstream:
+   * the canvas then laid aesop's hero beside that board and captioned it "Drawn from linear",
+   * which is a false claim about published work, made to the one person it is made to, with the
+   * evidence for it sitting right there.
+   */
+  for (const b of boards) {
+    const rung = Number(b.ambition);
+    if (!seen.has(rung)) {
+      throw new Error(`board ${b.id} is registered at rung ${b.ambition} and donor-heroes.json carries no entry for rung ${b.ambition}. Record its donor, or run with --no-donors; half a donor row reads as the whole one.`);
+    }
+    const named = seen.get(rung);
+    if (b.donor && String(b.donor) !== named) {
+      throw new Error(`board ${b.id} is registered with donor "${b.donor}" and ${donorsPath} carries "${named}" at rung ${rung}. The card beside that board would show ${named}'s hero captioned "Drawn from ${b.donor}". Name one reference in both.`);
+    }
+  }
+  return donors.slice().sort((a, b) => a.rung - b.rung);
+}
+
+/**
+ * Fetch one public hero, and refuse loudly on anything that is not a picture.
+ *
+ * Ten seconds, because this sits on the critical path of a run an operator is watching, and an
+ * unbounded fetch of a host that accepts the connection and never answers hangs the whole seed
+ * with nothing on screen. The body is checked by its MAGIC BYTES rather than by its
+ * content-type: an error page served as image/png under a .png name is the way this actually
+ * goes wrong, and it would otherwise be re-encoded into a broken frame.
+ */
+async function fetchHero(url) {
+  const ctl = new AbortController();
+  // The clock covers the BODY as well as the headers. A host that answers 200 and then dribbles
+  // is the shape that hangs a run an operator is watching, and clearing the timer at the end of
+  // the headers would leave the read unbounded.
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  let buf;
+  try {
+    const res = await fetch(url, { signal: ctl.signal, redirect: "follow" });
+    if (!res.ok) throw new Error(`${url} answered HTTP ${res.status}; the donor hero is not there.`);
+    buf = Buffer.from(await res.arrayBuffer());
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error(`${url} did not answer within 10 seconds.`);
+    throw e instanceof Error && /answered HTTP/.test(e.message) ? e : new Error(`${url} could not be fetched (${e.message}).`);
+  } finally {
+    clearTimeout(timer);
+  }
+  const png = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  const jpeg = buf[0] === 0xff && buf[1] === 0xd8;
+  const webp = buf.subarray(0, 4).toString("latin1") === "RIFF" && buf.subarray(8, 12).toString("latin1") === "WEBP";
+  if (!(png || jpeg || webp)) {
+    throw new Error(`${url} answered ${buf.length} bytes that are not a PNG, JPEG or WebP; an error page under an image name is not a hero.`);
+  }
+  return buf;
+}
+
+/**
+ * Write the donor row: one fetched, re-encoded hero and one card per rung, beside its board.
+ *
+ * The same ceiling as everything else on a canvas with no egress: 70 KB, walked down the
+ * existing ladder. The still is copied into the archive and into `public/_explore/` as well,
+ * so /explore can show the donor beside the board for every tool that cannot open a canvas.
+ */
+async function writeDonors(donors, boards, seedDir, shotsDir, projectDir) {
+  let sharp;
+  try { sharp = engineRequire("sharp"); }
+  catch { die(`sharp is not installed (${join(ENGINE, "setup.sh")}). The donor heroes cannot be brought under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB, so nothing was written.`); }
+
+  const lines = [];
+  for (const d of donors) {
+    /**
+     * A donor no registered board claims is RECORDED and not drawn. The surveyor may legitimately
+     * have written more donors than the ladder ended up with, and writing a card for one would
+     * leave a file in the seed that `canvas.json` never lays out: an artboard nobody can reach,
+     * which reads as a board that was dropped.
+     */
+    const board = boards.find((b) => Number(b.ambition) === d.rung);
+    if (!board) {
+      lines.push(`  donor rung ${d.rung} ${d.slug}: recorded, not drawn (no board is registered at rung ${d.rung})`);
+      continue;
+    }
+    let buf;
+    try { buf = await fetchHero(d.hero_url); }
+    catch (e) { die(`the donor hero for rung ${d.rung} (${d.slug}): ${e.message} Nothing written.`); }
+
+    const isJpeg = buf[0] === 0xff && buf[1] === 0xd8;
+    if (!isJpeg || buf.length > MAX_IMAGE_BYTES) {
+      const fit = await fitUnder(buf, sharp).catch((e) => {
+        die(`the donor hero for rung ${d.rung} (${d.slug}) could not be re-encoded (${e.message}). Nothing written.`);
+      });
+      if (!fit.ok) {
+        die(`the donor hero for rung ${d.rung} (${d.slug}) will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB (smallest was ${Math.round(fit.buffer.length / 1024)} KB at ${fit.width}px wide, quality ${fit.quality}). Nothing written.`);
+      }
+      buf = fit.buffer;
+    }
+
+    const img = `d${d.rung}-hero.jpg`;
+    writeFileSync(join(seedDir, img), buf);
+    writeFileSync(join(seedDir, `D${d.rung}.dc.html`), donorArtboard({ ...d, img }));
+
+    // The same picture reaches /explore and the archive, keyed on the BOARD's id, because that
+    // is what the page and the fidelity trail both address a rung by.
+    const boardShots = join(shotsDir, board.id);
+    mkdirSync(boardShots, { recursive: true });
+    writeFileSync(join(boardShots, "donor.jpg"), buf);
+    const pub = join(projectDir, "public", "_explore");
+    mkdirSync(pub, { recursive: true });
+    writeFileSync(join(pub, `${board.id}-donor.jpg`), buf);
+    lines.push(`  donor rung ${d.rung} ${d.slug}: D${d.rung}.dc.html, ${img} ${Math.round(buf.length / 1024)} KB`);
   }
   return lines;
 }
@@ -759,9 +978,41 @@ function refArtboard(r, img) {
   );
 }
 
-function seedReadme(boards, refs) {
+/**
+ * One donor: the reference's own hero, its slug, and the single move the board reproduces.
+ *
+ * Deliberately the same 720 x 580 frame as a calibration reference, because it is the same kind
+ * of object (a real site, shown as evidence) and a canvas row of mismatched frame heights reads
+ * as a mistake. One line of text, not a paragraph: what the board took, said plainly enough
+ * that the client can check the board against it.
+ */
+function donorArtboard({ rung, slug, name, signature_move, img }) {
+  const html =
+    `<div style="width:${REF_WIDTH}px;height:${REF_HEIGHT}px;background:#ffffff;color:#111111;` +
+    `font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column">` +
+    `<img src="${escapeHtml(img)}" alt="${escapeHtml(name)}" style="width:${REF_WIDTH}px;height:450px;object-fit:cover;object-position:top;display:block">` +
+    `<div style="padding:16px 20px;display:flex;flex-direction:column;gap:6px">` +
+    `<p style="margin:0;font-size:17px;font-weight:600;line-height:1.2">Rung ${escapeHtml(rung)} is drawn from ${escapeHtml(name)} (${escapeHtml(slug)})</p>` +
+    `<p style="margin:0;font-size:13px;line-height:1.45;color:#5c5c5c">${escapeHtml(signature_move)}</p>` +
+    `</div></div>`;
+  const head = [
+    `x-dc{display:block;width:${REF_WIDTH}px;overflow:hidden}`,
+    "body{margin:0}",
+    "a{color:#111111;text-decoration:underline}",
+    "a:hover{color:#444444}",
+    "img{max-width:100%}",
+  ].join("\n");
+  return (
+    "<!doctype html><html><head><meta charset=\"utf-8\">" +
+    "<script src=\"./support.js\"></script></head><body>" +
+    `<x-dc><helmet><style>${head}</style></helmet>${html}</x-dc></body></html>`
+  );
+}
+
+function seedReadme(boards, refs, donors = []) {
   const rows = boards.map((b) => `- \`${b.file}\` - rung ${b.ambition} of ${boards.length}, ${b.name} (${b.id}), ${FRAME_WIDTH} by ${b.h}`);
   const refRows = refs.map((r) => `- \`Ref${r.position}.dc.html\` - ${r.name} (${r.slug}), ${REF_WIDTH} by ${REF_HEIGHT}`);
+  const donorRows = donors.map((d) => `- \`D${d.rung}.dc.html\` - the donor rung ${d.rung} is drawn from, ${d.name} (${d.slug}), ${REF_WIDTH} by ${REF_HEIGHT}`);
   return [
     "# Explore canvas seed",
     "",
@@ -772,6 +1023,7 @@ function seedReadme(boards, refs) {
     "",
     "Row 1, the ladder in order, restrained to bold:",
     ...rows,
+    ...(donorRows.length ? ["", "Beside each board, the reference it reproduces:", ...donorRows] : []),
     "",
     "## Files",
     "",
@@ -812,7 +1064,7 @@ function seedReadme(boards, refs) {
  * nothing to subtract from. Written through manifest-merge so a concurrent hook write cannot
  * lose it.
  */
-function recordShown(projectDir, boards) {
+function recordShown(projectDir, boards, donorRow = null) {
   const merge = join(HERE, "manifest-merge.mjs");
   const manifest = join(projectDir, "build-manifest.json");
   if (!existsSync(manifest) || !existsSync(merge)) return;
@@ -821,6 +1073,14 @@ function recordShown(projectDir, boards) {
       ran: true,
       shown_at: new Date().toISOString(),
       boards: boards.map((b) => ({ id: b.id, rung: b.ambition, donor: b.donor })),
+      /**
+       * THE LINEAGE SEAM. The Stop hook's `.palate/donors.json` is built from
+       * `explore.shown[].donor_slug`, and nothing wrote `shown` at all, so every RUN SITE
+       * command afterwards searched the library cold for craft this build already knew the
+       * source of.
+       */
+      shown: boards.map((b) => ({ id: b.id, name: b.name, donor_slug: b.donor, position: b.ambition })),
+      ...(donorRow ? { donor_row: donorRow } : {}),
     },
   };
   try {

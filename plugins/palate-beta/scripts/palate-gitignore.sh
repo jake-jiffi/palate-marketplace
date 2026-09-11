@@ -51,6 +51,10 @@ verify-report.json
 .palate/explore/shots/
 .palate/explore/seed/canvas.json
 .palate/explore/seed/README.md
+.palate/explore/seed/D*.dc.html
+.palate/explore/seed/d[0-9]*-hero.jpg
+.palate/explore/judge-request.json
+.palate/explore/judgements.json
 public/_explore/
 *.palate-bak
 .palate-devserver.log
@@ -126,6 +130,10 @@ verify-report.json
 .palate/explore/seed/README.md
 .palate/explore/seed/Ref*.dc.html
 .palate/explore/seed/ref*.jpg
+.palate/explore/seed/D*.dc.html
+.palate/explore/seed/d[0-9]*-hero.jpg
+.palate/explore/judge-request.json
+.palate/explore/judgements.json
 public/_explore/
 *.palate-bak
 .palate-devserver.log

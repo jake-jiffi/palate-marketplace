@@ -24,7 +24,8 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
-import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard, validateArtboard, stampKeys } from "../boards-render.mjs";
+import { createServer } from "node:http";
+import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard, validateArtboard, stampKeys, loadDonors } from "../boards-render.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
@@ -782,4 +783,247 @@ test("no registry at all is refused rather than passed over", async (t) => {
   assert.equal(r.status, 2);
   assert.match(r.stderr, /variants\.ts/);
   assert.match(r.stderr, /NOT a pass/);
+});
+
+// ------------------------------------------------------------------ the donor row
+/**
+ * THE DONOR SITS BESIDE ITS BOARD, or the rung's claim that it reproduces a library reference
+ * is a bare slug in a registry nobody opens. These assertions are about the FILES and the
+ * LAYOUT, because a donor card that is written but never paired lands at the same x as the
+ * next board and covers it, and a canvas reports neither.
+ */
+const donorFor = (rung, over = {}) => ({
+  rung,
+  slug: `donor-${rung}`,
+  name: `Donor ${rung}`,
+  hero_url: `https://example.supabase.co/storage/v1/object/public/screenshots/donor-${rung}/desktop.png`,
+  signature_move: `The entrance holds one photograph and one line, rung ${rung}.`,
+  component_prompts: ["A hero of one photograph, one line and one action."],
+  copy_voice: "Plain sentences, no adjectives, the price said out loud.",
+  do_dont: ["Do not stack two calls to action in the entrance."],
+  ...over,
+});
+
+function donorFile(entries) {
+  const dir = mkdtempSync(join(tmpdir(), "donor-fixture-"));
+  fixtureDirs.push(dir);
+  writeFileSync(join(dir, "donor-heroes.json"), JSON.stringify(entries, null, 2));
+  return dir;
+}
+
+test("a registered board with no donor entry is refused, naming the rung and the file", () => {
+  const dir = donorFile([donorFor(1)]);
+  assert.throws(
+    () => loadDonors(dir, "donor-heroes.json", [{ id: "b1", ambition: 1 }, { id: "b2", ambition: 2 }]),
+    (e) => /rung 2/.test(e.message) && /donor-heroes\.json/.test(e.message),
+    "a board whose donor was never recorded passed as a silence",
+  );
+});
+
+/**
+ * The registry's donor and the row's donor are joined on the RUNG, so a mismatched slug used to
+ * pass every gate: the canvas laid one reference's hero beside the board and captioned it with
+ * the other's name, which is a false claim about published work shown to the client.
+ */
+test("a board whose registered donor is not the donor recorded at its rung is refused", () => {
+  const dir = donorFile([donorFor(1), donorFor(2, { slug: "aesop" })]);
+  assert.throws(
+    () => loadDonors(dir, "donor-heroes.json", [
+      { id: "b1", ambition: 1, donor: "donor-1" },
+      { id: "b2", ambition: 2, donor: "linear" },
+    ]),
+    (e) => /b2/.test(e.message) && /linear/.test(e.message) && /aesop/.test(e.message) && /donor-heroes\.json/.test(e.message),
+    "a board captioned with a reference it was not drawn from was accepted",
+  );
+});
+
+test("a board whose registered donor matches the rung's entry is accepted", () => {
+  const dir = donorFile([donorFor(1, { slug: "aesop" })]);
+  assert.equal(loadDonors(dir, "donor-heroes.json", [{ id: "b1", ambition: 1, donor: "aesop" }]).length, 1);
+});
+
+test("a donor hero that is not https is refused", () => {
+  const dir = donorFile([donorFor(1, { hero_url: "http://example.com/hero.png" })]);
+  assert.throws(
+    () => loadDonors(dir, "donor-heroes.json", [{ id: "b1", ambition: 1 }]),
+    /https/,
+  );
+});
+
+test("two donors for one rung are refused, naming the rung", () => {
+  const dir = donorFile([donorFor(1), donorFor(1, { slug: "other" })]);
+  assert.throws(
+    () => loadDonors(dir, "donor-heroes.json", [{ id: "b1", ambition: 1 }]),
+    /rung 1/,
+  );
+});
+
+test("a donor missing any of its taste layers is refused, naming the field", () => {
+  for (const field of ["slug", "name", "signature_move", "component_prompts", "copy_voice", "do_dont"]) {
+    const entry = donorFor(1);
+    delete entry[field];
+    const dir = donorFile([entry]);
+    assert.throws(
+      () => loadDonors(dir, "donor-heroes.json", [{ id: "b1", ambition: 1 }]),
+      new RegExp(field),
+      `a donor with no ${field} was accepted, so the drawing brief has nothing to draw from`,
+    );
+  }
+});
+
+test("canvas.json lays each donor beside its own board, and steps the next board past it", () => {
+  const boards = [
+    { file: "B1.dc.html", id: "b1", ambition: 1, name: "One", h: 2000, feeling: "quiet", what: "A" },
+    { file: "B2.dc.html", id: "b2", ambition: 2, name: "Two", h: 2400, feeling: "loud", what: "B" },
+  ];
+  const doc = writeCanvasJson({ boards, donors: [donorFor(1)], out: null });
+  const b1 = doc.artboards.find((a) => a.file === "B1.dc.html");
+  const b2 = doc.artboards.find((a) => a.file === "B2.dc.html");
+  const d1 = doc.artboards.find((a) => a.file === "D1.dc.html");
+  assert.ok(d1, "the donor card is not on the canvas at all");
+  assert.equal(d1.x, b1.x + 1440 + 80, "the donor does not sit beside its board");
+  assert.equal(d1.y, b1.y, "the donor is not on the board's own row");
+  assert.equal(d1.w, 720);
+  assert.equal(d1.h, 580);
+  assert.match(d1.title, /Donor for rung 1: Donor 1/);
+  assert.equal(b2.x, 1440 + 80 + 720 + 80, "the next board was not stepped past the donor, so it sits under it");
+  const note = doc.annotations.find((a) => a.id === "donor-b1");
+  assert.ok(note, "the donor card carries no annotation saying what was drawn from it");
+  assert.match(note.text, /Drawn from donor-1: The entrance holds one photograph/);
+  for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/);
+});
+
+test("with no donors the layout is byte-identical to the one without the argument", () => {
+  const boards = [
+    { file: "B1.dc.html", id: "b1", ambition: 1, name: "One", h: 2000, feeling: "quiet", what: "A" },
+    { file: "B2.dc.html", id: "b2", ambition: 2, name: "Two", h: 2400, feeling: "loud", what: "B" },
+  ];
+  const refs = [{ position: 1, name: "Ref one", slug: "one", why: "restrained" }];
+  assert.equal(
+    JSON.stringify(writeCanvasJson({ boards, refs, donors: [], out: null })),
+    JSON.stringify(writeCanvasJson({ boards, refs, out: null })),
+    "adding the donor argument moved a frame on a canvas that has no donors",
+  );
+});
+
+/** A loopback server standing in for the public screenshot object, so nothing here is metered. */
+async function serveHero(bytes) {
+  const server = createServer((req, res) => {
+    if (req.url === "/missing.png") { res.writeHead(404); res.end("gone"); return; }
+    if (req.url === "/not-an-image.png") {
+      res.writeHead(200, { "Content-Type": "image/png" });
+      res.end("<!doctype html><title>an error page under a png name</title>");
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "image/png" });
+    res.end(bytes);
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  return { server, port: server.address().port };
+}
+
+test("the donor hero is fetched, re-encoded and laid beside its board", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const { server, port } = await serveHero(pngFixture(1440, 900));
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, JSON.stringify([
+      donorFor(1, { slug: "therapy-in-london", name: "Therapy in London", hero_url: `http://127.0.0.1:${port}/hero.png` }),
+      donorFor(2, { slug: "the-modern-house", name: "The Modern House", hero_url: `http://127.0.0.1:${port}/hero.png` }),
+    ], null, 2));
+    writeFileSync(join(SITE, "build-manifest.json"), JSON.stringify({ schema: 3, project: "." }));
+
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `boards-render with a donor row failed:\n${r.stderr}`);
+
+    for (const [rung, id] of [[1, "b1"], [2, "b2"]]) {
+      const card = join(SEED, `D${rung}.dc.html`);
+      assert.ok(existsSync(card), `D${rung}.dc.html is missing, so the donor is not on the canvas`);
+      const html = readFileSync(card, "utf8");
+      assert.ok(html.startsWith("<!doctype html>"));
+      assert.ok(html.includes('<script src="./support.js"></script>'), `D${rung} lost the support line`);
+      assert.match(html, /a:hover\{[^}]*color:/, `D${rung} does not define a:hover in the helmet`);
+      const img = /<img\b[^>]*\bsrc="([^"]*)"/.exec(html);
+      assert.ok(img, `D${rung} carries no hero`);
+      assert.equal(img[1], `d${rung}-hero.jpg`);
+      const hero = join(SEED, `d${rung}-hero.jpg`);
+      assert.ok(existsSync(hero), `d${rung}-hero.jpg was never written`);
+      assert.ok(statSync(hero).size <= 70 * 1024, `d${rung}-hero.jpg is over the 70 KB canvas ceiling`);
+      assert.ok(existsSync(join(SITE, ".palate/explore/shots", id, "donor.jpg")), `${id} has no archived donor hero`);
+      assert.ok(existsSync(join(SITE, "public/_explore", `${id}-donor.jpg`)), `${id}'s donor never reached /explore`);
+    }
+    assert.match(readFileSync(join(SEED, "D2.dc.html"), "utf8"), /the-modern-house/,
+      "the donor card does not name the reference it is");
+
+    const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));
+    const b1 = canvas.artboards.find((a) => a.file === "B1.dc.html");
+    const d1 = canvas.artboards.find((a) => a.file === "D1.dc.html");
+    const b2 = canvas.artboards.find((a) => a.file === "B2.dc.html");
+    assert.ok(d1, "the donor card never reached canvas.json");
+    assert.equal(d1.x, 1440 + 80);
+    assert.equal(d1.y, b1.y, "the donor is not on its board's row");
+    assert.equal(b2.x, 1440 + 80 + 720 + 80, "the second board sits under the first board's donor");
+
+    // THE LINEAGE SEAM: the stop hook reads explore.shown[].donor_slug and nothing wrote it.
+    const manifest = JSON.parse(readFileSync(join(SITE, "build-manifest.json"), "utf8"));
+    assert.deepEqual(
+      manifest.explore.shown.map((s) => [s.id, s.donor_slug, s.position]),
+      [["b1", "therapy-in-london", 1], ["b2", "the-modern-house", 2]],
+      "explore.shown does not carry each board's donor, so the lineage dies with the build",
+    );
+    assert.equal(manifest.explore.donor_row.skipped, false);
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+    rmSync(join(SITE, "build-manifest.json"), { force: true });
+  }
+});
+
+test("a hero the fetch cannot get is refused, naming the URL, and the seed survives", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const { server, port } = await serveHero(pngFixture(400, 300));
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  const before = readFileSync(join(SEED, "B1.dc.html"));
+  try {
+    // Each fault names ITSELF, not merely the URL: a 404 and an error page served under a .png
+    // name send an operator to two different places, and the first version of this test passed
+    // with the status check removed because a 404 body also fails the magic-byte check.
+    for (const [path, said] of [["missing.png", /HTTP 404/], ["not-an-image.png", /not a PNG, JPEG or WebP/]]) {
+      writeFileSync(donorsPath, JSON.stringify([
+        donorFor(1, { slug: "therapy-in-london", hero_url: `http://127.0.0.1:${port}/${path}` }),
+        donorFor(2, { slug: "the-modern-house", hero_url: `http://127.0.0.1:${port}/hero.png` }),
+      ], null, 2));
+      const r = await run([SITE]);
+      assert.equal(r.status, 2, `${path} was accepted as a donor hero`);
+      assert.match(r.stderr, new RegExp(path), `the refusal does not name the URL it could not use (${path})`);
+      assert.match(r.stderr, said, `the refusal does not say WHAT was wrong with ${path}`);
+      assert.deepEqual(readFileSync(join(SEED, "B1.dc.html")), before, "the refusal rewrote the operator's artboard");
+    }
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+test("a board with no donor entry stops the run and leaves the drawn seed alone", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  writeFileSync(donorsPath, JSON.stringify([donorFor(1, { slug: "therapy-in-london", hero_url: "https://example.supabase.co/x/desktop.png" })]));
+  const r = await run([SITE]);
+  assert.equal(r.status, 2, "half a donor row was drawn as though it were the whole one");
+  assert.match(r.stderr, /rung 2/, "the refusal does not name the rung with no donor");
+  assert.match(r.stderr, /donor-heroes\.json/, "the refusal does not name the file that owes the entry");
+  assert.ok(existsSync(join(SEED, "B1.dc.html")), "the refusal deleted the hand-drawn artboards");
+  rmSync(donorsPath, { force: true });
+});
+
+test("--no-donors runs without the file and says so in the manifest", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  writeFileSync(join(SITE, "build-manifest.json"), JSON.stringify({ schema: 3, project: "." }));
+  const r = await run([SITE, "--no-donors"]);
+  assert.equal(r.status, 0, `--no-donors failed:\n${r.stderr}`);
+  const manifest = JSON.parse(readFileSync(join(SITE, "build-manifest.json"), "utf8"));
+  assert.equal(manifest.explore.donor_row.skipped, true,
+    "a run with no donor row is byte-identical to one with it, which is the fault this records");
+  rmSync(join(SITE, "build-manifest.json"), { force: true });
 });
