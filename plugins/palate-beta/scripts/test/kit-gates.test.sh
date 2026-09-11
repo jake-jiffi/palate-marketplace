@@ -453,6 +453,23 @@ rm -rf "$SITE/_assets-archive"
 if "$IMAGERY" "$SITE" >/dev/null 2>&1; then ok "and skips a build with no harvested imagery to fail on"
 else bad "gate-client-imagery did not skip a build with nothing harvested"; fi
 
+# A BARE TAILWIND-NAMESPACE CLASS in the kit with no rule behind it is a phantom utility, and a
+# real client build's verifier blocked on exactly that: the pricing table and the process piece
+# both carried a BEM block named `pt` (a padding-top namespace) that no stylesheet defined. The
+# compiler-as-oracle gate needs a built dist; this is the static half, run on every suite.
+NS_RE='^(p|px|py|pt|pb|pl|pr|ps|pe|m|mx|my|mt|mb|ml|mr|ms|me|w|h|size|min|max|gap|space|inset|top|right|bottom|left|start|end|z|order|basis|grow|shrink|flex|grid|col|row|justify|items|content|self|place|auto|text|font|leading|tracking|indent|align|list|decoration|underline|whitespace|break|hyphens|line|bg|from|via|to|border|rounded|ring|outline|divide|shadow|opacity|mix|fill|stroke|accent|caret|placeholder|blur|brightness|contrast|grayscale|hue|invert|saturate|sepia|drop|backdrop|translate|rotate|scale|skew|origin|transition|duration|delay|ease|animate|cursor|select|resize|scroll|snap|touch|will|appearance|pointer|object|aspect|overflow|overscroll|float|clear|box|isolation|visibility|table|caption|columns|container|sr|not)$'
+bare=$(node -e '
+const fs=require("fs"),path=require("path");
+const NS=new RegExp(process.argv[2]);
+const out=new Set();
+(function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);
+  if(e.isDirectory())walk(p);else if(p.endsWith(".astro")){const src=fs.readFileSync(p,"utf8");
+    for(const m of src.matchAll(/\bclass="([^"]*)"/g))for(const t of m[1].split(/\s+/))if(t&&NS.test(t))out.add(t);
+    for(const m of src.matchAll(/\bclass:list=\{\[([\s\S]*?)\]\}/g))for(const q of m[1].matchAll(/"([^"]*)"|\x27([^\x27]*)\x27/g))for(const t of (q[1]??q[2]).split(/\s+/))if(t&&NS.test(t))out.add(t);}}})(process.argv[1]);
+process.stdout.write([...out].sort().join(" "));' "$KIT" "$NS_RE")
+if [ -z "$bare" ]; then ok "no kit component carries a bare Tailwind-namespace class (the pt phantom)"
+else bad "bare Tailwind-namespace class in a kit component: $(echo "$bare" | tr '\n' ' ')"; fi
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
