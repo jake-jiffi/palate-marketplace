@@ -52,6 +52,7 @@ write_valid_manifest() { # <dir>
     {"id":"c6","mechanic":"timeline","lens":"worst-moment","analogical_seed":"relay baton","conventionality":0.7,"colourway":"cobalt + chalk + amber","type":"humanist serif + mono caption"},
     {"id":"c7","mechanic":"press","lens":"founder-obsession","analogical_seed":"instrument","conventionality":0.8,"colourway":"ink + bone + signal-red","type":"grotesk display + serif body"},
     {"id":"c8","mechanic":"crowd","lens":"physical-object","analogical_seed":"games","conventionality":0.55,"colourway":"forest + cream","type":"slab display + grotesk body"} ] },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1","c2"] } }
 JSON
 }
@@ -112,6 +113,7 @@ cat > "$B10/build-manifest.json" <<'JSON'
     {"id":"c1","lens":"a","analogical_seed":"x","conventionality":0.1},
     {"id":"c2","lens":"b","analogical_seed":"y","conventionality":0.5},
     {"id":"c3","lens":"c","analogical_seed":"z","conventionality":0.9} ] },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "build site, thin diverge (<8) -> deny" DENY \
@@ -131,6 +133,7 @@ cat > "$B11/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"same","analogical_seed":"same","conventionality":0.7},
     {"id":"c7","lens":"same","analogical_seed":"same","conventionality":0.7},
     {"id":"c8","lens":"same","analogical_seed":"same","conventionality":0.7} ] },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "build site, 8 cloned concepts (no spread) -> deny" DENY \
@@ -156,6 +159,7 @@ cat > "$B12/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"f","analogical_seed":"u","conventionality":0.6,"colourway":"ink + bone","type":"grotesk + serif","layout":"index"},
     {"id":"c7","lens":"g","analogical_seed":"v","conventionality":0.7,"colourway":"ink + bone","type":"grotesk + serif","layout":"poster"},
     {"id":"c8","lens":"h","analogical_seed":"w","conventionality":0.8,"colourway":"ink + bone","type":"grotesk + serif","layout":"feed"} ] },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "brand-creation, varies only layout (no colour/type) -> deny" DENY \
@@ -184,6 +188,7 @@ cat > "$B14/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"f","analogical_seed":"u","conventionality":0.6,"colourway":"gold","layout":"index","motion":"tilt"},
     {"id":"c7","lens":"g","analogical_seed":"v","conventionality":0.7,"colourway":"navy","layout":"poster","motion":"wipe"},
     {"id":"c8","lens":"h","analogical_seed":"w","conventionality":0.8,"colourway":"gold","layout":"feed","motion":"snap"} ] },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "brand-provided, colour in axes_varied (brand drift) -> deny" DENY \
@@ -205,6 +210,7 @@ cat > "$B15/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"f","analogical_seed":"u","conventionality":0.6,"colourway":"brand","type":"brand","layout":"index","motion":"tilt"},
     {"id":"c7","lens":"g","analogical_seed":"v","conventionality":0.7,"colourway":"brand","type":"brand","layout":"poster","motion":"wipe"},
     {"id":"c8","lens":"h","analogical_seed":"w","conventionality":0.8,"colourway":"brand","type":"brand","layout":"feed","motion":"snap"} ] },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "brand-provided, locked colour/type + >=6 skins -> allow" ALLOW \
@@ -397,5 +403,52 @@ want "board section with a thin survey -> deny" DENY \
   "$(run "$BB3" Write "$BB3/src/components/sections/B1Hero.astro")"
 
 echo "---"
+
+# === THE PLAN CHECKPOINT WALL ==============================================================
+# A live build skipped checkpoint 1 whole (one sentence to the user in 28 minutes). A valid
+# diverge no longer suffices: the manifest must record what was shown and a go, or a
+# recorded exemption. Three Explore decisions are valid, and two of them skip variations.
+strip_cp() { # <dir> -> remove plan_checkpoint from a valid fixture
+  node -e 'const fs=require("fs");const f=process.argv[1];const m=JSON.parse(fs.readFileSync(f,"utf8"));delete m.plan_checkpoint;fs.writeFileSync(f,JSON.stringify(m));' "$1/build-manifest.json"
+}
+set_cp() { # <dir> <json-for-plan_checkpoint>
+  node -e 'const fs=require("fs");const f=process.argv[1];const m=JSON.parse(fs.readFileSync(f,"utf8"));m.plan_checkpoint=JSON.parse(process.argv[2]);fs.writeFileSync(f,JSON.stringify(m));' "$1/build-manifest.json" "$2"
+}
+mk_cp() { local d="$TMP/$1"; mkdir -p "$d"; echo "$MARKER" > "$d/.palate-skill-state.json"; write_valid_manifest "$d"; echo "$d"; }
+
+C1="$(mk_cp cp1)"; strip_cp "$C1"
+want "valid diverge but NO plan checkpoint -> deny" DENY "$(run "$C1" Write "$C1/src/pages/index.astro")"
+want "  ...and the deny names the checkpoint" "yes" \
+  "$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"%s"}}' "$C1" "$C1/src/pages/index.astro" | node "$HOOK" 2>/dev/null | grep -q "PLAN CHECKPOINT REQUIRED" && echo yes || echo no)"
+want "no checkpoint + PALATE_GATE_CHECKPOINT=0 -> allow" ALLOW "$(run "$C1" Write "$C1/src/pages/index.astro" PALATE_GATE_CHECKPOINT=0)"
+want "no checkpoint + PALATE_GATE_OFF=1 -> allow" ALLOW "$(run "$C1" Write "$C1/src/pages/index.astro" PALATE_GATE_OFF=1)"
+
+C2="$(mk_cp cp2)"; set_cp "$C2" '{"exempt":"tiny-work","reason":"one copy fix on an existing page"}'
+want "recorded tiny-work exemption -> allow" ALLOW "$(run "$C2" Write "$C2/src/pages/index.astro")"
+C3="$(mk_cp cp3)"; set_cp "$C3" '{"exempt":"tiny-work"}'
+want "exemption with no reason -> deny" DENY "$(run "$C3" Write "$C3/src/pages/index.astro")"
+C4="$(mk_cp cp4)"; set_cp "$C4" '{"exempt":"because-i-said-so","reason":"x"}'
+want "an unknown exemption -> deny" DENY "$(run "$C4" Write "$C4/src/pages/index.astro")"
+
+C5="$(mk_cp cp5)"; set_cp "$C5" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"supplied-example","source":"client-mockup/index.html"}},"go":{"given":true,"how":"asked","quote":"yes, rebuild that as is"}}'
+want "supplied-example (no variations wanted) -> allow" ALLOW "$(run "$C5" Write "$C5/src/pages/index.astro")"
+C6="$(mk_cp cp6)"; set_cp "$C6" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"named-direction","source":"https://northwind.example"}},"go":{"given":true,"how":"brief","quote":"build it like the Northwind site"}}'
+want "named-direction pre-authorised by the brief -> allow" ALLOW "$(run "$C6" Write "$C6/src/pages/index.astro")"
+C7="$(mk_cp cp7)"; set_cp "$C7" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"supplied-example"}},"go":{"given":true,"how":"asked","quote":"ok"}}'
+want "supplied-example with nothing supplied -> deny" DENY "$(run "$C7" Write "$C7/src/pages/index.astro")"
+C8="$(mk_cp cp8)"; set_cp "$C8" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"ladder","count":2}},"go":{"given":true,"how":"asked","quote":"ok"}}'
+want "ladder of 2 (no BETWEEN to point at) -> deny" DENY "$(run "$C8" Write "$C8/src/pages/index.astro")"
+C9="$(mk_cp cp9)"; set_cp "$C9" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"ladder","count":5}},"go":{"given":false,"how":"asked","quote":"hold on"}}'
+want "plan shown, go NOT given -> deny" DENY "$(run "$C9" Write "$C9/src/pages/index.astro")"
+C10="$(mk_cp cp10)"; set_cp "$C10" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"ladder","count":5}},"go":{"given":true,"how":"asked","quote":""}}'
+want "go with no quoted words -> deny" DENY "$(run "$C10" Write "$C10/src/pages/index.astro")"
+C11="$(mk_cp cp11)"; set_cp "$C11" '{"shown":{"stage":"preview","cms":false,"explore":{"mode":"ladder","count":5}},"go":{"given":true,"how":"asked","quote":"go"}}'
+want "host never asked -> deny" DENY "$(run "$C11" Write "$C11/src/pages/index.astro")"
+C12="$(mk_cp cp12)"; set_cp "$C12" '{"shown":{"host":"vercel","stage":"preview","explore":{"mode":"ladder","count":5}},"go":{"given":true,"how":"asked","quote":"go"}}'
+want "CMS question never asked -> deny" DENY "$(run "$C12" Write "$C12/src/pages/index.astro")"
+C13="$(mk_cp cp13)"; strip_cp "$C13"
+want "no checkpoint, NON page/section source over an existing file -> allow (iteration)" ALLOW \
+  "$( mkdir -p "$C13/src/lib"; echo x > "$C13/src/lib/util.ts"; run "$C13" Write "$C13/src/lib/util.ts")"
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

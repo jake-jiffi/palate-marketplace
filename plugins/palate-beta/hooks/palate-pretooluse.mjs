@@ -153,6 +153,70 @@ function DIVERGE_REQUIRED_MESSAGE(mode) {
 // The survey deny copy. It has to hand back the exact calls that clear the bar, because the
 // agent is mid-build and a vague "survey more" costs a round trip to work out what is missing.
 // House rules: Australian English, no em dashes, no AI-tell vocabulary.
+// ---------------------------------------------------------------------------------------
+// THE PLAN CHECKPOINT WALL. The doctrine has always said "before Phase A, show a short plan
+// and get a go-ahead": the pages, the brand source, the references, the host (ALWAYS asked),
+// whether Explore runs and at what count, the stage, who edits the copy. It was prose, and a
+// live client build skipped it whole: one sentence to the user in twenty-eight minutes, then
+// host, variant count and CMS decided alone. Every other rule that mattered here got a gate
+// after it was skipped silently. This is that gate.
+//
+// It reads manifest.plan_checkpoint and refuses the first page/section source write until the
+// block records WHAT was shown, the EXPLORE DECISION and a GO. Three Explore decisions are
+// valid, because not everyone wants variations: a LADDER of N boards (N >= 3), a NAMED
+// DIRECTION ("build it like the Northwind site"), or a SUPPLIED EXAMPLE (an HTML file, a
+// mock-up or a URL the client wants rebuilt in Astro as it is). The last two skip Explore and
+// must also be recorded on commission.explore_skip so the done gate agrees.
+//
+// A skip is allowed, and it is RECORDED, never silent: tiny reversible work, or a brief that
+// named its direction, writes { exempt, reason }. What the hook cannot verify is that a human
+// actually said yes: go.quote carries their words (or the clause of the brief that
+// pre-authorised the build) so the claim is visible in the manifest and the Stop summary.
+// PALATE_GATE_CHECKPOINT=0 releases it for a session that genuinely cannot ask.
+// ---------------------------------------------------------------------------------------
+const EXPLORE_MODES = ["ladder", "named-direction", "supplied-example"];
+const CHECKPOINT_EXEMPTIONS = ["tiny-work", "named-direction"];
+const nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
+
+function checkpointValid(m) {
+  const c = m && m.plan_checkpoint;
+  if (!c || typeof c !== "object") return false;
+  if (c.exempt != null) {
+    return CHECKPOINT_EXEMPTIONS.includes(c.exempt) && nonEmpty(c.reason);
+  }
+  const shown = c.shown, go = c.go;
+  if (!shown || typeof shown !== "object" || !go || typeof go !== "object") return false;
+  if (!nonEmpty(shown.host) || !nonEmpty(shown.stage)) return false;
+  if (shown.cms === undefined || shown.cms === null) return false;
+  const ex = shown.explore;
+  if (!ex || typeof ex !== "object" || !EXPLORE_MODES.includes(ex.mode)) return false;
+  if (ex.mode === "ladder") {
+    if (!Number.isInteger(ex.count) || ex.count < 3) return false;
+  } else if (!nonEmpty(ex.source)) {
+    return false; // what was named, or what was supplied (a path or a URL)
+  }
+  if (go.given !== true) return false;
+  if (!["asked", "brief"].includes(go.how)) return false;
+  return nonEmpty(go.quote);
+}
+
+const CHECKPOINT_REQUIRED_MESSAGE =
+  "PLAN CHECKPOINT REQUIRED before any page or section source is written (SKILL.md, \"The plan\n" +
+  "checkpoint\", moment 1). Show the person a short plan and get a go, then record it:\n" +
+  "  manifest.plan_checkpoint = {\n" +
+  "    shown_at: ISO time,\n" +
+  "    shown: { pages:[...], brand_source, references:[...], industry,\n" +
+  "             host: \"vercel\"|\"cloudflare\" (ALWAYS asked, Vercel the default), stage: \"preview\"|\"production\",\n" +
+  "             cms: false | \"sanity\" (ask: who edits this copy in six months?),\n" +
+  "             explore: { mode: \"ladder\", count: N>=3 }\n" +
+  "                   | { mode: \"named-direction\", source: \"the site or direction they named\" }\n" +
+  "                   | { mode: \"supplied-example\", source: \"path or URL of the HTML / mock-up to rebuild in Astro\" } },\n" +
+  "    go: { given: true, how: \"asked\"|\"brief\", quote: \"their words, or the brief clause that pre-authorised it\" } }\n" +
+  "Not everyone wants variations: named-direction and supplied-example SKIP Explore (record the same\n" +
+  "reason on commission.explore_skip). Tiny reversible work, or a brief that names its direction, may\n" +
+  "record the skip instead: plan_checkpoint = { exempt: \"tiny-work\"|\"named-direction\", reason }.\n" +
+  "PALATE_GATE_CHECKPOINT=0 releases this wall for a session that genuinely cannot ask.";
+
 function SURVEY_REQUIRED_MESSAGE(gateReason, calls) {
   return (
     "Palate BUILD SITE gate: the SURVEY is not deep enough to start writing code.\n" +
@@ -501,6 +565,13 @@ try {
       // A build site is active, this is a NEW (or page/section) source write, and DIVERGE
       // has not validly run FOR THIS MODE. Block it and tell the model to diverge first.
       deny(DIVERGE_REQUIRED_MESSAGE(mode));
+    }
+
+    // THE PLAN CHECKPOINT WALL (see checkpointValid above): a build site, new or page/section
+    // source, and nobody was shown a plan or asked. Sits after DIVERGE because the plan names
+    // the references and the Explore count, which DIVERGE produces.
+    if (process.env.PALATE_GATE_CHECKPOINT !== "0" && !checkpointValid(manifest)) {
+      deny(CHECKPOINT_REQUIRED_MESSAGE);
     }
 
     // ---------------------------------------------------------------------------------
