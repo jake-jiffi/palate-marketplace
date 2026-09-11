@@ -300,6 +300,31 @@ function collectSlugs(node, out) {
   }
 }
 
+/**
+ * THE HOOK DOES NOT ALWAYS RECEIVE AN OBJECT. On a real build every one of 23 survey calls was
+ * journaled with `returned: []` and `refs_search` contributed no slugs, because `tool_response`
+ * arrived as the result's JSON TEXT (or as a bare array of content blocks), not as
+ * `{ content: [...] }`. `resultEvidence` already called a non-empty string "ok", so the survey
+ * counted as grounded while nothing it returned was ever read. Normalise once, before anything
+ * looks inside: a string is parsed as JSON where it can be, else kept as one text block; an array
+ * is the content list.
+ */
+function normaliseResult(result) {
+  if (typeof result === "string") {
+    const t = result.trim();
+    if (!t) return result;
+    try {
+      const parsed = JSON.parse(t);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (Array.isArray(parsed.content) || parsed.structuredContent)) return parsed;
+      return { content: [{ type: "text", text: t }], structuredContent: parsed && typeof parsed === "object" ? parsed : undefined };
+    } catch {
+      return { content: [{ type: "text", text: t }] };
+    }
+  }
+  if (Array.isArray(result)) return { content: result };
+  return result;
+}
+
 // MCP results often arrive as { content: [{ type:'text', text:'<json>' }] }; the
 // slugs live inside that stringified JSON, so parse text blocks too.
 function collectFromMcpResult(result, out) {
@@ -680,7 +705,7 @@ function main() {
   if (!p) return;
   const tool = p.tool_name || "";
   const input = p.tool_input || {};
-  const result = p.tool_response ?? p.tool_output ?? p.toolResponse ?? null;
+  const result = normaliseResult(p.tool_response ?? p.tool_output ?? p.toolResponse ?? null);
   const written = input.file_path || input.filePath || input.path;
 
   // ONE answer to "which project is this", shared with palate-stop.mjs and palate-pretooluse.mjs.

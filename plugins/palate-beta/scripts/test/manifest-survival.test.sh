@@ -157,6 +157,18 @@ call "$M2" "mcp__palate__refs_search" '{"query":"thin"}' '{"results":[{"slug":"t
 is "a manifest with no list fields still records the call" "$(mancalls "$M2/build-manifest.json")" "1"
 is "and the reference" "$(jq -r '.references_surveyed[0]' "$M2/build-manifest.json")" "tt"
 
+# THE RESULT ARRIVES AS TEXT. On a real build all 23 survey calls journaled `returned: []` and
+# refs_search contributed no slugs: tool_response was the result's JSON text, not an object, and
+# nothing parsed it while resultEvidence called it "ok". Both shapes the hook has been handed.
+RS="$TMP/rawstring"; mkdir -p "$RS"
+printf '{"cwd":%s,"tool_name":"mcp__palate__refs_search","tool_input":{"query":"q"},"tool_response":%s}' \
+  "$(jq -Rn --arg v "$RS" '$v')" "$(jq -Rn --arg v '{"results":[{"slug":"str-a"},{"slug":"str-b"}]}' '$v')" | node "$HOOK" 2>/dev/null
+is "a JSON-text tool_response still yields the slugs" "$(jq -r '.references_surveyed|sort|join(",")' "$RS/build-manifest.json")" "str-a,str-b"
+is "and journals what came back" "$(jq -r '.mcp_calls[0].returned|sort|join(",")' "$RS/build-manifest.json")" "str-a,str-b"
+printf '{"cwd":%s,"tool_name":"mcp__palate__refs_get","tool_input":{"slug":"blk"},"tool_response":[{"type":"text","text":"{\\"slug\\":\\"blk\\",\\"do_dont\\":{\\"do\\":[\\"x\\"]}}"}]}' \
+  "$(jq -Rn --arg v "$RS" '$v')" | node "$HOOK" 2>/dev/null
+is "a bare array of content blocks is read too" "$(jq -r '.mcp_calls[1].returned|join(",")' "$RS/build-manifest.json")" "blk"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
