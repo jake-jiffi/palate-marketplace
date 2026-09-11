@@ -199,6 +199,11 @@ function checkpointValid(m) {
   }
   if (go.given !== true) return false;
   if (!["asked", "brief"].includes(go.how)) return false;
+  // A BRIEF PRE-AUTHORISES ONLY A NAMED DIRECTION OR A SUPPLIED EXAMPLE. The first live build
+  // after this wall shipped recorded how:"brief" quoting its opening prompt and asked nothing:
+  // host, CMS and rung count decided alone, on a ladder Explore, which is the case the doctrine
+  // says is ALWAYS asked. A ladder on a new site needs the person's own answer.
+  if (go.how === "brief" && ex.mode === "ladder") return false;
   return nonEmpty(go.quote);
 }
 
@@ -214,6 +219,7 @@ const CHECKPOINT_REQUIRED_MESSAGE =
   "                   | { mode: \"named-direction\", source: \"the site or direction they named\" }\n" +
   "                   | { mode: \"supplied-example\", source: \"path or URL of the HTML / mock-up to rebuild in Astro\" } },\n" +
   "    go: { given: true, how: \"asked\"|\"brief\", quote: \"their words, or the brief clause that pre-authorised it\" } }\n" +
+  "  how: \"brief\" is accepted ONLY for named-direction and supplied-example; a ladder Explore must be ASKED.\n" +
   "Not everyone wants variations: named-direction and supplied-example SKIP Explore (record the same\n" +
   "reason on commission.explore_skip). Tiny reversible work, or a brief that names its direction, may\n" +
   "record the skip instead: plan_checkpoint = { exempt: \"tiny-work\"|\"named-direction\", reason }.\n" +

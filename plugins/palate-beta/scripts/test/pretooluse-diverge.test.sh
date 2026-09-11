@@ -464,5 +464,10 @@ AB4="$TMP/art-notes"; mkdir -p "$AB4"; echo "$MARKER" > "$AB4/.palate-skill-stat
 want "the seed README is not design source -> allow" ALLOW "$(run "$AB4" Write "$AB4/.palate/explore/seed/README.md")"
 want "canvas.json is not design source -> allow" ALLOW "$(run "$AB4" Write "$AB4/.palate/explore/seed/canvas.json")"
 
+C14="$(mk_cp cp14)"; set_cp "$C14" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"ladder","count":5}},"go":{"given":true,"how":"brief","quote":"Run a full Explore so I can pick a direction"}}'
+want "a ladder Explore pre-authorised by the brief alone -> deny (the host and CMS are always asked)" DENY "$(run "$C14" Write "$C14/src/pages/index.astro")"
+C15="$(mk_cp cp15)"; set_cp "$C15" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"supplied-example","source":"mock.html"}},"go":{"given":true,"how":"brief","quote":"rebuild this mock as is"}}'
+want "a supplied example pre-authorised by the brief -> allow" ALLOW "$(run "$C15" Write "$C15/src/pages/index.astro")"
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
