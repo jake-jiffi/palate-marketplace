@@ -695,6 +695,12 @@ function main() {
   const projectDir = ctx.dir;
 
   let m = load(MANIFEST) ?? blank();
+  // A manifest somebody hand-shaped, or one written by an older recorder, can be missing the
+  // list fields. Missing lists threw on every call, so the hook exited 1 and the survey was
+  // silently unrecorded: normalise rather than trust the shape.
+  for (const k of ["mcp_calls", "mcp_failures", "references_surveyed", "inner_pages_viewed", "layers_read", "files_written", "files_written_outside", "sections", "variants"]) {
+    if (!Array.isArray(m[k])) m[k] = [];
+  }
   // A manifest belongs to ONE build, so telemetry from an unrelated repo must not keep
   // accumulating into one file. But the first version of this check compared the two paths for
   // EQUALITY, and that destroyed the survey of very nearly every build.

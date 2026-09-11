@@ -134,6 +134,29 @@ call "$O/inner" "mcp__palate__refs_search" '{"query":"unrelated"}' '{"results":[
 is "a manifest above a repo root is NOT adopted" "$(mancalls "$O/build-manifest.json")" "0"
 is "the repo gets its own" "$(mancalls "$O/inner/build-manifest.json")" "1"
 
+# The other bound: HOME. A client build in a plain folder with NO .git walked straight past
+# its own directory to a stray ~/build-manifest.json and recorded its whole survey there,
+# under project "/Users/<user>". A manifest in HOME (or above it) is never a build's.
+H="$TMP/home"; mkdir -p "$H/dev/client-site"
+printf '{"schema":3,"project":"%s","mcp_calls":[]}' "$H" > "$H/build-manifest.json"
+HOME="$H" call "$H/dev/client-site" "mcp__palate__refs_search" '{"query":"aluminium"}' '{"results":[{"slug":"yy"}]}'
+is "a stray manifest in HOME is NOT adopted by a repo-less build folder" "$(mancalls "$H/build-manifest.json")" "0"
+is "the build folder gets its own manifest" "$(mancalls "$H/dev/client-site/build-manifest.json")" "1"
+is "and its own journal" "$(find "$H" -name mcp-journal.jsonl | wc -l | tr -d ' ')" "1"
+# ...while a manifest ABOVE the cwd but BELOW home is still the build's (case 7 stays true under HOME too)
+mkdir -p "$H/dev/other-site/.palate/harvest"
+HOME="$H" call "$H/dev/other-site" "mcp__palate__refs_search" '{"query":"a"}' '{"results":[{"slug":"a1"}]}'
+HOME="$H" call "$H/dev/other-site/.palate/harvest" "mcp__palate__refs_search" '{"query":"b"}' '{"results":[{"slug":"b1"}]}'
+is "a subdirectory under HOME still finds its build's manifest" "$(mancalls "$H/dev/other-site/build-manifest.json")" "2"
+
+# A manifest missing its list fields (hand-shaped, or from an older recorder) used to THROW
+# inside the hook on every call: exit 1, nothing recorded, no message a build would see.
+M2="$TMP/thin"; mkdir -p "$M2"
+printf '{"schema":3,"project":"%s"}' "$M2" > "$M2/build-manifest.json"
+call "$M2" "mcp__palate__refs_search" '{"query":"thin"}' '{"results":[{"slug":"tt"}]}'
+is "a manifest with no list fields still records the call" "$(mancalls "$M2/build-manifest.json")" "1"
+is "and the reference" "$(jq -r '.references_surveyed[0]' "$M2/build-manifest.json")" "tt"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

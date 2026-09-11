@@ -40,6 +40,7 @@
  * ALREADY HOLDS a manifest, and only the writer (hooks/palate-manifest.mjs) moves it, once.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 // Deep enough for any real tree, bounded so a symlink cycle or a pathological path cannot spin.
@@ -277,9 +278,25 @@ function hasManifest(dir) {
  *
  * A build's manifest is at or above the working directory essentially always, so look up before
  * falling back to the cwd. BOUNDED so it cannot reach into an unrelated project: it stops at a
- * repository root (the directory holding `.git` is checked, nothing above it is), and at MAX_UP
+ * repository root (the directory holding `.git` is checked, nothing above it is), at the HOME
+ * directory (never checked: a manifest in `~` or above it belongs to nobody), and at MAX_UP
  * either way.
+ *
+ * THE HOME CEILING WAS MISSING, AND A REAL BUILD LOST ITS SURVEY TO IT. A client build ran in a
+ * plain folder under ~/dev with no `.git`, so the repo-root ceiling never applied, the walk
+ * reached `~/build-manifest.json` (a stray one that had been absorbing calls from every
+ * repo-less session since June) and recorded every survey call of the build there, under
+ * `project: /Users/<user>`. The build's own directory held no manifest and no journal, so the
+ * depth gate would have read 66 calls as zero.
  */
+function homeDir() {
+  try {
+    return path.resolve(os.homedir());
+  } catch {
+    return null;
+  }
+}
+
 function manifestAbove(from) {
   let dir;
   try {
@@ -287,7 +304,10 @@ function manifestAbove(from) {
   } catch {
     return null;
   }
+  const home = homeDir();
   for (let i = 0; i < MAX_UP; i++) {
+    // HOME (or anything above it) is never a build: stop BEFORE looking there.
+    if (home && (dir === home || home.startsWith(dir + path.sep) || path.dirname(dir) === dir)) return null;
     if (hasManifest(dir)) return dir;
     // A repo root is the ceiling: a manifest above it belongs to something else.
     let atRepoRoot = false;
