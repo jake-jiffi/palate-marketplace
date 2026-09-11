@@ -450,5 +450,19 @@ C13="$(mk_cp cp13)"; strip_cp "$C13"
 want "no checkpoint, NON page/section source over an existing file -> allow (iteration)" ALLOW \
   "$( mkdir -p "$C13/src/lib"; echo x > "$C13/src/lib/util.ts"; run "$C13" Write "$C13/src/lib/util.ts")"
 
+# === ARTBOARDS ARE DESIGN SOURCE ===========================================================
+# Canvas-first Explore writes .palate/explore/seed/B1.dc.html as the FIRST design artefact of a
+# build. If that path fell outside the wall, five boards could be drawn having diverged nothing,
+# asked nothing and surveyed nothing: the exact failure every wall exists to stop.
+AB="$TMP/art-nodiverge"; mkdir -p "$AB"; echo "$MARKER" > "$AB/.palate-skill-state.json"
+want "artboard before DIVERGE -> deny" DENY "$(run "$AB" Write "$AB/.palate/explore/seed/B1.dc.html")"
+AB2="$TMP/art-diverged"; mkdir -p "$AB2"; echo "$MARKER" > "$AB2/.palate-skill-state.json"; write_valid_manifest "$AB2"
+want "artboard after DIVERGE + checkpoint -> allow" ALLOW "$(run "$AB2" Write "$AB2/.palate/explore/seed/B1.dc.html")"
+AB3="$TMP/art-survey"; mkdir -p "$AB3"; echo "$MARKER" > "$AB3/.palate-skill-state.json"; write_valid_manifest "$AB3"; add_calls "$AB3" "$SHALLOW"
+want "artboard with a thin survey -> deny (drawn FROM the library)" DENY "$(run "$AB3" Write "$AB3/.palate/explore/seed/B1.dc.html")"
+AB4="$TMP/art-notes"; mkdir -p "$AB4"; echo "$MARKER" > "$AB4/.palate-skill-state.json"
+want "the seed README is not design source -> allow" ALLOW "$(run "$AB4" Write "$AB4/.palate/explore/seed/README.md")"
+want "canvas.json is not design source -> allow" ALLOW "$(run "$AB4" Write "$AB4/.palate/explore/seed/canvas.json")"
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

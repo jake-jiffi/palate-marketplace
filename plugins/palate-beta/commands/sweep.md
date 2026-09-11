@@ -178,9 +178,11 @@ only place it now shows, beside section 9's question about whether the number is
 
 Two other things it will not tell you. Trading hours are read only where the page says they are
 the trading hours, so a timetable, an inspection schedule or a market stall is passed over, and
-so is an hours line that carries no opening word at all. And Explore scaffolding (`/explore`,
-`/boards/*`, `/vN`) is not inspected: the rungs differ in their copy on purpose and are deleted
-before hand-over.
+so is an hours line that carries no opening word at all. And Explore scaffolding (`/explore`)
+is not inspected: the rungs differ in their copy on purpose and the page is deleted before
+hand-over. The predicate still carries the retired board routes (`/boards/*`, `/vN`) as
+defence: nothing builds one any more, because a board is a drawn artboard under
+`.palate/explore/`, which never ships.
 
 ## 7. Orphans and dead internal links
 

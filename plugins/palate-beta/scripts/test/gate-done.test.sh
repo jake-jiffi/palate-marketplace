@@ -184,7 +184,13 @@ printf -- '---\n---\n<h1>the scaffold home</h1>\n' > "$FIDNC/src/pages/index.ast
 node -e '
 const fs = require("node:fs");
 const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-m.explore = { ran: true, picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }] };
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
+  // The question round is recorded here so this fixture keeps testing the PROOF check, not
+  // the round check that now sits in front of it.
+  question_round: { motion: "a slow draw", mix: "nothing", cms: "false", answered_at: "2026-09-09T00:01:00Z" },
+};
 fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
 ' "$DEEP" "$FIDNC/build-manifest.json"
 make_shots "$FIDNC" 0
@@ -209,6 +215,7 @@ m.explore = {
   ran: true,
   picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
   proof: { url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z" },
+  question_round: { motion: "a slow draw", mix: "nothing", cms: "false", answered_at: "2026-09-09T00:01:00Z" },
 };
 fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
 ' "$DEEP" "$FIDP/build-manifest.json"
@@ -223,6 +230,64 @@ elif printf '%s' "$fidp_summary" | grep -qF 'fidelity: '; then
   echo "ok   - a recorded motion proof makes the gate run, and it skips for its own reason"; pass=$((pass+1))
 else
   echo "FAIL - the fidelity gate reported nothing at all (got: $fidp_summary)"; fail=$((fail+1))
+fi
+
+# --- THE QUESTION ROUND: a pick with no round is refused, not silently skipped ---------
+# Between the pick and Compose sits a short conversation the doctrine calls the question round:
+# how the picked rung should move, what to mix in from the other boards, who edits the copy.
+# A build that reaches Compose without it is worse than one that never picked, because the
+# record already claims a direction for the site. This sits ahead of the proof check, so a
+# missing round blocks even on a build that DOES carry a motion proof.
+QRNONE="$TMP/question-round-none"; mkdir -p "$QRNONE/src/pages"
+printf -- '---\n---\n<h1>the composed home</h1>\n' > "$QRNONE/src/pages/index.astro"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
+  proof: { url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z" },
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$QRNONE/build-manifest.json"
+make_shots "$QRNONE" 0
+cp "$PASS/verify-report.json" "$QRNONE/verify-report.json"
+qrnone_err="$(bash "$GATE" "$QRNONE/build-manifest.json" 2>&1 >/dev/null)"
+qrnone_ec=$?
+if [ "$qrnone_ec" -eq 2 ] && printf '%s' "$qrnone_err" | grep -qF 'question round'; then
+  echo "ok   - a picked, proven build with no question round blocks the done gate, naming it"; pass=$((pass+1))
+else
+  echo "FAIL - a picked build with no question round must block and name it (exit $qrnone_ec: $qrnone_err)"; fail=$((fail+1))
+fi
+
+# AND ONCE ALL THREE ANSWERS ARE RECORDED, the block above is gone and the gate moves on into
+# the fidelity check itself (which then runs or skips on its own terms). What matters here is
+# only that the question-round block does not fire.
+QRFULL="$TMP/question-round-full"; mkdir -p "$QRFULL/src/pages"
+printf -- '---\n---\n<h1>the composed home</h1>\n' > "$QRFULL/src/pages/index.astro"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
+  proof: { url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z" },
+  question_round: {
+    motion: "the column rules draw down over 800ms, nothing loops",
+    mix: "b2 services list under the b3 hero",
+    cms: "false, the office edits nothing",
+    answered_at: "2026-09-09T00:06:00Z",
+  },
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$QRFULL/build-manifest.json"
+make_shots "$QRFULL" 0
+cp "$PASS/verify-report.json" "$QRFULL/verify-report.json"
+qrfull_summary="$(bash "$GATE" "$QRFULL/build-manifest.json" 2>&1)"
+if printf '%s' "$qrfull_summary" | grep -qF 'question round'; then
+  echo "FAIL - a complete question round still blocks on it (got: $qrfull_summary)"; fail=$((fail+1))
+else
+  echo "ok   - a complete question round clears the check and reaches the fidelity gate"; pass=$((pass+1))
 fi
 
 # --- SHIPREADY'S OTHER EXIT-2 REASONS ARE NOT ALL "not an Astro project shape" ---------

@@ -86,6 +86,24 @@ const cannotCheck = (reason) => {
   process.exit(2);
 };
 
+/**
+ * A skip signal for the two cannotCheck-shaped refusals that fire AFTER the browser and its
+ * servers are open (the hero-not-found and the home-did-not-load checks below). cannotCheck()
+ * itself calls process.exit(2), which is right for every refusal above that runs before those
+ * resources exist and wrong down there: an immediate exit skips the `finally` that closes them,
+ * leaking a live Chromium process and up to two open HTTP servers. Thrown instead, caught once
+ * around the whole measurement, printed in cannotCheck's own shape, and reported through
+ * `process.exitCode` (never process.exit(), for the same ONNX-teardown reason the file's closing
+ * comment gives) so `finally` always runs first.
+ */
+class SkipSignal extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = "SkipSignal";
+  }
+}
+const cannotCheckMidRun = (reason) => { throw new SkipSignal(reason); };
+
 const dir = resolve(positional[0] || ".");
 const refusal = pluginRootRefusal(dir);
 if (refusal) cannotCheck(`refused: ${refusal}. Name the site directory explicitly.`);
@@ -117,17 +135,17 @@ const sectionRenderPath = join(shotsRoot, sectionPick.variant_id, "rendered.html
 // --------------------------------------------------------------- where the home is
 const serveUrl = opt("--serve", null);
 /**
- * The build is required even when --serve names a running preview.
+ * dist is required only when there is no other way to reach the home.
  *
- * The board's archived render carries ABSOLUTE asset paths (`/_astro/...`), so it has to be
- * served from an origin where those resolve, and that origin is the build. Served from the
- * shots directory instead it renders with no stylesheet at all, and the first thing that
- * reports is a font set that has nothing to do with the direction: measured that way, an
- * honest build failed on "missing system-ui, added ui-monospace".
+ * The board no longer needs it. Its archived render is an ARTBOARD (Task 3): self-contained
+ * CSS in its own helmet, bare-filename images copied beside it, so it is served from its own
+ * directory below and resolves without a build at all. What still needs a build, or a running
+ * --serve preview, is the HOME ITSELF: the composed page has to come from somewhere before it
+ * can be compared with the picked board.
  */
 const distRoot = ["dist/client", "dist"].map((d) => join(dir, d)).find((d) => existsSync(join(d, "index.html")));
-if (!distRoot) {
-  cannotCheck(`no built site under ${join(dir, "dist")}. The board's archived render needs the build's own stylesheets to resolve, so a build is required even with --serve.`);
+if (!distRoot && !serveUrl) {
+  cannotCheck(`no built site under ${join(dir, "dist")} and no --serve URL. The composed home has to be built (or served) before it can be compared with the picked board.`);
 }
 
 // --------------------------------------------------------------- section identities
@@ -142,9 +160,16 @@ function sectionIds(html) {
 }
 const heroIds = sectionIds(readFileSync(heroRenderPath, "utf8"));
 if (!heroIds.length) {
-  cannotCheck(`the archived render of ${heroPick.variant_id} carries no data-section-id, so its sections cannot be identified. Wrap each board section in <SectionMark id="..." /> and re-render.`);
+  cannotCheck(`the archived render of ${heroPick.variant_id} carries no data-section-id, so its sections cannot be identified. Mark the hero root data-section-id="${heroPick.variant_id}-hero" in the artboard and re-run boards-render.`);
 }
-const heroSectionId = heroIds[0];
+/**
+ * THE HERO IS FOUND BY NAME, not position.
+ *
+ * An artboard opens with its navigation (BoardFrame's own chrome), so the first mark in
+ * document order is `<id>-navigation`, not the hero. Falls back to the first mark when the
+ * expected name is not there, which is the old behaviour and still better than refusing.
+ */
+const heroSectionId = heroIds.includes(`${heroPick.variant_id}-hero`) ? `${heroPick.variant_id}-hero` : heroIds[0];
 const sectionIdsOfPick = existsSync(sectionRenderPath) ? sectionIds(readFileSync(sectionRenderPath, "utf8")) : heroIds;
 
 /**
@@ -211,19 +236,32 @@ function jaccard(a, b) {
   for (const x of a) if (b.has(x)) inter++;
   return inter / (a.size + b.size - inter);
 }
-/** The markup of the section carrying an id, from its opening <section to the matching close. */
+/**
+ * The markup of the element carrying an id, from its own opening tag to the matching close.
+ *
+ * IT READS THE MARKED ELEMENT, WHATEVER TAG IT IS. This used to walk back to the nearest
+ * `<section`, which on a board whose hero root is a `<div>` (or a `<header>`) returns the
+ * PREVIOUS section, or nothing at all, and a null here skips the skeleton comparison in
+ * silence: the one check that tells a lifted hero from a rebuilt one with the same id simply
+ * stopped running, and the gate still printed a pass.
+ */
 function sectionMarkup(html, marker) {
   const at = html.indexOf(marker);
   if (at < 0) return null;
-  const open = html.lastIndexOf("<section", at);
+  // The marker sits inside the element's own opening tag, so the nearest `<` before it starts
+  // that tag.
+  const open = html.lastIndexOf("<", at);
   if (open < 0) return null;
+  const named = /^<([a-zA-Z][\w-]*)/.exec(html.slice(open, at + marker.length));
+  if (!named) return null;
+  const tag = named[1].toLowerCase();
   let i = open;
   let depth = 0;
-  const re = /<\/?section\b/gi;
+  const re = new RegExp(`<\\/?${tag}\\b`, "gi");
   re.lastIndex = open;
   let m;
   while ((m = re.exec(html))) {
-    if (m[0].startsWith("</")) { depth--; if (depth === 0) return html.slice(open, m.index + 10); }
+    if (m[0].startsWith("</")) { depth--; if (depth === 0) return html.slice(open, m.index + tag.length + 3); }
     else depth++;
     i = m.index;
   }
@@ -325,7 +363,16 @@ async function measureHeroScope(page, selector) {
     // labels and sets a monospace face nothing in the design chose, so the board carries it and
     // the composed home never does: measured, that reads as "missing ui-monospace" on an honest
     // build. `:not(section)` covers renders taken before the badge declared itself.
-    for (const el of document.querySelectorAll(scaffolding)) el.style.visibility = "hidden";
+    //
+    // NEVER THE HERO ITSELF, OR ANYTHING IT SITS INSIDE. `[data-section-id]:not(section)`
+    // matches a hero whose root is a `<div>` (or a `<header>`, or a `<footer>`), so the one
+    // element the whole comparison is scoped to was hidden and the board measured as setting
+    // no type, no accent and no scale at all. Hiding an ancestor does the same thing, because
+    // visibility inherits.
+    for (const el of document.querySelectorAll(scaffolding)) {
+      if (el === hero || el.contains(hero)) continue;
+      el.style.visibility = "hidden";
+    }
     return true;
   }, { sel: selector, scaffolding: "[data-palate-mark], .ev-switcher, [data-section-id]:not(section)" });
   if (!scoped) return null;
@@ -368,22 +415,32 @@ let exitCode = 0;
 try {
   const ctx = await browser.newContext({ viewport: { width: WIDTH, height: FOLD }, deviceScaleFactor: 1 });
 
-  // --- the board, from its archived render, on the build's own origin ----------------
-  const boardServed = await serveOnFreePort(distRoot, Number(opt("--port", "8791")), readFileSync(heroRenderPath, "utf8"));
+  // --- the board, from its own archived directory -------------------------------------
+  // The board is an artboard: self-contained CSS, bare-filename images copied beside it
+  // (Task 3). Serve its own directory, not the build's, so b1-img1.jpg resolves and no dist
+  // is needed for the board itself.
+  const boardServed = await serveOnFreePort(join(shotsRoot, heroPick.variant_id), Number(opt("--port", "8791")), readFileSync(heroRenderPath, "utf8"));
   boardServer = boardServed.server;
   const boardPage = await ctx.newPage();
   await boardPage.goto(`http://127.0.0.1:${boardServed.port}${BOARD_ROUTE}`, { waitUntil: "load", timeout: 30000 });
   await boardPage.waitForTimeout(300);
   const boardFacts = await measureHeroScope(boardPage, `[data-section-id="${heroSectionId}"]`);
   if (!boardFacts) {
-    cannotCheck(`the archived render of ${heroPick.variant_id} has no element marked ${heroSectionId}, so its hero could not be scoped.`);
+    cannotCheckMidRun(`the archived render of ${heroPick.variant_id} has no element marked ${heroSectionId}, so its hero could not be scoped.`);
   }
 
-  // --- the built home ----------------------------------------------------------------
-  const homeUrl = serveUrl || `http://127.0.0.1:${boardServed.port}/`;
+  // --- the built home, from its own build directory (a second server) or --serve ------
+  async function serveDist(root) {
+    // Same starting port as the board: the board already holds it, so serveOnFreePort's own
+    // EADDRINUSE handling walks past it onto the next free one, with no port math here.
+    const served = await serveOnFreePort(root, Number(opt("--port", "8791")), null);
+    homeServer = served.server;
+    return `http://127.0.0.1:${served.port}/`;
+  }
+  const homeUrl = serveUrl || (distRoot ? await serveDist(distRoot) : null);
   const homePage = await ctx.newPage();
   const res = await homePage.goto(homeUrl, { waitUntil: "networkidle", timeout: 45000 }).catch(() => null);
-  if (!res || !res.ok()) cannotCheck(`the built home did not load at ${homeUrl} (${res ? res.status() : "no response"}).`);
+  if (!res || !res.ok()) cannotCheckMidRun(`the built home did not load at ${homeUrl} (${res ? res.status() : "no response"}).`);
   const homeHtml = await homePage.content();
   await homePage.waitForTimeout(300);
   const heroShot = join(shotsRoot, "_built-hero.png");
@@ -542,6 +599,13 @@ try {
     process.stdout.write(`gate-fidelity: the built home carries the picked direction (${heroPick.variant_id}, rung ${heroPick.rung}, hero ${heroSectionId}).\n`);
     for (const n of notes) process.stdout.write(`  - ${n}\n`);
   }
+} catch (e) {
+  if (!(e instanceof SkipSignal)) throw e;
+  // Printed exactly as cannotCheck() prints it. process.exitCode, never process.exit(), so the
+  // `finally` below still runs and closes the browser and both servers before the process ends.
+  process.stderr.write(`gate-fidelity: skipped (${e.message})\n`);
+  process.stderr.write("gate-fidelity: NOT a pass.\n");
+  exitCode = 2;
 } finally {
   await browser.close().catch(() => {});
   if (boardServer) boardServer.close();

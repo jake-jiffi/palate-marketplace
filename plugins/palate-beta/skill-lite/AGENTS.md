@@ -42,7 +42,7 @@ Research-led, not interview-led. **Five stages:** (1) research the real business
 
 Issued once after CONVERGE, before Explore; carried through Explore, Compose, Verify. Fail-open.
 - **Bar:** good enough to win its category on Awwwards / FWA. "Competent" is a fail.
-- **Intensity** `high` or `calm`, recorded machine-readably. HIGH binds the bold mandate + the bold gates (pairwise-vs-exemplar, ambition, built-Explore required); calm keeps the lighter floor. Mechanisms are chosen TO FIT (a few not all), grounded in a `motion-and-3d` recipe + an MCP precedent.
+- **Intensity** `high` or `calm`, recorded machine-readably. HIGH binds the bold mandate + the bold gates (pairwise-vs-exemplar, ambition, full-Explore required); calm keeps the lighter floor. Mechanisms are chosen TO FIT (a few not all), grounded in a `motion-and-3d` recipe + an MCP precedent.
 - **Restraint clause CUTS BOTH WAYS, and CALM IS NOT MOTIONLESS.** A calm category (a clinic, a conveyancer) demands whisper-quiet: the CHARACTER of motion (slow, never performing), not its absence. A HIGH-INTENSITY brand (a label, a studio, a launch, a culture brand) DEMANDS the **bold mandate**, and a flat page fails the brief. Bold mandate: one committed feeling; copy that risks something; ONE signature focal object that is the hero INTERACTION not a banner; a custom cursor + micro-physics; one signature easing + an entrance ritual; film-grain; a rich-dark surface + a warm off-white + ONE rare accent that detonates; scroll as a timeline; kinetic masked type. WebGL is amplification where it fits, not the price of admission. Bold still ships its no-JS / reduced-motion finished state and holds the mobile budget (the phone is 80% of traffic).
 
 ## Creative principles (the soul)

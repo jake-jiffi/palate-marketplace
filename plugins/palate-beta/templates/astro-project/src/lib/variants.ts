@@ -1,10 +1,10 @@
 /**
  * Registry of Explore-stage DIRECTION BOARDS.
  *
- * Read by `src/pages/explore.astro` (the coaching page the client opens FIRST), by
- * `src/components/ExploreSwitcher.astro` (the bottom-right picker that follows them from
- * board to board, never the site's own navigation), by `src/layouts/BoardFrame.astro` and
- * by `scripts/boards-render.mjs`, which turns each board into a canvas artboard. See
+ * Read by `src/pages/explore.astro` (the coaching page the client opens FIRST, and shows
+ * STILLS of the artboards, not routes) and by `scripts/boards-render.mjs`, which reads each
+ * artboard under `.palate/explore/seed/` and turns it into a canvas artboard. Nothing under
+ * `/boards/` exists: the board IS the artboard file, never a page. See
  * `references/explore-stage.md`.
  *
  * ===================== THIS SET IS A LADDER, NOT A BAG =====================
@@ -32,16 +32,21 @@
  * a direction with its most expensive property invisible; and offering two or three CTA
  * labels turns a guess into a decision the client can make in the same sitting.
  *
- * At Compose time, after the client picks, this file is CLEARED (both arrays back to []),
- * `explore.astro` and the `/boards/*` routes are archived, and the picker stops rendering.
+ * At Compose time, after the client picks, this file is CLEARED (both arrays back to []) and
+ * `explore.astro` is deleted: the board IS the artboard, so there is no route to archive.
  */
 export interface Variant {
-  /** Route id, e.g. "b1" (board) or "lp1" (landing page). */
+  /** The board's id, e.g. "b1" (board) or "lp1" (landing page). The board IS the artboard file; there is no route. */
   id: string;
   /** Short evocative direction name, e.g. "The Quiet Room". Never "Option 3". */
   name: string;
-  /** Route href, e.g. "/boards/b1". */
-  href: string;
+  /**
+   * The artboard file under .palate/explore/seed/, e.g. "B1.dc.html". REQUIRED: the board IS
+   * this file. There is no route; Astro is built once, for the picked direction, at Compose.
+   */
+  artboard: string;
+  /** Deprecated. Boards have no route since canvas-first Explore; kept optional for old registries. */
+  href?: string;
   /**
    * Position on the ambition ladder, 1..N. 1 = most restrained, N = boldest. Required:
    * without it the set renders as a bag of options and the range is invisible.
@@ -75,16 +80,16 @@ export interface Variant {
 }
 
 /**
- * Direction boards, in ladder order. Routes /boards/b1 .. /boards/bN.
- * Claude appends one entry per board during Explore, after that board has PASSED its gates.
- * A board that has not passed is not registered, so the client never sees it.
+ * Direction boards, in ladder order. Each names an artboard under .palate/explore/seed/;
+ * there is no route. Claude appends one entry per board during Explore, after that board has
+ * PASSED its gates. A board that has not passed is not registered, so the client never sees it.
  */
 export const variants: Variant[] = [
   // Example of the shape (delete when the real ones land):
   // {
   //   id: "b1",
   //   name: "The Quiet Room",
-  //   href: "/boards/b1",
+  //   artboard: "B1.dc.html",
   //   ambition: 1,
   //   what: "One column, one photograph, and a great deal of air.",
   //   why: "The people arriving here are anxious and have usually been dismissed once already. Nothing on the page asks anything of them before they have read a sentence.",

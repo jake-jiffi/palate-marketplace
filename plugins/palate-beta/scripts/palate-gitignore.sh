@@ -49,7 +49,8 @@ verify-report.json
 .palate/adoption/filmstrip/
 .palate/tmp/
 .palate/explore/shots/
-.palate/explore/seed/
+.palate/explore/seed/canvas.json
+.palate/explore/seed/README.md
 public/_explore/
 *.palate-bak
 .palate-devserver.log
@@ -115,7 +116,16 @@ verify-report.json
 .palate/adoption/filmstrip/
 .palate/tmp/
 .palate/explore/shots/
-.palate/explore/seed/
+# The Explore SEED is the operator's own drawing work: one hand-authored artboard per rung
+# (`B<n>.dc.html`) and the images beside it. Those ARE the directions the client was shown and
+# nothing can regenerate them, so they stay COMMITTED. Only what boards-render writes into the
+# same directory is ignored, and it writes the calibration row as well as canvas.json: one
+# `Ref<n>.dc.html` and one `ref<n>.jpg` per reference, both re-derived from refs.json on every
+# run.
+.palate/explore/seed/canvas.json
+.palate/explore/seed/README.md
+.palate/explore/seed/Ref*.dc.html
+.palate/explore/seed/ref*.jpg
 public/_explore/
 *.palate-bak
 .palate-devserver.log

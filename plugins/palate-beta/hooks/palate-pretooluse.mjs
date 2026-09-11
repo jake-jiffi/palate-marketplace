@@ -75,12 +75,14 @@ import { resolveBuildContext } from "./project-dir.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
 const MERGE = path.join(HERE, "..", "scripts", "manifest-merge.mjs");
-const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$/i;
+const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$|\.dc\.html$/i;
 const CONFIG = /(^|\/)(astro|tailwind|vite|postcss|package|tsconfig|eslint)\.[a-z.]+$/i;
 // Page/section source: the files the model HAND-AUTHORS to compose the site. A NEW one
 // (or overwriting one) is the act the DIVERGE wall guards; everything else (config,
 // layout chrome, lib, the manifest/state files) is exempt so the scaffold is free.
-const PAGE_OR_SECTION = /(^|\/)src\/(pages|components)\//i;
+// Canvas-first Explore: an artboard under .palate/explore/seed/ IS the first design write of a
+// build (a drawn hero and section), so it is page-and-section source for every wall.
+const PAGE_OR_SECTION = /(^|\/)src\/(pages|components)\/|(^|\/)\.palate\/explore\/seed\/[^/]+\.dc\.html$/i;
 
 // Thresholds for the divergeValid predicate (env-tunable, documented; defaults echo
 // references/story-engine.md's own numbers, N=6-8 sampled with >=2 concepts at

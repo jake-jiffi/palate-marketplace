@@ -5,9 +5,9 @@
 #
 # Usage: scripts/test/run.sh [--fast]
 #   --fast  skip the browser-driven and build-driven suites, which need Playwright or an npm
-#           install and take minutes. template-csp-live, board-components, boards-render,
-#           explore-page-boards and gate-fidelity all install and build the template, which is
-#           the only honest way to prove a policy, a render or a fidelity comparison.
+#           install and take minutes. template-csp-live, boards-render, explore-page-boards and
+#           gate-fidelity all install and build the template, which is the only honest way to
+#           prove a policy, a render or a fidelity comparison.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 FAST=0; for a in "$@"; do [ "$a" = "--fast" ] && FAST=1; done
@@ -17,7 +17,7 @@ FAST=0; for a in "$@"; do [ "$a" = "--fast" ] && FAST=1; done
 # is BOTH a browser suite and a 72ms unit suite, and the bare name silently took the unit one
 # out of every fast run. A missing entry is warned about below, because a list that names a
 # file nobody has skips nothing and says nothing.
-SLOW="verify-rendered-forms.test.mjs hygiene-loop.test.sh verify-rendered-a11y.test.sh verify-rendered-incremental.test.mjs template-csp-live.test.sh board-components.test.sh boards-render.test.mjs explore-page-boards.test.sh gate-fidelity.test.mjs"
+SLOW="verify-rendered-forms.test.mjs hygiene-loop.test.sh verify-rendered-a11y.test.sh verify-rendered-incremental.test.mjs template-csp-live.test.sh boards-render.test.mjs explore-page-boards.test.sh gate-fidelity.test.mjs"
 for s in $SLOW; do
   [ -e "$DIR/$s" ] || echo "  WARNING: the slow list names $s, which does not exist"
 done

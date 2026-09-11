@@ -29,14 +29,22 @@ LEAKY=".palate/adoption/home-1440.png
 src/pages/index.astro.palate-bak
 public/_explore/b1-hero.png
 .palate/explore/shots/b1-1440.png
-.palate/explore/seed/canvas.json"
+.palate/explore/seed/canvas.json
+.palate/explore/seed/README.md
+.palate/explore/seed/Ref1.dc.html
+.palate/explore/seed/ref1.jpg"
 
 # MEASURED state in the same directories. Ignoring these is the opposite failure: the
 # adoption record and the baselines are judgement, and cannot be recomputed.
+# The Explore SEED artboards belong here too: they are hand-drawn, they are the record of the
+# directions a client was shown, and `boards-render.mjs` validates them rather than writing
+# them, so an ignore rule over the directory would drop the one artefact Explore produces.
 KEEP=".palate/adoption/report.json
 .palate/adoption/routes.json
 .palate/baselines/home.json
 .palate/assets.json
+.palate/explore/seed/B1.dc.html
+.palate/explore/seed/b1-hero.jpg
 public/logo.png"
 
 # ============ 1. THE WORKSPACE LAYOUT: the script writes the rules at the repo root ========

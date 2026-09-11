@@ -173,6 +173,49 @@ test("the motion proof is a command, not a JSON edit", async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("the canvas is recorded by command, published or declined", async () => {
+  const dir = project();
+  // The gate blocks a shown set whose canvas is neither published nor declined, so a field with
+  // no writer is a gate the model can only clear by hand-editing the manifest it was told never
+  // to touch.
+  const r = await run([dir, "--canvas-url", "https://claude.ai/code/artifact/abc123"]);
+  assert.equal(r.status, 0, r.stderr);
+  const canvas = manifestOf(dir).explore.canvas;
+  assert.equal(canvas.url, "https://claude.ai/code/artifact/abc123");
+  assert.ok(Date.parse(canvas.recorded_at) > 0, "the canvas record carries no timestamp");
+  assert.match(r.stdout, /canvas published/i);
+
+  const skipped = await run([dir, "--canvas-skipped", "no design skill in this session"]);
+  assert.equal(skipped.status, 0, skipped.stderr);
+  const declined = manifestOf(dir).explore.canvas;
+  assert.equal(declined.skipped, true);
+  assert.equal(declined.reason, "no design skill in this session");
+  assert.ok(Date.parse(declined.recorded_at) > 0, "the declined record carries no timestamp");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a canvas that cannot be opened, or declined with no reason, is refused", async () => {
+  const dir = project();
+  const bad = await run([dir, "--canvas-url", "the design canvas"]);
+  assert.equal(bad.status, 1, `a link the client cannot open must be refused:\n${bad.stdout}${bad.stderr}`);
+  assert.match(bad.stderr, /http/i);
+  assert.equal(manifestOf(dir).explore.canvas, undefined, "a refused url was recorded anyway");
+
+  const silent = await run([dir, "--canvas-skipped", "   "]);
+  assert.equal(silent.status, 1, `a declined canvas with no reason must be refused:\n${silent.stdout}${silent.stderr}`);
+  assert.match(silent.stderr, /reason/i);
+  assert.equal(manifestOf(dir).explore.canvas, undefined, "a reasonless skip was recorded anyway");
+
+  // Both at once is a model guessing rather than reporting: the canvas was published, or it
+  // was not.
+  const both = await run([dir, "--canvas-url", "https://claude.ai/code/artifact/abc123", "--canvas-skipped", "no design skill"]);
+  assert.equal(both.status, 1, `both flags at once must be refused:\n${both.stdout}${both.stderr}`);
+  assert.match(both.stderr, /--canvas-url/);
+  assert.match(both.stderr, /--canvas-skipped/);
+  assert.equal(manifestOf(dir).explore.canvas, undefined, "a contradictory call was recorded anyway");
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("the proof still records after Compose has cleared the registry", async () => {
   const dir = project();
   await run([dir, "--hero", "b3"]);
@@ -254,6 +297,32 @@ test("an intensity outside 1 to 4 is refused", async () => {
   const r = await run([dir, "--intensity", "7"]);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /1 to 4/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--answer records the question round, key by key, and refuses an unknown key", async () => {
+  const dir = project();
+  await run([dir, "--answer", "motion=the column rules draw down over 800ms, nothing loops"]);
+  await run([dir, "--answer", "mix=b2 services list under the b3 hero"]);
+  await run([dir, "--answer", "cms=false, the office edits nothing"]);
+  const m = manifestOf(dir);
+  assert.equal(m.explore.question_round.motion.startsWith("the column rules"), true);
+  assert.equal(m.explore.question_round.mix.startsWith("b2 services"), true);
+  assert.equal(m.explore.question_round.cms, "false, the office edits nothing");
+  assert.ok(m.explore.question_round.answered_at, "answered_at was not stamped");
+
+  const r = await run([dir, "--answer", "colour=red"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /motion, mix, cms/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--answer with no key or no value is refused, not silently dropped", async () => {
+  const dir = project();
+  const noValue = await run([dir, "--answer", "motion="]);
+  assert.equal(noValue.status, 1);
+  const noKey = await run([dir, "--answer", "just some text"]);
+  assert.equal(noKey.status, 1);
   rmSync(dir, { recursive: true, force: true });
 });
 

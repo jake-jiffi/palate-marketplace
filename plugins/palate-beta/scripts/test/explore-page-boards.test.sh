@@ -2,8 +2,14 @@
 # /explore is the page the client opens first, and it is the fallback for every tool that
 # cannot open a design canvas. So the assertions here are about what a CLIENT can see and do:
 # the calibration question above the ladder, the marker where they said they were aiming, one
-# card per board carrying its own entrance and its own argument, and the canvas link first when
-# there is one.
+# card per direction carrying its own entrance and its own argument, and the canvas link first
+# when there is one.
+#
+# A board is an artboard now, never an Astro route: `/explore` shows the rendered STILL at
+# `/_explore/<id>.png`, exactly as `scripts/boards-render.mjs` writes it. This test scaffolds
+# the site, writes the two still images by hand (the same PNG fixture boards-render.test.mjs
+# uses, so this test needs no board-rendering machinery of its own), registers two variants
+# with `artboard` and no route, and builds once to prove the page reads them.
 #
 # The last block runs the real rendered gate over the page at 390, 834 and 1440. This page has
 # form before: it once shipped eight eyebrow labels, bars that rendered at zero height, and 35
@@ -38,16 +44,16 @@ trap cleanup EXIT
 SITE="$TMP/site"
 scaffold_site "$SITE" boardtest || exit 2
 
-# --- two registered boards, their pages, their card images ------------------------------
+# --- two registered directions, each an artboard, no route -------------------------------
 cat > "$SITE/src/lib/variants.ts" <<'TS'
 export interface Variant {
-  id: string; name: string; href: string; ambition: number; what: string; why: string;
-  feeling: string; donor: string; section: string; motion: string; ctas: string[];
+  id: string; name: string; artboard: string; href?: string; ambition: number; what: string;
+  why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[];
   clip?: string; lookAt?: string;
 }
 export const variants: Variant[] = [
   {
-    id: "b1", name: "The Quiet Room", href: "/boards/b1", ambition: 1,
+    id: "b1", name: "The Quiet Room", artboard: "B1.dc.html", ambition: 1,
     what: "One column, one photograph, and a great deal of air.",
     why: "The people arriving are anxious and have been dismissed once already.",
     feeling: "unhurried, private, adult",
@@ -56,7 +62,7 @@ export const variants: Variant[] = [
     ctas: ["Book a first visit", "Ask a question"],
   },
   {
-    id: "b2", name: "The Long Table", href: "/boards/b2", ambition: 2,
+    id: "b2", name: "The Long Table", artboard: "B2.dc.html", ambition: 2,
     what: "A wide table of the work, read left to right.",
     why: "This buyer compares before they commit, so the comparison is the page.",
     feeling: "candid, unhurried",
@@ -65,51 +71,95 @@ export const variants: Variant[] = [
     ctas: ["See the work", "Start a project"],
   },
 ];
-export const landingVariants: Variant[] = [];
+// A LANDING BOARD IS SHOWN ON THE CANVAS ONLY. boards-render draws the ladder's rungs and
+// nothing else, so /explore must not offer a still for one: the card used to link
+// /_explore/lp1.png, which nothing ever writes.
+export const landingVariants: Variant[] = [
+  {
+    id: "lp1", name: "The Straight Offer", artboard: "LP1.dc.html", ambition: 1,
+    what: "One promise, one form, nothing else on the page.",
+    why: "The click was paid for, so the page owes the visitor exactly what the ad said.",
+    feeling: "direct, unembarrassed",
+    donor: "attentive", section: "cta",
+    motion: "Nothing moves until the form is answered.",
+    ctas: ["Get a price", "Ask a question"],
+  },
+];
 export function byAmbition(list: Variant[]): Variant[] {
   return [...list].sort((a, b) => (a.ambition ?? 0) - (b.ambition ?? 0));
 }
 TS
-mkdir -p "$SITE/src/pages/boards" "$SITE/public/_explore" "$SITE/.palate/explore"
-rm -f "$SITE/src/pages/boards/b1.astro"
-for id in b1 b2; do
-  cat > "$SITE/src/pages/boards/$id.astro" <<ASTRO
----
-import BoardFrame from "../../layouts/BoardFrame.astro";
-import SectionMark from "../../components/SectionMark.astro";
-import { variants } from "../../lib/variants";
-const variant = variants.find((v) => v.id === "$id");
----
-{variant && (
-  <BoardFrame variant={variant}>
-    <section slot="hero" class="bg-brand-bg relative px-6 py-24">
-      <SectionMark id="$id-hero" />
-      <h1 class="font-display text-brand-text text-5xl">{variant.name}</h1>
-    </section>
-    <section slot="section" class="bg-brand-bg relative px-6 py-20">
-      <SectionMark id="$id-section" />
-      <h2 class="font-display text-brand-text text-3xl">{variant.section}</h2>
-    </section>
-  </BoardFrame>
-)}
-ASTRO
-done
+mkdir -p "$SITE/public/_explore" "$SITE/.palate/explore"
 
-# Real PNGs and JPEGs, so the browser pass measures a page with images in it rather than a
-# page of broken icons.
+# The board stills: a real PNG (the same fixture boards-render.test.mjs uses, no `sharp`
+# dependency needed), so the browser pass measures a page with real images in it rather than a
+# page of broken icons. The reference-calibration images stay real JPEGs via `sharp`, since
+# nothing about them changed here.
+node -e '
+const { writeFileSync } = require("node:fs");
+const { deflateSync } = require("node:zlib");
+const out = process.argv[1];
+
+function pngFixture(w, h) {
+  const chunks = [];
+  const crcTable = [];
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    crcTable[n] = c >>> 0;
+  }
+  const crc = (buf) => {
+    let c = 0xffffffff;
+    for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const cc = Buffer.alloc(4); cc.writeUInt32BE(crc(td));
+    return Buffer.concat([len, td, cc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8; ihdr[9] = 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  const raw = Buffer.alloc(h * (1 + w * 3));
+  for (let y = 0; y < h; y++) {
+    const o = y * (1 + w * 3);
+    raw[o] = 0;
+    for (let x = 0; x < w; x++) {
+      raw[o + 1 + x * 3] = Math.round((x / w) * 255);
+      raw[o + 2 + x * 3] = Math.round((y / h) * 255);
+      raw[o + 3 + x * 3] = Math.round(((x + y) / (w + h)) * 255);
+    }
+  }
+  chunks.push(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  chunks.push(chunk("IHDR", ihdr));
+  chunks.push(chunk("IDAT", deflateSync(raw)));
+  chunks.push(chunk("IEND", Buffer.alloc(0)));
+  return Buffer.concat(chunks);
+}
+
+writeFileSync(out + "/b1.png", pngFixture(1440, 900));
+writeFileSync(out + "/b2.png", pngFixture(1440, 900));
+// The WHOLE board, which is what the card links open. boards-render writes both, and the card
+// image stays the 1440x900 entrance.
+writeFileSync(out + "/b1-full.png", pngFixture(1440, 2400));
+writeFileSync(out + "/b2-full.png", pngFixture(1440, 2400));
+' "$SITE/public/_explore" || { echo "explore-page-boards: could not write the board stills. NOT a pass." >&2; exit 2; }
+
 node -e '
 const { createRequire } = require("node:module");
 const req = createRequire(process.argv[1] + "/scripts/reference-capture/");
 const sharp = req("sharp");
 const out = process.argv[2];
 (async () => {
-  for (const [name, w, h] of [["b1.png",1440,900],["b2.png",1440,900],["ref1.jpg",720,450],["ref2.jpg",720,450],["ref3.jpg",720,450]]) {
+  for (const [name, w, h] of [["ref1.jpg",720,450],["ref2.jpg",720,450],["ref3.jpg",720,450]]) {
     const buf = await sharp({ create: { width: w, height: h, channels: 3, background: { r: 236, g: 233, b: 222 } } })
-      [name.endsWith(".png") ? "png" : "jpeg"]().toBuffer();
+      .jpeg().toBuffer();
     require("node:fs").writeFileSync(out + "/" + name, buf);
   }
 })();
-' "$ROOT" "$SITE/public/_explore" || { echo "explore-page-boards: could not write the fixture images (sharp). NOT a pass." >&2; exit 2; }
+' "$ROOT" "$SITE/public/_explore" || { echo "explore-page-boards: could not write the reference fixture images (sharp). NOT a pass." >&2; exit 2; }
 
 cat > "$SITE/.palate/explore/refs.json" <<'JSON'
 [
@@ -123,7 +173,7 @@ cat > "$SITE/build-manifest.json" <<'JSON'
 {
   "schema": 3,
   "project": ".",
-  "explore": { "ran": true, "canvas_url": "https://claude.ai/code/artifact/fixture-canvas" },
+  "explore": { "ran": true, "canvas": { "url": "https://claude.ai/code/artifact/fixture-canvas" } },
   "commission": { "intensity": "high", "intensity_asked": 3 }
 }
 JSON
@@ -139,12 +189,24 @@ done
 [ -n "$HTML" ] || { bad "/explore did not build"; echo "passed=$pass failed=$fail"; exit 1; }
 ok "/explore builds"
 
-# --- the boards, shown rather than listed -----------------------------------------------
+# --- the directions, shown as stills, never as routes -----------------------------------
 has "board b1 shows its entrance"            'data-board-shot="b1"'
 has "board b2 shows its entrance"            'data-board-shot="b2"'
-has "the b1 card image is the rendered hero"  '/_explore/b1.png'
-has "the b2 card image is the rendered hero"  '/_explore/b2.png'
-has "each card links to its board"            'href="/boards/b1"'
+has "the b1 card image is the rendered still" '/_explore/b1.png'
+has "the b2 card image is the rendered still" '/_explore/b2.png'
+has "each card links to the whole board"     'href="/_explore/b1-full.png"'
+# Anchored to the specific element, not just "the string appears somewhere": several sites on
+# the page render the same href for the same id, so a bare substring check cannot tell one
+# broken site from five correct ones. This one catches exactly the b1 card image link.
+# It opens `-full.png`, never the card image. `<id>.png` is the top 900px, which is what the
+# fidelity gate measures and the right size for a card; behind a link promising the board it is
+# the entrance again with everything below it cut off.
+has "the b1 card image anchor opens the whole board" \
+  '<a class="ex-shot" href="/_explore/b1-full.png" data-board-shot="b1"'
+hasnt "no route under /boards/ exists"        '/boards/'
+# The landing card is shown on the canvas and has no still on this page, so it must not link one.
+has "the landing board is listed"             'The Straight Offer'
+hasnt "the landing card links no still nothing draws" '/_explore/lp1.png'
 has "the notes carry what moves"              'What moves'
 has "the motion plan is the registry's"       'the photograph fades in once it is scrolled to'
 has "the CTA options are offered"             'Book a first visit / Ask a question'
@@ -175,23 +237,6 @@ ccol=$(grep -bo 'fixture-canvas' "$HTML" | head -1 | cut -d: -f1)
 
 # --- and it is still a working document, not a page of the site -------------------------
 has "the page is noindex" '<meta name="robots" content="noindex">'
-
-# --- the picker knows which board it is on ----------------------------------------------
-# A static build serves /boards/b2/ and the registry records /boards/b2, so a raw equality
-# never matched and the pill named the first rung on every board.
-B2=""
-for cand in "$SITE/dist/client/boards/b2/index.html" "$SITE/dist/boards/b2/index.html"; do
-  [ -f "$cand" ] && { B2="$cand"; break; }
-done
-if [ -n "$B2" ]; then
-  pill="$(sed -n 's/.*ev-pill[^>]*>\(.*\)/\1/p' "$B2" | head -c 600)"
-  case "$pill" in
-    *"The Long Table"*) ok "the picker names the board you are on" ;;
-    *) bad "the picker names the wrong board on /boards/b2/ (pill: ${pill:0:120})" ;;
-  esac
-else
-  bad "board b2 did not build, so the picker could not be checked"
-fi
 
 # --- the rendered gate, at all three viewports ------------------------------------------
 DIST="$(dirname "$(dirname "$HTML")")"

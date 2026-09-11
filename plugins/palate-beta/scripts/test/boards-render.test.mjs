@@ -1,37 +1,38 @@
 /**
- * boards-render.test.mjs - the artboards, against a real build in a real browser.
+ * boards-render.test.mjs - the artboard contract, and the run that holds boards to it.
  *
- * Everything this script writes is consumed by something that cannot report a fault. The canvas
- * silently renders a broken image for a src it cannot resolve, silently runs nothing for a
- * module whose import it cannot fetch, and silently mis-frames an artboard whose declared
- * height is wrong. So the assertions here are about the FILE, not about the run finishing:
- * the skeleton the editor requires, one script and no more, every image a bare filename that
- * exists and fits, and a canvas.json whose geometry matches what was rendered.
+ * Explore is drawn now, not built: a board is a hand-authored `.dc.html` artboard and this
+ * script validates it, keys it, measures it and archives it. Everything it writes is consumed
+ * by something that cannot report a fault. The canvas silently renders a broken image for a src
+ * it cannot resolve, silently stops being editable when the skeleton is spelled differently,
+ * and silently mis-frames an artboard whose declared height is wrong. So the assertions here
+ * are about the FILE, not about the run finishing.
  *
- * The last block is the one that matters most: a registered board with no page must leave NO
- * seed directory. Half a set handed to a client reads as the whole set.
+ * The last blocks are the ones that matter most: a refusal must leave the seed alone. The seed
+ * is the operator's own drawing work, so a script that deletes it over one oversized image
+ * costs hours rather than a minute.
  *
- * Slow: an npm install, an astro build and a browser. scripts/test/run.sh skips it under
- * --fast. Run: node --test scripts/test/boards-render.test.mjs
+ * Slow: it needs Playwright. scripts/test/run.sh skips it under --fast.
+ * Run: node --test scripts/test/boards-render.test.mjs
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync, statSync, readdirSync, symlinkSync, realpathSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync, statSync, symlinkSync, realpathSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
-import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard } from "../boards-render.mjs";
+import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard, validateArtboard, stampKeys } from "../boards-render.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
 const CLI = join(ROOT, "scripts", "boards-render.mjs");
-const PORT = 8796; // reserved for this suite; 8791 and 8797 belong to the others
 
 let TMP = null;
 let SITE = null;
+let SEED = null;
 let ready = false;
 let skipReason = "";
 
@@ -54,11 +55,12 @@ const BOARDS = [
   },
 ];
 
+/** The registry as Task 2 left it: `artboard` required, no `href`, because no route exists. */
 function registryFor(boards) {
   const entries = boards.map((b) => `  {
     id: ${JSON.stringify(b.id)},
     name: ${JSON.stringify(b.name)},
-    href: ${JSON.stringify(`/boards/${b.id}`)},
+    artboard: ${JSON.stringify(`B${b.ambition}.dc.html`)},
     ambition: ${b.ambition},
     what: ${JSON.stringify(b.what)},
     why: ${JSON.stringify(b.why)},
@@ -69,8 +71,8 @@ function registryFor(boards) {
     ctas: ${JSON.stringify(b.ctas)},
   },`).join("\n");
   return `export interface Variant {
-  id: string; name: string; href: string; ambition: number; what: string; why: string;
-  feeling: string; donor: string; section: string; motion: string; ctas: string[];
+  id: string; name: string; artboard: string; href?: string; ambition: number; what: string;
+  why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[];
   clip?: string; lookAt?: string;
 }
 export const variants: Variant[] = [
@@ -83,77 +85,45 @@ export function byAmbition(list: Variant[]): Variant[] {
 `;
 }
 
-function boardPage(b) {
-  return `---
-import BoardFrame from "../../layouts/BoardFrame.astro";
-import SectionMark from "../../components/SectionMark.astro";
-import { variants } from "../../lib/variants";
-const variant = variants.find((v) => v.id === ${JSON.stringify(b.id)});
----
-{variant && (
-  <BoardFrame variant={variant}>
-    <Fragment slot="head">
-      {/* A cross-origin stylesheet. Reading its rules throws, and the head is never
-          serialised, so without explicit handling the faces a brand-creation Explore
-          chose are simply absent from the artboard. */}
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fixture+Face:wght@400&display=swap" />
-      {/* A REAL SAME-ORIGIN STYLESHEET, served from public/ rather than written inline.
-          An inline style in an .astro template is raw text that Astro and Vite may hoist,
-          resolve or drop, and two attempts at one produced a fixture that measured nothing.
-          A linked file gives exactly what the harvest has to cope with: a CSSImportRule, a
-          fragment url(), a class-set background and one that 404s. */}
-      <link rel="stylesheet" href="/_fixture/extra.css" />
-    </Fragment>
-    <section slot="hero" class="bg-brand-bg relative px-6 py-24" style="background-image:url('/_fixture/bg.png');background-size:cover">
-      <SectionMark id="${b.id}-hero" />
-      <h1 class="font-display text-brand-text text-5xl">${b.name}</h1>
-      <p class="text-brand-muted mt-6 max-w-xl">${b.what}</p>
-      <img src="/_fixture/photo.png" alt="A fixture photograph" width="640" height="400" />
-      {/* An inline icon, the commonest shape a data URI takes. document.images includes it, and
-          Playwright's request context cannot fetch one, so it aborted the whole seed with a
-          message about a broken image. */}
-      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%232f5d50'/></svg>" alt="An inline icon" width="16" height="16" data-inline-icon />
-      {/* Base64, with a prolog long enough that the root element is past the first 200 bytes:
-          sniffing the payload cannot see it is an SVG, so only the declared media type can. */}
-      <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+PCEtLSBFeHBvcnRlZCBieSBhIGRyYXdpbmcgdG9vbCB0aGF0IHdyaXRlcyBhIGxvbmcgcHJvbG9nIGJlZm9yZSB0aGUgcm9vdCBlbGVtZW50LiBUaGlzIGlzIG9yZGluYXJ5LCBhbmQgaXQgaXMgd2hhdCBwdXRzIHRoZSByb290IGVsZW1lbnQgcGFzdCBhbnl0aGluZyBhIHBheWxvYWQgc25pZmYgcmVhZHMsIHdoaWNoIGlzIHdoeSB0aGUgZGVjbGFyZWQgbWVkaWEgdHlwZSBpcyB0aGUgb25seSB0aGluZyB0aGF0IGNhbiBuYW1lIHRoZSBleHRlbnNpb24uIC0tPjxzdmcgeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB2aWV3Qm94PScwIDAgMTYgMTYnPjxyZWN0IHdpZHRoPScxNicgaGVpZ2h0PScxNicgZmlsbD0nIzFjMWIxOScvPjwvc3ZnPg==" alt="A second inline icon" width="16" height="16" data-inline-b64 />
-      {/* A band the page never scrolls to, held at opacity 0 until a reveal fires. */}
-      {/* url(#id): an SVG filter reference. It resolves to the page's own URL, so harvesting it
-          as an image fetches HTML and refuses the whole seed. Grain is the canonical technique
-          and the bold mandate names it. */}
-      <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-        <filter id="fixture-grain"><feTurbulence baseFrequency="0.8" /></filter>
-      </svg>
-      <div class="fixture-grain" style="width:80px;height:80px;background:#2f5d50"></div>
-      {/* A class-set background that IS an image: the helmet-CSS rewrite path, which the inline
-          style above does not exercise. */}
-      <div class="fixture-bg" style="width:200px;height:120px"></div>
-      {/* And one that 404s, from a rule that may belong to another page entirely. */}
-      <div class="fixture-missing" style="width:80px;height:80px"></div>
-      <div class="fixture-notimage" style="width:80px;height:80px"></div>
-      <p class="fixture-classy" data-classy>Styled only by the linked stylesheet.</p>
-      <div style="height:1400px"></div>
-      <p data-reveal class="reveal-band" style="opacity:0">The band a scroll reveal brings in.</p>
-    </section>
-    <section slot="section" class="bg-brand-bg relative px-6 py-20">
-      <SectionMark id="${b.id}-${b.section}" />
-      <h2 class="font-display text-brand-text text-3xl">${b.section}</h2>
-      {/* A third-party tag IN THE BODY. Astro hoists its own scripts to the head, which the
-          artboard never serialises, so without this the stripping assertions would be true by
-          construction and would pass on a script-stripper that had been deleted. */}
-      <script is:inline src="https://tracker.example.com/t.js"></script>
-      {/* And the site's own motion, self-contained and declared, which SHOULD travel. It is a
-          real IntersectionObserver, so the reveal only resolves if something actually scrolls
-          the page before the harvest. */}
-      <script is:inline data-palate-motion>
-        const io = new IntersectionObserver((entries) => {
-          for (const e of entries) if (e.isIntersecting) { e.target.style.opacity = "1"; e.target.setAttribute("data-revealed", "1"); }
-        });
-        document.querySelectorAll("[data-reveal]").forEach((n) => io.observe(n));
-      </script>
-    </section>
-  </BoardFrame>
-)}
-`;
+/**
+ * A conforming artboard: the whole page in one direction, navigation to footer, with the motion
+ * written on it and every block naming its role.
+ *
+ * Tall on purpose. The frame height is MEASURED, and a board that renders 150px tall could not
+ * tell a real measurement from a default.
+ */
+function artboardFor(b) {
+  return `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body>` +
+    `<x-dc><helmet><style>` +
+    `x-dc{display:block;width:1440px;overflow:hidden}body{margin:0;font-family:Georgia,serif}` +
+    `a{color:#2f5d50;text-decoration:underline}a:hover{color:#1b382f}` +
+    `.hero{min-height:620px;padding:80px;background:#f4f1ea}.band{padding:64px 80px}` +
+    `</style></helmet>` +
+    `<header class="nav band" data-section-id="${b.id}-navigation">` +
+    `<a class="nav-logo" href="#">${b.name}</a><a class="nav-cta" href="#">${b.ctas[0]}</a></header>` +
+    `<section class="hero" data-section-id="${b.id}-hero">` +
+    `<h1 class="hero-title">${b.name}</h1><p class="hero-lede">${b.what}</p>` +
+    `<img src="${b.id}-img1.png" alt="A fixture photograph"></section>` +
+    `<section class="${b.section} band" data-section-id="${b.id}-${b.section}">` +
+    `<h2 class="section-title">${b.section}</h2><ul class="list"><li class="row">One</li><li class="row">Two</li></ul></section>` +
+    `<aside class="motion-note band" data-palate-motion="">${b.motion} It holds once it arrives, and nothing loops.</aside>` +
+    `<section class="cta band" data-section-id="${b.id}-cta"><a class="cta-btn" href="#">${b.ctas[1]}</a></section>` +
+    `<footer class="footer band" data-section-id="${b.id}-footer"><p class="footer-line">Ballina, New South Wales</p></footer>` +
+    `</x-dc></body></html>`;
+}
+
+function drawSeed(boards) {
+  mkdirSync(SEED, { recursive: true });
+  for (const b of boards) {
+    writeFileSync(join(SEED, `B${b.ambition}.dc.html`), artboardFor(b));
+    writeFileSync(join(SEED, `${b.id}-img1.png`), pngFixture(80, 60));
+  }
+}
+
+/** The pixel dimensions in a PNG's IHDR: the two numbers that say whether a still is the fold. */
+async function pngSize(path) {
+  const buf = readFileSync(path);
+  return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
 }
 
 const run = async (args, opts = {}) => {
@@ -165,47 +135,19 @@ const run = async (args, opts = {}) => {
   }
 };
 
-before(async () => {
+before(() => {
   if (!existsSync(join(ROOT, "scripts/reference-capture/node_modules/playwright"))) {
-    skipReason = "playwright is not installed (scripts/reference-capture/setup.sh); the artboards are UNPROVEN.";
+    skipReason = "playwright is not installed (scripts/reference-capture/setup.sh); the artboards are UNMEASURED.";
     return;
   }
   TMP = mkdtempSync(join(tmpdir(), "boards-render-"));
   SITE = join(TMP, "site");
-  try {
-    execFileSync("bash", ["-c",
-      `set -e; export SCAFFOLD_TEMPLATE="${join(ROOT, "templates/astro-project")}"; ` +
-      `. "${join(HERE, "lib/scaffold-site.sh")}"; scaffold_site "${SITE}" boardtest`,
-    ], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
-  } catch (e) {
-    skipReason = `the scaffold fixture could not be stood up: ${(e.stderr || e.message || "").toString().slice(-400)}`;
-    return;
-  }
+  SEED = join(SITE, ".palate/explore/seed");
+  // NO SCAFFOLD, NO npm INSTALL, NO ASTRO BUILD. A board is an artboard; the only things this
+  // script needs from a project are the registry and the drawn seed.
+  mkdirSync(join(SITE, "src/lib"), { recursive: true });
   writeFileSync(join(SITE, "src/lib/variants.ts"), registryFor(BOARDS));
-  mkdirSync(join(SITE, "src/pages/boards"), { recursive: true });
-  rmSync(join(SITE, "src/pages/boards/b1.astro"), { force: true });
-  for (const b of BOARDS) writeFileSync(join(SITE, `src/pages/boards/${b.id}.astro`), boardPage(b));
-  // Real rasters the flattener has to carry into the seed directory: one as an <img>, one as
-  // a CSS background, which is the shape a hero photograph usually takes.
-  mkdirSync(join(SITE, "public/_fixture"), { recursive: true });
-  writeFileSync(join(SITE, "public/_fixture/photo.png"), pngFixture(640, 400));
-  writeFileSync(join(SITE, "public/_fixture/bg.png"), pngFixture(1440, 900));
-  writeFileSync(join(SITE, "public/_fixture/tile.png"), pngFixture(320, 320));
-  writeFileSync(join(SITE, "public/_fixture/notes.txt"), "not an image, and it answers 200\n");
-  // The @import is FIRST because CSS ignores one that follows any other rule.
-  writeFileSync(join(SITE, "public/_fixture/extra.css"), [
-    '@import url("https://fonts.googleapis.com/css2?family=Fixture+Import&display=swap");',
-    ".fixture-grain { filter: url(#fixture-grain); }",
-    '.fixture-bg { background-image: url("/_fixture/tile.png"); background-size: cover; }',
-    '.fixture-missing { background-image: url("/_fixture/gone.png"); }',
-    // Fetches perfectly and is not an image. sharp refusing to decode it says the harvest
-    // reached too far, not that the board is broken.
-    '.fixture-notimage { background-image: url("/_fixture/notes.txt"); }',
-    // Values no browser default and no inline style could produce, so an inline computed value
-    // matching them proves the sheet was present when the flatten ran.
-    '.fixture-classy { font-size: 27px; background-color: rgb(11, 22, 33); padding: 13px; }',
-    "",
-  ].join("\n"));
+  drawSeed(BOARDS);
   ready = true;
 });
 
@@ -265,6 +207,13 @@ test("the registry parser ignores the commented-out example", () => {
   assert.equal(parseRegistry(registryFor(BOARDS)).length, 2);
 });
 
+test("the registry parser returns each board's artboard file", () => {
+  // The board IS the file. Without this the run falls back to a name derived from the rung, and
+  // a registry naming anything else is obeyed by the picker and ignored here.
+  const parsed = parseRegistry(registryFor(BOARDS));
+  assert.deepEqual(parsed.map((v) => v.artboard), ["B1.dc.html", "B2.dc.html"]);
+});
+
 test("an artboard carries the skeleton the editor replaces, verbatim", () => {
   const a = toArtboard({ html: "<p>hi</p>", css: "p{color:red}", name: "b1 Test" });
   assert.ok(a.startsWith("<!doctype html>"));
@@ -276,8 +225,8 @@ test("an artboard carries the skeleton the editor replaces, verbatim", () => {
 test("canvas.json puts the references on row 0 and the boards 120px below", () => {
   const doc = writeCanvasJson({
     boards: [
-      { file: "B1.dc.html", id: "b1", ambition: 1, name: "One", height: 2000, feeling: "quiet", what: "A" },
-      { file: "B2.dc.html", id: "b2", ambition: 2, name: "Two", height: 2400, feeling: "loud", what: "B" },
+      { file: "B1.dc.html", id: "b1", ambition: 1, name: "One", h: 2000, feeling: "quiet", what: "A" },
+      { file: "B2.dc.html", id: "b2", ambition: 2, name: "Two", h: 2400, feeling: "loud", what: "B" },
     ],
     refs: [{ position: 1, name: "Ref one", slug: "one", why: "restrained" }],
     out: null,
@@ -288,217 +237,440 @@ test("canvas.json puts the references on row 0 and the boards 120px below", () =
   assert.equal(refFrame.y, 0);
   assert.equal(b1.y, refFrame.h + 120, "120px between rows");
   assert.equal(b2.x - (b1.x + b1.w), 80, "80px between frames in a row");
-  assert.equal(b1.h, 2000, "the frame height is the rendered height, never a guess");
+  assert.equal(b1.h, 2000, "the frame height is the measured height, never a guess");
   assert.equal(doc.launch.view, "canvas");
   assert.ok(doc.annotations.some((a) => a.id === "cal-q"), "the calibration question is annotated");
   for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/);
 });
 
+// ------------------------------------------------------- the artboard contract
+const GOOD = `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>x-dc{display:block;width:1440px;overflow:hidden}a{color:#000}a:hover{color:#333}</style></helmet><header class="nav" data-section-id="b1-navigation"><a class="nav-logo" href="#">Eastcoast</a><a class="nav-cta" href="#">Ring</a></header><section class="hero" data-section-id="b1-hero"><h1 class="hero-title">Hogan Street</h1><img src="b1-img1.jpg" alt=""></section><section class="services" data-section-id="b1-services"><ul class="list"><li class="row">Doors</li></ul></section><aside class="motion-note" data-palate-motion="">On load the column rules draw down over 800ms on one curve, then hold; nothing loops.</aside><section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section><footer class="footer" data-section-id="b1-footer"><p class="footer-line">Ballina</p></footer></x-dc></body></html>`;
+
+const fixtureDirs = [];
+function fixtureDirWith(sizes) {
+  const dir = mkdtempSync(join(tmpdir(), "artboard-fixture-"));
+  fixtureDirs.push(dir);
+  for (const [name, bytes] of Object.entries(sizes)) writeFileSync(join(dir, name), Buffer.alloc(bytes, 0x41));
+  return dir;
+}
+after(() => { for (const d of fixtureDirs) rmSync(d, { recursive: true, force: true }); });
+
+test("a conforming artboard validates", () => {
+  const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+// THE FRAME WIDTH IS A CONTRACT, NOT A CONVENTION. The canvas neither scales nor crops a
+// frame, so a board drawn at some other width is cropped or floats in a gutter on the canvas
+// while every other check passes. The doctrine has always said 1440; nothing held it there.
+test("an artboard with no 1440 frame rule is refused", () => {
+  const r = validateArtboard(GOOD.replace("x-dc{display:block;width:1440px;overflow:hidden}", ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /1440/);
+});
+
+test("a frame rule at any other width is refused", () => {
+  const r = validateArtboard(GOOD.replace("width:1440px", "width:1280px"), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /1440/);
+});
+
+// Spacing is a matter of taste in a stylesheet, so the check reads the rule rather than the
+// spelling: refusing `x-dc { width: 1440px }` would be refusing a correct board.
+test("the frame rule is read whitespace-tolerantly", () => {
+  const r = validateArtboard(GOOD.replace("x-dc{display:block;width:1440px;overflow:hidden}", "x-dc {\n  display: block;\n  width: 1440px;\n  overflow: hidden;\n}\n"), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("a missing hero mark is named", () => {
+  const r = validateArtboard(GOOD.replace(' data-section-id="b1-hero"', ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /b1-hero/);
+});
+
+test("a whole page is required: nav, cta and footer marks are each named when missing", () => {
+  for (const piece of ["navigation", "cta", "footer"]) {
+    const r = validateArtboard(GOOD.replace(` data-section-id="b1-${piece}"`, ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+    assert.equal(r.ok, false, piece);
+    assert.match(r.problems.join("\n"), new RegExp(`b1-${piece}`));
+  }
+});
+
+// A MARKED ROOT IS A SECTIONING ELEMENT. gate-fidelity scopes its whole comparison to the
+// marked hero and hides everything else on the page, so a `<div>` carrying the mark measured as
+// setting no type, no accent and no scale, and the skeleton check that tells a lifted hero from
+// a rebuilt one stopped running without saying so.
+test("a marked root on a div is refused, naming the tag", () => {
+  const r = validateArtboard(
+    GOOD.replace('<section class="hero" data-section-id="b1-hero">', '<div class="hero" data-section-id="b1-hero">')
+      .replace("</section><section class=\"services\"", "</div><section class=\"services\""),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, false);
+  const said = r.problems.join("\n");
+  assert.match(said, /<div>/, `the refusal does not name the offending tag:\n${said}`);
+  assert.match(said, /b1-hero/, `the refusal does not name the mark that sits on it:\n${said}`);
+});
+
+test("a header and a footer are sectioning elements too, so a whole board validates", () => {
+  const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("data-srcset is not srcset, and a conforming board is not refused for carrying one", () => {
+  const r = validateArtboard(
+    GOOD.replace('<img src="b1-img1.jpg" alt="">', '<img src="b1-img1.jpg" data-srcset="handled by a loader" alt="">'),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("the registry's own inner section must be on the board", () => {
+  const r = validateArtboard(GOOD, { id: "b1", section: "pricing", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /b1-pricing/);
+});
+
+test("the planned motion must be written on the board as text", () => {
+  const r = validateArtboard(GOOD.replace(/<aside class="motion-note"[^>]*>[^<]*<\/aside>/, ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /motion/);
+  const short = validateArtboard(GOOD.replace(/(<aside class="motion-note"[^>]*>)[^<]*/, "$1fades in"), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(short.ok, false);
+  assert.match(short.problems.join("\n"), /motion/);
+});
+
+test("the hero is found by name, not by position (nav first is fine)", () => {
+  // An artboard opens with its navigation, so a hero read as "the first mark" is never the hero.
+  assert.match(GOOD, /data-section-id="b1-navigation"[\s\S]*data-section-id="b1-hero"/);
+  const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("a remote image is refused", () => {
+  // NAMED AS REMOTE, not as a path with slashes in it. The canvas has no egress, so a remote
+  // src renders as a broken box and the correction is "put the file beside the artboard", which
+  // is a different instruction from "you wrote a subdirectory".
+  const r = validateArtboard(GOOD.replace("b1-img1.jpg", "https://example.com/x.jpg"), { id: "b1", section: "services", dir: fixtureDirWith({}) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /is remote or inline/i);
+  const inline = validateArtboard(GOOD.replace("b1-img1.jpg", "data:image/png;base64,AAAA"), { id: "b1", section: "services", dir: fixtureDirWith({}) });
+  assert.equal(inline.ok, false);
+  assert.match(inline.problems.join("\n"), /is remote or inline/i);
+  const nested = validateArtboard(GOOD.replace("b1-img1.jpg", "img/b1-img1.jpg"), { id: "b1", section: "services", dir: fixtureDirWith({}) });
+  assert.equal(nested.ok, false);
+  assert.match(nested.problems.join("\n"), /bare filename/i);
+});
+
+test("an image that is not beside the artboard is refused", () => {
+  const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({}) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /not beside the artboard/);
+});
+
+test("an oversized image is refused at 70 KB", () => {
+  const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 71 * 1024 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /70 KB/);
+});
+
+test("a second script tag is refused", () => {
+  const r = validateArtboard(GOOD.replace("</x-dc>", "<script>alert(1)</script></x-dc>"), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /script/);
+});
+
+test("a stylesheet from anywhere but Google Fonts is refused", () => {
+  const r = validateArtboard(
+    GOOD.replace("</helmet>", '</helmet><link rel="stylesheet" href="https://cdn.example.com/x.css">'),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /Google Fonts/);
+});
+
+test("Google's own three-link embed validates, preconnects included", () => {
+  // The standard snippet is a preconnect to fonts.googleapis.com, a crossorigin preconnect to
+  // fonts.gstatic.com (where the face files actually come from) and the stylesheet. Refusing the
+  // gstatic preconnect sent an operator looking for a fault in a board that was correct.
+  const embed = '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    + '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Simula&display=swap">';
+  const r = validateArtboard(GOOD.replace("</helmet>", `${embed}</helmet>`), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("a remote stylesheet is refused however its href is quoted", () => {
+  // Matching only href="..." was a false accept: a single-quoted or bare href produced no match
+  // and therefore no problem, on the one rule that says nothing else may be fetched.
+  for (const href of ['"https://cdn.evil.com/x.css"', "'https://cdn.evil.com/x.css'", "https://cdn.evil.com/x.css"]) {
+    const r = validateArtboard(
+      GOOD.replace("</helmet>", `<link rel="stylesheet" href=${href}></helmet>`),
+      { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+    );
+    assert.equal(r.ok, false, `href=${href} was accepted`);
+    assert.match(r.problems.join("\n"), /cdn\.evil\.com.*not Google Fonts/);
+  }
+});
+
+test("a css background is held to the same rules as an img", () => {
+  // A hero photograph is usually a background, not an <img>, so this was the commonest picture
+  // on a board and the only one that was never checked for existence or for the ceiling.
+  const withBg = (url) => GOOD.replace("a{color:#000}", `a{color:#000}.hero{background-image:url(${url})}`);
+  const dir = fixtureDirWith({ "b1-img1.jpg": 1000, "hero.jpg": 1000, "big.jpg": 71 * 1024 });
+
+  const rooted = validateArtboard(withBg("/img/hero.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(rooted.ok, false, "a root-relative background was accepted and renders blank");
+  assert.match(rooted.problems.join("\n"), /bare filename/);
+
+  const nested = validateArtboard(withBg("pics/hero.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(nested.ok, false, "a nested background path was accepted and renders blank");
+  assert.match(nested.problems.join("\n"), /bare filename/);
+
+  const missing = validateArtboard(withBg("gone.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(missing.ok, false);
+  assert.match(missing.problems.join("\n"), /not beside the artboard/);
+
+  const oversized = validateArtboard(withBg("big.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(oversized.ok, false);
+  assert.match(oversized.problems.join("\n"), /70 KB/);
+
+  const good = validateArtboard(withBg("hero.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(good.ok, true, good.problems.join("; "));
+});
+
+test("a fragment url and a data URI are not files that have to exist", () => {
+  // `filter: url(#grain)` names an element in this very document, and grain is a canonical
+  // technique the bold rungs reach for. A face inlined as a data URI is already here.
+  const r = validateArtboard(
+    GOOD.replace("a{color:#000}", "a{color:#000}.hero{filter:url(#grain)}@font-face{font-family:X;src:url(data:font/woff2;base64,AAAA)}"),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("a file the canvas cannot resolve as an image is refused even when it is right there", () => {
+  // It exists, it is small, and it is not a picture. The canvas renders a broken box for it and
+  // says nothing, so the extension is checked rather than assumed from the filename being local.
+  const dir = fixtureDirWith({ "b1-img1.jpg": 1000, "notes.txt": 200, "Simula.woff2": 4000 });
+  const notAnImage = validateArtboard(GOOD.replace("b1-img1.jpg", "notes.txt"), { id: "b1", section: "services", dir });
+  assert.equal(notAnImage.ok, false);
+  assert.match(notAnImage.problems.join("\n"), /not an image type/);
+  // A face beside the artboard is the same refusal: the contract says non-Google faces travel as
+  // @font-face data URIs, because the canvas will not fetch a file it was not handed.
+  const face = validateArtboard(
+    GOOD.replace("a{color:#000}", "a{color:#000}@font-face{font-family:Simula;src:url(Simula.woff2)}"),
+    { id: "b1", section: "services", dir },
+  );
+  assert.equal(face.ok, false);
+  assert.match(face.problems.join("\n"), /not an image type|data URIs/);
+});
+
+test("a srcset is refused, because it overrides the bare filename", () => {
+  const r = validateArtboard(
+    GOOD.replace('<img src="b1-img1.jpg" alt="">', '<img src="b1-img1.jpg" srcset="https://cdn.example.com/x.jpg 2x" alt="">'),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /srcset/);
+});
+
+test("a remote css url() is refused and a Google Fonts one is not", () => {
+  const remote = validateArtboard(
+    GOOD.replace("a{color:#000}", "a{color:#000}.hero{background-image:url(https://cdn.example.com/h.jpg)}"),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(remote.ok, false);
+  assert.match(remote.problems.join("\n"), /is remote/);
+  const fonts = validateArtboard(
+    GOOD.replace("a{color:#000}", '@import url("https://fonts.googleapis.com/css2?family=Simula");a{color:#000}'),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(fonts.ok, true, fonts.problems.join("; "));
+});
+
+test("a link hover state must be defined, because the canvas asks for one", () => {
+  const r = validateArtboard(GOOD.replace("a:hover{color:#333}", ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /a:hover/);
+});
+
+test("the skeleton the editor replaces is required verbatim", () => {
+  // An extra tag in the head is enough. The editor looks for this exact shape and a head it does
+  // not recognise stops the artboard being editable with nothing saying so, which is why this is
+  // checked as a whole string rather than as a set of parts.
+  const extra = GOOD.replace('<meta charset="utf-8">', '<meta charset="utf-8"><meta name="viewport" content="width=device-width">');
+  const r = validateArtboard(extra, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /skeleton/);
+  // And a support.js spelled differently, which is the way it actually goes wrong.
+  const spelled = validateArtboard(GOOD.replace('<script src="./support.js"></script>', '<script src="support.js"></script>'), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(spelled.ok, false);
+  assert.match(spelled.problems.join("\n"), /skeleton|support\.js/);
+});
+
+test("blind structure is refused: fewer than 60% of block elements carry a class", () => {
+  const blind = GOOD.replace(/ class="[^"]*"/g, "");
+  const r = validateArtboard(blind, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /class/);
+});
+
+test("stampKeys gives every element a stable data-palate-k and is idempotent", () => {
+  const once = stampKeys(GOOD);
+  const twice = stampKeys(once);
+  assert.equal(once, twice);
+  const keys = [...once.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(keys.length >= 7, `only ${keys.length} elements were keyed`);
+  assert.equal(new Set(keys).size, keys.length, "a key was repeated, which makes two elements the same element");
+  assert.ok(!/<(html|head|body|x-dc|helmet|script|style|meta)\b[^>]*data-palate-k/.test(once),
+    "the skeleton the editor replaces was keyed, which changes the shape it looks for");
+});
+
+test("a board that gains an element is keyed without repeating a key", () => {
+  // THE COUNTER HAS TO START PAST THE HIGHEST KEY ALREADY THERE. Skipping keyed elements is not
+  // enough: a board keyed k0..k8 that the client adds a paragraph to came back with a SECOND k0,
+  // so two different elements carried one key and the read-back matched whichever it saw first.
+  const once = stampKeys(GOOD);
+  const before = [...once.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
+  const grown = once.replace("</footer>", '<p class="footer-extra">Added on the canvas</p></footer>');
+  const twice = stampKeys(grown);
+  const after = [...twice.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
+
+  assert.equal(after.length, before.length + 1, "the new element was not keyed");
+  assert.equal(new Set(after).size, after.length, `a key was repeated: ${after.join(",")}`);
+  assert.deepEqual(after.slice(0, before.length), before, "the keys the client's canvas was published with were renumbered");
+  assert.match(/<p class="footer-extra"[^>]*data-palate-k="([^"]*)"/.exec(twice)[1], /^k\d+$/);
+  assert.ok(!before.includes(/<p class="footer-extra"[^>]*data-palate-k="([^"]*)"/.exec(twice)[1]),
+    "the added element reused a key that was already on the board");
+});
+
+test("a stamped artboard still validates, so the seed can be rewritten in place", () => {
+  const r = validateArtboard(stampKeys(GOOD), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
 // ---------------------------------------------------------------- the real run
-test("two boards render to two artboards the canvas can open", async (t) => {
+test("the artboards are validated, keyed, measured and archived", async (t) => {
   if (!ready) return t.skip(skipReason);
-  const r = await run([SITE, "--port", String(PORT)]);
+  const r = await run([SITE]);
   assert.equal(r.status, 0, `boards-render failed:\n${r.stderr}`);
 
-  const seed = join(SITE, ".palate/explore/seed");
   for (const f of ["B1.dc.html", "B2.dc.html", "canvas.json", "README.md"]) {
-    assert.ok(existsSync(join(seed, f)), `${f} is missing from the seed`);
+    assert.ok(existsSync(join(SEED, f)), `${f} is missing from the seed`);
   }
 
-  for (const f of ["B1.dc.html", "B2.dc.html"]) {
-    const a = readFileSync(join(seed, f), "utf8");
-    assert.ok(a.startsWith("<!doctype html>"), `${f} does not open with the doctype`);
-    assert.ok(a.includes('<script src="./support.js"></script>'), `${f} is missing the support line`);
-    assert.ok(a.includes("<x-dc>"), `${f} has no x-dc root`);
-    assert.ok(a.includes("<helmet><style>"), `${f} has no helmet`);
+  for (const b of BOARDS) {
+    const file = `B${b.ambition}.dc.html`;
+    const seedFile = readFileSync(join(SEED, file), "utf8");
+    // THE KEYS ARE WRITTEN BACK INTO THE SEED, or the canvas the client is looking at and the
+    // copy the read-back diffs against are two different documents.
+    const keys = [...seedFile.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
+    assert.ok(keys.length >= 7, `${file} carries ${keys.length} element keys, so the read-back can only align by position`);
+    assert.equal(new Set(keys).size, keys.length, `${file} repeats an element key`);
+    assert.ok(seedFile.startsWith("<!doctype html>"), `${file} lost its doctype`);
+    assert.ok(seedFile.includes('<script src="./support.js"></script>'), `${file} lost the support line`);
 
-    // ONE script, or one plus an inlined motion script. Anything else is a third-party tag
-    // that would silently fail inside a canvas with no network.
-    const scripts = a.match(/<script\b/g) || [];
-    assert.equal(scripts.length, 2, `${f} carries ${scripts.length} script tags; only support.js and the inlined motion script may travel`);
-    assert.equal((a.match(/<script src=/g) || []).length, 1, `${f} carries an external script other than support.js`);
-    assert.ok(!/tracker\.example\.com/.test(a), `${f} still carries a third-party tag, which cannot load inside a canvas with no network`);
-    assert.ok(!/https:\/\/app\.humblytics\.com/.test(a), `${f} still carries the analytics tag`);
-    assert.ok(a.includes('data-reveal'), `${f} dropped the site's own motion script, so the board is a still that says it moves`);
+    const shots = join(SITE, ".palate/explore/shots", b.id);
+    const archived = readFileSync(join(shots, "rendered.html"), "utf8");
+    assert.equal(archived, seedFile, `${b.id}'s archived render is not the artboard the client sees`);
+    assert.match(archived, new RegExp(`data-section-id="${b.id}-hero"`),
+      `${b.id}'s archived render carries no hero mark, so nothing downstream can identify its sections`);
+    assert.match(archived, /data-palate-k=/, `${b.id}'s archived render is unkeyed`);
+    // The archive travels with its pictures, or it renders broken the day it is read.
+    assert.ok(existsSync(join(shots, `${b.id}-img1.png`)), `${b.id}'s archived render lost its image`);
 
-    // Every image is a bare filename that exists beside the artboard and fits.
-    for (const m of a.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/g)) {
-      const src = m[1];
-      assert.ok(!/[/:]/.test(src), `${f} references ${src}, which is not a bare filename`);
-      const p = join(seed, src);
-      assert.ok(existsSync(p), `${f} references ${src}, which is not in the seed directory`);
-      assert.ok(statSync(p).size <= 70 * 1024, `${src} is ${Math.round(statSync(p).size / 1024)} KB, over the 70 KB ceiling`);
+    for (const p of [
+      join(shots, "hero.png"), join(SITE, "public/_explore", `${b.id}.png`),
+      join(shots, "full.png"), join(SITE, "public/_explore", `${b.id}-full.png`),
+    ]) {
+      assert.ok(existsSync(p), `${p} is missing`);
+      assert.ok(statSync(p).size > 1024, `${p} is ${statSync(p).size} bytes, which is not a rendered board`);
     }
-    assert.ok(!/\bsrcset=/.test(a), `${f} keeps a srcset, which overrides the bare filename with a URL the canvas cannot fetch`);
-
-    // R2. AN INLINE DATA URI IS AN IMAGE, not an unfetchable URL. One of them aborted the whole
-    // seed, so a board carrying a single inline icon had no canvas at all.
-    const icon = /<img\b[^>]*\bdata-inline-icon\b[^>]*>/.exec(a);
-    assert.ok(icon, `${f} lost the inline icon`);
-    const iconSrc = /\bsrc="([^"]*)"/.exec(icon[0]);
-    assert.ok(iconSrc && !/[/:]/.test(iconSrc[1]), `${f} kept the icon as a data URI or a path: ${iconSrc && iconSrc[1].slice(0, 40)}`);
-    assert.match(iconSrc[1], /\.svg$/, "an SVG data URI was written with the wrong extension");
-    assert.ok(existsSync(join(seed, iconSrc[1])), `${f} references ${iconSrc[1]}, which is not in the seed directory`);
-
-    // The extension comes from the DECLARED media type, not from sniffing the payload: a long
-    // prolog puts the root element past anything a sniff reads, and a vector written as a
-    // photograph is a photograph from then on.
-    const icon2 = /<img\b[^>]*\bdata-inline-b64\b[^>]*>/.exec(a);
-    assert.ok(icon2, `${f} lost the base64 inline icon`);
-    const icon2Src = /\bsrc="([^"]*)"/.exec(icon2[0]);
-    assert.match(icon2Src[1], /\.svg$/, "a base64 SVG whose prolog hides its root element was written as a raster");
-    assert.ok(existsSync(join(seed, icon2Src[1])));
-
-    // The flattening actually happened: the panel has something to edit.
-    assert.ok(/style="[^"]*font-size:/.test(a), `${f} has no inline font-size, so the property panel edits nothing`);
-    assert.ok(/style="[^"]*color:/.test(a), `${f} has no inline colour`);
-
-    // R1. THE FLATTEN HAPPENS WHILE THE STYLESHEETS ARE STILL THERE.
-    //
-    // The strip used to remove <link> and only then read computed styles, so every element
-    // styled by the build's bundle (Tailwind utilities, globals.css, the brand tokens it
-    // imports) had the BROWSER'S defaults written onto it: Times at 32px, no padding, an empty
-    // --brand-accent. The artboard's own helmet still carried the real rules, and the inline
-    // values overrode them. The shipped b1 example arrived unstyled on the one surface the
-    // client picks from, and nine green tests never saw it because every fixture hero was
-    // styled with inline attributes.
-    const classy = /<p\b[^>]*\bdata-classy\b[^>]*>/.exec(a);
-    assert.ok(classy, `${f} lost the class-styled paragraph`);
-    assert.match(classy[0], /font-size:\s*27px/,
-      `${f} flattened a class-styled element to the browser default instead of the stylesheet's value`);
-    assert.match(classy[0], /background-color:\s*rgb\(11,\s*22,\s*33\)/,
-      `${f} flattened a class-styled background to the browser default`);
-    assert.match(classy[0], /padding:\s*13px/, `${f} flattened away a class-set padding`);
-
-    // R3. EVERY ELEMENT CARRIES A STABLE KEY, which is what lets the read-back tell a deletion
-    // from a shift. Without it the diff can only align by position, and deleting one paragraph
-    // on the canvas reported every element after it as an edit: 167 of them on a real board,
-    // with the run then telling Compose to honour all of them.
-    const keys = [...a.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
-    assert.ok(keys.length > 10, `${f} carries ${keys.length} element keys, so the read-back can only align by position`);
-    assert.equal(new Set(keys).size, keys.length, `${f} repeats an element key, which makes two elements the same element`);
-
-    // I3. A CSS BACKGROUND IMAGE IS AN IMAGE. A hero photograph is usually set as one, and
-    // `rule.cssText` serialises its URL absolute, so it survived as a link to the local build
-    // server: no egress in the canvas, no refusal either, and the hero renders blank on the one
-    // surface the client picks from.
-    // Google's two font hosts are the ONLY external origins the canvas allows, so they are the
-    // only ones a url() may name. Everything else has to be a file beside the artboard.
-    const remote = [...a.matchAll(/url\((["']?)(https?:\/\/[^)"']+)\1\)/g)]
-      .map((m) => m[2])
-      .filter((u) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u));
-    assert.equal(remote.length, 0,
-      `${f} points a url() at an origin the canvas cannot reach: ${remote.slice(0, 2).join(", ")}`);
-    // A fragment names an element in this very document and is deliberately left as written,
-    // so it is not a file that has to exist beside the artboard.
-    const bgs = [...a.matchAll(/url\((["']?)([^)"']+)\1\)/g)]
-      .map((m) => m[2])
-      .filter((u) => !u.startsWith("data:") && !u.startsWith("#") && !/^https?:\/\//.test(u));
-    assert.ok(bgs.length, `${f} carries no url() at all, so this assertion is measuring nothing`);
-    for (const u of bgs) {
-      assert.ok(!/[/:]/.test(u), `${f} references ${u} in a url(), which is not a bare filename`);
-      assert.ok(existsSync(join(seed, u)), `${f} references ${u} in a url(), which is not in the seed directory`);
-      assert.ok(statSync(join(seed, u)).size <= 70 * 1024, `${u} is over the 70 KB ceiling`);
-    }
-
-    // I4. THE GOOGLE FONTS SHEET IS CROSS-ORIGIN, so cssRules throws and the head is never
-    // serialised. Without explicit handling the faces a brand-creation Explore chose are simply
-    // absent, and the fidelity gate's own copy calls the faces the loudest thing a client picked.
-    assert.match(a, /@import url\(["']?https:\/\/fonts\.googleapis\.com/,
-      `${f} lost its Google Fonts stylesheet, so the artboard renders in a face nobody chose`);
-    // Both forms reach the artboard: the <link> Google's embed dialog offers first, and the
-    // @import form it offers beside it, which is what a component-scoped <style> reaches for.
-    assert.match(a, /family=Fixture\+Face/, `${f} lost the Google Fonts <link> form`);
-    assert.match(a, /family=Fixture\+Import/, `${f} lost the Google Fonts @import form`);
-
-    // A FRAGMENT URL IS NOT AN IMAGE. `filter: url(#grain)` resolves against the page, so
-    // harvesting it fetches the board's own HTML; it must survive untouched.
-    assert.match(a, /url\((["']?)#fixture-grain\1\)/, `${f} rewrote or dropped an SVG filter reference`);
-
-    // A url NOTHING COULD FETCH is removed, not left pointing at a dead path: inside a canvas
-    // with no egress that is a blank box rather than a broken-image icon.
-    assert.ok(!/gone\.png/.test(a), `${f} kept a url() that could not be fetched`);
-
-    // A class-set background IS an image and takes the helmet-CSS rewrite path.
-    assert.ok(/\.fixture-bg\{[^}]*background-image:\s*url\((["']?)b\d+-img\d+\.[a-z]+\1\)/.test(a.replace(/\s+/g, " ")) ||
-      /fixture-bg[^}]*url\((["']?)b\d+-img/.test(a),
-      `${f} left a class-set background pointing somewhere the canvas cannot fetch`);
-    const helmetStyle = /<helmet><style>([\s\S]*?)<\/style>/.exec(a);
-    assert.ok(helmetStyle, `${f} has no helmet style`);
-    assert.match(helmetStyle[1].trimStart(), /^@import/,
-      `${f} puts @import after other rules, where CSS ignores it`);
-
-    // I5. THE DIRECTION PICKER IS OPERATOR SCAFFOLDING. Its links 404 inside the canvas and a
-    // client can select and restyle it.
-    // Keyed on the ELEMENT, not on any mention: the picker's own rules survive in the helmet
-    // stylesheet, which is dead CSS rather than scaffolding a client can select and restyle.
-    assert.ok(!/class="[^"]*\bev-(switcher|panel|pill)\b/.test(a), `${f} carries the direction picker`);
-    assert.ok(!/<a\b[^>]*href="\/boards\//.test(a), `${f} carries a link to another board, which 404s inside the canvas`);
-
-    // I6. A REVEAL HELD BELOW THE FOLD IS CAPTURED IN ITS UNSEEN STATE unless something scrolls
-    // the page first. The bold rungs are the ones told to use scroll-as-timeline, so they are
-    // the ones most likely to flatten with everything below the hero invisible.
-    assert.match(a, /data-revealed="1"/,
-      `${f} was captured before its scroll reveals fired, so it holds the unseen state`);
-    assert.ok(!/data-reveal[^>]*style="[^"]*opacity:\s*0(;|")/.test(a),
-      `${f} carries a reveal still at opacity 0`);
+    // THE WHOLE BOARD IS A DIFFERENT PICTURE FROM THE TOP OF IT. /explore's link says it opens
+    // the still at full size, and for the whole of the board format's life it opened the same
+    // 1440x900 crop the card already showed. The fixture artboards are taller than the fold, so
+    // a full-page shot that is not bigger than the hero shot is the hero shot under a new name.
+    assert.ok(statSync(join(shots, "full.png")).size > statSync(join(shots, "hero.png")).size,
+      `${b.id}'s full.png is no larger than its hero.png, so the whole-board still is the fold again`);
+    const heroPx = await pngSize(join(shots, "hero.png"));
+    const fullPx = await pngSize(join(shots, "full.png"));
+    assert.equal(heroPx.h, 900, `${b.id}'s hero.png is ${heroPx.h}px tall; the fidelity gate reads it as the 1440x900 entrance`);
+    assert.ok(fullPx.h > heroPx.h,
+      `${b.id}'s full.png is ${fullPx.h}px tall against a ${heroPx.h}px hero, so it is not the whole board`);
   }
 
-  const canvas = JSON.parse(readFileSync(join(seed, "canvas.json"), "utf8"));
-  assert.equal(canvas.artboards.length, 2);
+  const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));
+  assert.deepEqual(canvas.artboards.map((a) => a.file), ["B1.dc.html", "B2.dc.html"]);
   const [f1, f2] = canvas.artboards;
-  assert.equal(f2.x - (f1.x + f1.w), 80, "80px between frames");
   assert.equal(f1.w, 1440);
-  assert.ok(f1.h > 800, `the frame height reads ${f1.h}, which is not a rendered page`);
+  assert.equal(f2.x - (f1.x + f1.w), 80, "80px between frames");
+  assert.equal(f1.y, 0, "with no calibration row the boards are row 0");
+  // A frame neither scales nor crops, so a height that is not the measured one clips the board.
+  for (const f of canvas.artboards) assert.ok(f.h >= 200, `${f.file} declares ${f.h}px, which is not a measured board`);
   assert.equal(canvas.annotations.length, 2, "one annotation per board");
   assert.equal(canvas.launch.view, "canvas");
+  assert.match(r.stdout, /artboard\(s\) validated, keyed, measured and archived/);
+});
 
-  // The shots the fidelity gate and /explore read.
-  for (const id of ["b1", "b2"]) {
-    assert.ok(existsSync(join(SITE, ".palate/explore/shots", id, "rendered.html")));
-    assert.ok(existsSync(join(SITE, ".palate/explore/shots", id, "hero.png")));
-    assert.ok(existsSync(join(SITE, "public/_explore", `${id}.png`)));
-
-    const archived = readFileSync(join(SITE, ".palate/explore/shots", id, "rendered.html"), "utf8");
-
-    // The archived render is the fidelity gate's evidence and the uniqueness gate's, so it has
-    // to hold the SEEN state too: a page captured at scroll 0 archives its reveals unfired.
-    assert.match(archived, /data-revealed="1"/,
-      `${id}'s archived render was taken before its scroll reveals fired`);
-
-    // BUILT IN EXPLORE MODE, or the boards do not exist in the output. SectionMark renders
-    // nothing without PUBLIC_EXPLORE_MODE, so the archived renders came back with no section
-    // ids at all and gate-fidelity skipped with "its sections cannot be identified" on a build
-    // that had done everything right. Found by running the whole loop, not by reading it.
-    assert.match(archived, new RegExp(`data-section-id="${id}-hero"`),
-      `${id}'s archived render carries no section id, so nothing downstream can identify its sections`);
-
-    // SELF-CONTAINED, because it has to outlive the build it came from. The render links
-    // /_astro/<hash>.css; Compose rebuilds, the hash changes, the old file is gone, and the
-    // archived board renders UNSTYLED. gate-fidelity then measured a page with no palette and
-    // no type scale and called both "could not be compared" on an honest build.
-    assert.match(archived, /data-palate-archived-css/, `${id}'s archived render carries no stylesheet of its own`);
-    assert.ok(!/<link\b[^>]*rel=["']stylesheet["']/i.test(archived),
-      `${id}'s archived render still links a stylesheet, which the next build renames`);
+test("the declared frame height is the height the artboard actually renders", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // THE FRAME NEITHER SCALES NOR CROPS, and `x-dc` carries `overflow: hidden`, so a frame
+  // declared shorter than its content clips the bottom off the board with nothing reporting it.
+  const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));
+  const { chromium } = await import(join(ROOT, "scripts/reference-capture/node_modules/playwright/index.mjs"));
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    for (const frame of canvas.artboards) {
+      await page.goto(`file://${join(SEED, frame.file)}`, { waitUntil: "load" });
+      await page.waitForTimeout(150);
+      const rendered = await page.evaluate(() => {
+        const dc = document.querySelector("x-dc");
+        return dc ? Math.ceil(Math.max(dc.getBoundingClientRect().height, dc.scrollHeight)) : null;
+      });
+      assert.ok(rendered, `${frame.file} has no x-dc to measure`);
+      assert.equal(frame.h, rendered, `${frame.file} declares ${frame.h}px and renders ${rendered}px; the canvas clips the difference`);
+    }
+  } finally {
+    await browser.close().catch(() => {});
   }
-  assert.match(r.stdout, /B1\.dc\.html \d+ KB/, "the run does not report the artboard sizes");
+});
 
-  // A URL THAT CANNOT BE FETCHED IS DROPPED AND NAMED, never a refusal. A rule in a shared
-  // stylesheet can point at an asset that belongs to another page; before this it refused every
-  // board, with a message that read as a broken image rather than as the harvest over-reaching.
-  assert.match(r.stdout + r.stderr, /gone\.png/,
-    "a url that could not be fetched was dropped without saying which one");
+test("a second run leaves the seed byte-identical, so a board on a canvas is never renumbered", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const first = readFileSync(join(SEED, "B1.dc.html"));
+  const r = await run([SITE]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(readFileSync(join(SEED, "B1.dc.html")), first,
+    "a re-run rewrote the artboard, so the keys the client's canvas was published with no longer match");
+});
 
-  // AND A FRAGMENT IS NEVER FETCHED AT ALL. Resolved against the page it becomes the board's
-  // own URL, so harvesting one costs a pointless request and prints a line naming the board
-  // itself as an image that could not be read, which is the harvest over-reaching in public.
-  assert.ok(!/dropped\s+\S*#fixture-grain/.test(`${r.stdout}\n${r.stderr}`),
-    "an SVG filter reference was fetched as though it were an image");
+test("it runs through a symlinked path, instead of exiting 0 having done nothing", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // FOUND BY A REAL SEED RUN, NOT BY THIS SUITE, and the suite could not have found it: every
+  // other test here invokes the script by its real path. On macOS `/tmp` is a symlink to
+  // `/private/tmp`, which is where every `mktemp -d` lands, so `main()` never ran: no stdout, no
+  // stderr, exit 0, nothing written. An operator reads that as a run that did nothing.
+  // unlink, not rm: on macOS rmSync on a symlink to a directory reports the TARGET's type and
+  // refuses, which would have this test tear down the repo's own path if it ever followed.
+  const link = join(TMP, "plugin-link");
+  try { unlinkSync(link); } catch { /* not there yet */ }
+  symlinkSync(realpathSync(ROOT), link);
+  const linkedCli = join(link, "scripts", "boards-render.mjs");
+  assert.notEqual(linkedCli, join(realpathSync(ROOT), "scripts", "boards-render.mjs"),
+    "the symlink resolves to the same string, so this test is measuring nothing");
 
-  // A URL THAT FETCHES AND IS NOT AN IMAGE is dropped and named too. Before this it reached
-  // sharp, threw, and refused the whole seed with a message about a broken image.
-  assert.match(r.stdout + r.stderr, /notes\.txt.*not a decodable image/,
-    "a url that fetched but is not an image was not dropped and named");
+  rmSync(join(SEED, "canvas.json"), { force: true });
+  const r = await promisify(execFile)(process.execPath, [linkedCli, SITE], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 })
+    .then((o) => ({ status: 0, ...o }))
+    .catch((e) => ({ status: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" }));
+
+  assert.equal(r.status, 0, `through a symlink it failed:\n${r.stderr}`);
+  assert.match(r.stdout, /artboard\(s\) validated/, "it exited 0 having printed nothing, which reads as a run that did nothing");
+  assert.ok(existsSync(join(SEED, "canvas.json")), "nothing was written through the symlinked path");
+  unlinkSync(link);
 });
 
 test("the calibration references land on row 0 with the question", async (t) => {
@@ -513,12 +685,11 @@ test("the calibration references land on row 0 with the question", async (t) => 
   for (const r of refs) writeFileSync(join(refsDir, r.screenshot), pngFixture(1440, 900));
   writeFileSync(join(refsDir, "refs.json"), JSON.stringify(refs, null, 2));
 
-  const r = await run([SITE, "--port", String(PORT), "--no-build", "--refs", ".palate/explore/refs.json"]);
+  const r = await run([SITE, "--refs", ".palate/explore/refs.json"]);
   assert.equal(r.status, 0, `boards-render with --refs failed:\n${r.stderr}`);
 
-  const seed = join(SITE, ".palate/explore/seed");
   for (const n of [1, 2, 3]) {
-    const f = join(seed, `Ref${n}.dc.html`);
+    const f = join(SEED, `Ref${n}.dc.html`);
     assert.ok(existsSync(f), `Ref${n}.dc.html is missing`);
     const a = readFileSync(f, "utf8");
     assert.ok(a.startsWith("<!doctype html>"));
@@ -530,13 +701,14 @@ test("the calibration references land on row 0 with the question", async (t) => 
     const img = /<img\b[^>]*\bsrc="([^"]*)"/.exec(a);
     assert.ok(img, `Ref${n} carries no screenshot`);
     assert.ok(!/[/:]/.test(img[1]), `Ref${n} references ${img[1]}, which is not a bare filename`);
-    assert.ok(existsSync(join(seed, img[1])));
-    assert.ok(statSync(join(seed, img[1])).size <= 70 * 1024, `${img[1]} is over the 70 KB ceiling`);
+    assert.ok(existsSync(join(SEED, img[1])));
+    assert.ok(statSync(join(SEED, img[1])).size <= 70 * 1024, `${img[1]} is over the 70 KB ceiling`);
+    assert.ok(existsSync(join(SITE, "public/_explore", img[1])), `${img[1]} never reached /explore`);
   }
-  assert.ok(readFileSync(join(seed, "Ref1.dc.html"), "utf8").includes("one photograph and a great deal of air"),
+  assert.ok(readFileSync(join(SEED, "Ref1.dc.html"), "utf8").includes("one photograph and a great deal of air"),
     "the reference does not say why it sits where it does on the range");
 
-  const canvas = JSON.parse(readFileSync(join(seed, "canvas.json"), "utf8"));
+  const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));
   const row0 = canvas.artboards.filter((a) => a.y === 0);
   assert.equal(row0.length, 3, "the three references are not all on row 0");
   assert.equal(row0[1].x - (row0[0].x + row0[0].w), 80, "80px between the reference frames");
@@ -550,128 +722,39 @@ test("the calibration references land on row 0 with the question", async (t) => 
   rmSync(join(refsDir, "refs.json"), { force: true });
 });
 
-test("an SVG over the ceiling is refused rather than shipped broken", async (t) => {
-  if (!ready) return t.skip(skipReason);
-  // A RASTER ALMOST ALWAYS FITS. The ladder walks down to 640 wide at quality 38, and 1440x900
-  // of pure per-pixel noise lands at 33 KB there, so a photograph cannot exercise the refusal.
-  // An SVG can and does: it is already lossless, re-encoding a diagram as a photograph would be
-  // worse in every way, so it travels whole or not at all. A 90 KB path-heavy logo is ordinary.
-  const big = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
-    Array.from({ length: 2600 }, (_, i) => `<path d="M${i % 97}.${i % 7} ${i % 89}.${i % 3}l1.5 2.25 3.75-1.125z" fill="#2f5d50"/>`).join("") +
-    `</svg>`;
-  assert.ok(Buffer.byteLength(big) > 70 * 1024, "the fixture SVG is not actually over the ceiling");
-  writeFileSync(join(SITE, "public/_fixture/big.svg"), big);
-  const page = readFileSync(join(SITE, "src/pages/boards/b1.astro"), "utf8");
-  writeFileSync(join(SITE, "src/pages/boards/b1.astro"),
-    page.replace('src="/_fixture/photo.png"', 'src="/_fixture/big.svg"'));
-
-  const rebuilt = await run([SITE, "--port", String(PORT)]);
-  assert.equal(rebuilt.status, 2, "an SVG over the ceiling must exit 2");
-  assert.match(rebuilt.stderr, /b1/, "the refusal does not name the board");
-  assert.match(rebuilt.stderr, /cannot be downsampled under 70 KB/);
-  assert.ok(!existsSync(join(SITE, ".palate/explore/seed")), "a seed was left behind");
-
-  writeFileSync(join(SITE, "src/pages/boards/b1.astro"), page);
-  rmSync(join(SITE, "public/_fixture/big.svg"), { force: true });
-  // Put the seed back so the next test has one to destroy.
-  const restored = await run([SITE, "--port", String(PORT)]);
-  assert.equal(restored.status, 0, `the restore build failed:\n${restored.stderr}`);
-});
-
 test("a calibration reference missing its screenshot is refused", async (t) => {
   if (!ready) return t.skip(skipReason);
   const refsDir = join(SITE, ".palate/explore");
   writeFileSync(join(refsDir, "refs.json"), JSON.stringify([
     { slug: "aesop", name: "Aesop", position: 1, why: "Restrained.", screenshot: "refshots/gone.png" },
   ]));
-  const r = await run([SITE, "--port", String(PORT), "--no-build", "--refs", ".palate/explore/refs.json"]);
+  const r = await run([SITE, "--refs", ".palate/explore/refs.json"]);
   assert.equal(r.status, 2);
   assert.match(r.stderr, /aesop/, "the refusal does not name the reference");
   rmSync(join(refsDir, "refs.json"), { force: true });
 });
 
-test("it renders through a symlinked path, instead of exiting 0 having done nothing", async (t) => {
+test("an image over the ceiling is refused, and the seed is left exactly as it was", async (t) => {
   if (!ready) return t.skip(skipReason);
-  // FOUND BY A REAL SEED RUN, NOT BY THIS SUITE, and the suite could not have found it: every
-  // test here invokes the script by its real path. The guard compared `resolve(process.argv[1])`
-  // with `fileURLToPath(import.meta.url)`, and `resolve` does not follow symlinks while Node's
-  // module loader does. On macOS `/tmp` is a symlink to `/private/tmp`, which is where every
-  // `mktemp -d` lands, so `main()` never ran: no stdout, no stderr, exit 0, no seed. An operator
-  // reads that as a render that wrote nothing.
-  // unlink, not rm: on macOS rmSync on a symlink to a directory reports the TARGET's type and
-  // refuses, which would have this test tear down the repo's own path if it ever followed.
-  const link = join(TMP, "plugin-link");
-  try { unlinkSync(link); } catch { /* not there yet */ }
-  symlinkSync(realpathSync(ROOT), link);
-  const linkedCli = join(link, "scripts", "boards-render.mjs");
-  assert.notEqual(linkedCli, join(realpathSync(ROOT), "scripts", "boards-render.mjs"),
-    "the symlink resolves to the same string, so this test is measuring nothing");
+  const img = join(SEED, "b1-img1.png");
+  const original = readFileSync(img);
+  const before = readFileSync(join(SEED, "B1.dc.html"));
+  const over = pngFixture(1440, 900);
+  assert.ok(over.length > 70 * 1024, "the fixture image is not actually over the ceiling");
+  writeFileSync(img, over);
 
-  rmSync(join(SITE, ".palate/explore/seed"), { recursive: true, force: true });
-  const r = await promisify(execFile)(process.execPath, [linkedCli, SITE, "--port", String(PORT), "--no-build"], {
-    encoding: "utf8", maxBuffer: 32 * 1024 * 1024,
-  }).then((o) => ({ status: 0, ...o })).catch((e) => ({ status: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" }));
+  const r = await run([SITE]);
+  assert.equal(r.status, 2, "an image over the ceiling must exit 2");
+  assert.match(r.stderr, /b1/, "the refusal does not name the board");
+  assert.match(r.stderr, /70 KB/, "the refusal does not say what the ceiling is");
+  assert.ok(existsSync(join(SEED, "B1.dc.html")), "the refusal deleted the operator's own artboard");
+  assert.deepEqual(readFileSync(join(SEED, "B1.dc.html")), before, "the refusal rewrote an artboard it had refused");
 
-  assert.equal(r.status, 0, `through a symlink it failed:\n${r.stderr}`);
-  assert.match(r.stdout, /board\(s\) written/, "it exited 0 having printed nothing, which reads as a render that wrote nothing");
-  assert.ok(existsSync(join(SITE, ".palate/explore/seed/B1.dc.html")), "no seed was written through the symlinked path");
-  unlinkSync(link);
+  writeFileSync(img, original);
 });
 
-test("the declared frame height is the height the artboard actually renders", async (t) => {
+test("a registered artboard that does not exist is refused, naming the path, and the seed survives", async (t) => {
   if (!ready) return t.skip(skipReason);
-  // THE FRAME NEITHER SCALES NOR CROPS, and `x-dc` carries `overflow: hidden`, so a frame
-  // declared shorter than its content clips the bottom off every board with nothing reporting
-  // it. The height used to be read from the LIVE page before the flatten, and the flatten
-  // re-lays the page out: measured on a real five-board seed the artboards rendered 26 to 42px
-  // taller than their frames, almost all of it the system strip.
-  const seeded = await run([SITE, "--port", String(PORT), "--no-build"]);
-  assert.equal(seeded.status, 0, seeded.stderr);
-  const seed = join(SITE, ".palate/explore/seed");
-  const canvas = JSON.parse(readFileSync(join(seed, "canvas.json"), "utf8"));
-
-  const { chromium } = await import(join(ROOT, "scripts/reference-capture/node_modules/playwright/index.mjs"));
-  const browser = await chromium.launch();
-  try {
-    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
-    const page = await ctx.newPage();
-    let sawADifference = false;
-    for (const frame of canvas.artboards.filter((a) => a.file.startsWith("B"))) {
-      await page.goto(`file://${join(seed, frame.file)}`, { waitUntil: "load" });
-      await page.waitForTimeout(200);
-      const rendered = await page.evaluate(() => {
-        const dc = document.querySelector("x-dc");
-        return dc ? Math.ceil(Math.max(dc.getBoundingClientRect().height, dc.scrollHeight)) : null;
-      });
-      assert.ok(rendered, `${frame.file} has no x-dc to measure`);
-      assert.equal(frame.h, rendered,
-        `${frame.file} declares ${frame.h}px and renders ${rendered}px; the canvas clips the difference`);
-
-    }
-    // The fixture has to exercise the defect or this test proves nothing. The board pages are
-    // built pages; open one and compare the height a pre-flatten read would have recorded.
-    const distRoot = ["dist/client", "dist"].map((d) => join(SITE, d)).find((d) => existsSync(join(d, "index.html")));
-    await page.goto(`file://${join(distRoot, "boards/b1/index.html")}`, { waitUntil: "load" });
-    await page.waitForTimeout(200);
-    const liveHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
-    const b1 = canvas.artboards.find((a) => a.file === "B1.dc.html");
-    if (liveHeight !== b1.h) sawADifference = true;
-    assert.ok(sawADifference,
-      `the flatten no longer changes this fixture's layout (live ${liveHeight}, artboard ${b1.h}), so this test measures nothing; give a board an element whose layout the flatten moves`);
-  } finally {
-    await browser.close().catch(() => {});
-  }
-});
-
-test("a registered board with no page leaves NO seed behind", async (t) => {
-  if (!ready) return t.skip(skipReason);
-  const seed = join(SITE, ".palate/explore/seed");
-  // Its own setup, not the previous test's leftovers: every refusal clears the seed, so
-  // whether one is on disk here depends on which tests ran before this one.
-  const seeded = await run([SITE, "--port", String(PORT)]);
-  assert.equal(seeded.status, 0, `the setup render failed:\n${seeded.stderr}`);
-  assert.ok(existsSync(seed), "the setup render wrote no seed");
-
   const three = [...BOARDS, {
     id: "b3", name: "The Loud Room", ambition: 3, section: "menu", donor: "utsubo",
     what: "A full-bleed type wall.", why: "This launch has to be seen from across a room.",
@@ -680,10 +763,23 @@ test("a registered board with no page leaves NO seed behind", async (t) => {
   }];
   writeFileSync(join(SITE, "src/lib/variants.ts"), registryFor(three));
 
-  const r = await run([SITE, "--port", String(PORT), "--no-build"]);
-  assert.equal(r.status, 2, "a board with no page must exit 2");
-  assert.match(r.stderr, /b3/, "the failure does not name the board");
-  assert.ok(!existsSync(seed), "a partial seed was left on disk, and half a set reads as the whole set");
+  const r = await run([SITE]);
+  assert.equal(r.status, 2, "a board with no artboard must exit 2");
+  assert.match(r.stderr, /b3/, "the refusal does not name the board");
+  assert.match(r.stderr, /B3\.dc\.html/, "the refusal does not name the file the registry asked for");
+  // THE SEED IS THE OPERATOR'S OWN WORK. It used to be wiped on every refusal, which was right
+  // when this script wrote it and is destructive now that a person drew it.
+  assert.ok(existsSync(join(SEED, "B1.dc.html")), "a refusal deleted the hand-drawn artboards");
 
   writeFileSync(join(SITE, "src/lib/variants.ts"), registryFor(BOARDS));
+});
+
+test("no registry at all is refused rather than passed over", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const empty = join(TMP, "not-an-explore-build");
+  mkdirSync(empty, { recursive: true });
+  const r = await run([empty]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /variants\.ts/);
+  assert.match(r.stderr, /NOT a pass/);
 });

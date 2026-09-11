@@ -80,7 +80,7 @@ not converge on the same sites.
    services) of the donors. View **at least 3 inner pages**.
 6. **THE CALIBRATION ROW.** Pick 3 or 4 references from the client's own vertical that
    span restrained to bold, and write them to `.palate/explore/refs.json` in the project.
-   This is the row the client is shown FIRST, above the boards, under the question "which
+   This is row 0 of the canvas, the row the client is shown FIRST above the boards, under the question "which
    of these is closest to how bold you want to be?".
 
    Why it exists: the ambition ladder is built BEFORE anyone has told us how bold to be, so
@@ -106,7 +106,7 @@ not converge on the same sites.
 
    `position` is 1..4 running restrained to bold, `why` is one line saying why it sits
    where it does on the range (never a compliment, an argument), and `screenshot` is
-   relative to `refs.json`. `scripts/boards-render.mjs --refs .palate/explore/refs.json`
+   relative to `refs.json`. `node scripts/boards-render.mjs <project-dir> --refs .palate/explore/refs.json`
    draws them as row 0 of the canvas and `/explore` shows them above the ladder. The
    client's answer is recorded by `/pick --intensity <n>` as `commission.intensity_asked`.
 

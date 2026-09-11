@@ -22,11 +22,21 @@ happen after the pick + a confirm pause. PREVIEW stops there.
       `templates/astro-project/`; `verify-is-real-astro.sh` would pass on
       the bare scaffold.
 - [ ] `PUBLIC_EXPLORE_MODE` is set to `true`.
-- [ ] 8-10 variants exist as `src/pages/v1.astro`..`/vN.astro` - each a real
-      `.astro` page that imports `BaseLayout`, uses `loadPage()`, and wraps
-      every section with `<SectionMark id="vN-..."/>`.
-- [ ] `src/lib/variants.ts` lists every generated variant - the switcher
-      reads it, so the count on the page matches.
+- [ ] One direction board per rung exists as a hand-authored artboard at
+      `.palate/explore/seed/B<rung>.dc.html`, and NO Astro was written for a
+      board. Each is the whole home page in that direction, navigation to
+      footer, with every kit section marked on its root as
+      `data-section-id="<id>-<piece>"` and the planned motion written on the
+      board in a `class="motion-note" data-palate-motion` block.
+- [ ] `src/lib/variants.ts` registers every board with its `artboard`,
+      `ambition`, `what`, `why`, `feeling`, `donor`, `section`, `motion` and
+      `ctas`, so `/explore` and the canvas show the same set.
+- [ ] `scripts/boards-render.mjs` ran clean: every artboard validated against
+      the canvas contract, keyed, measured and archived, with the stills in
+      `public/_explore/`.
+- [ ] The canvas was published and `explore.canvas = { url }` recorded with
+      `/pick --canvas-url`, or it was declined with
+      `/pick --canvas-skipped "<reason>"`. Silence is a gate failure.
 - [ ] The variants are genuinely different - **no two share the same hero
       pattern, the same section sequence, or the same density level**. They
       span the concept-ambition spectrum: roughly 3 safe-warm, roughly 3 bold,
@@ -44,18 +54,20 @@ happen after the pick + a confirm pause. PREVIEW stops there.
 - [ ] Token variation is real - type scale, density, accent treatment differ
       between variants within the brand's permitted range. They do not invent
       off-brand colours.
-- [ ] If the brief implies a landing page, 1-3 `/lp1`..`/lpN` exist too;
-      otherwise none.
+- [ ] If the brief implies a landing page, 1-3 landing boards are registered in
+      `landingVariants` too; otherwise none.
 - [ ] The skill PAUSED and asked which sections to combine before doing
       anything else; it did NOT compose on its own assumption.
-- [ ] After the pick ("e.g. v3 hero + v7 features + v5 cta"), `Compose` built
-      `src/pages/index.astro` from those sections, without `SectionMark`
-      wrappers, using the canonical `loadPage()` pattern.
+- [ ] After the pick ("e.g. b3 hero + b5 proof"), `Compose` built
+      `src/pages/index.astro` by reading the picked artboards, using the
+      canonical `loadPage()` pattern, and carried each lifted section's id
+      across as `data-palate-section="b3-hero"`.
 - [ ] Design tokens of the dominant variant (the one supplying the hero) were
       adopted as the project's tokens.
-- [ ] Variant routes were moved to `_explore-archive/` (or removed);
+- [ ] `src/pages/explore.astro` and `public/_explore/` are gone;
       `src/lib/variants.ts` arrays are empty; `PUBLIC_EXPLORE_MODE` is now
-      `false`; the switcher no longer renders.
+      `false`. The seed artboards stay committed: they are the record of what
+      the client was shown.
 - [ ] The skill PAUSED again and asked the client to confirm the composed
       direction before finalising.
 - [ ] On confirm, `src/lib/content.ts` got real Lighthouse Optometry copy
@@ -65,6 +77,6 @@ happen after the pick + a confirm pause. PREVIEW stops there.
 ## Regression signals
 
 A build that jumped straight to a single canonical page without Explore, a
-variant set that all feel the same, missing `SectionMark` wrappers, a
-canonical `index.astro` still carrying `SectionMark` after Compose, or no
-pause between Explore and the deep build.
+board set that all feel the same, an Astro page written for a board, a board
+that is a hero and one section rather than a whole page, a canvas neither
+published nor declined, or no pause between Explore and the deep build.

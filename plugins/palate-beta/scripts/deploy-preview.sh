@@ -10,9 +10,10 @@
 #
 #   Usage: deploy-preview.sh <project-dir> <slug> [--explore]
 #
-#   --explore  turn the bottom-right direction picker + section labels ON
-#              (PUBLIC_EXPLORE_MODE=true) so the client can pick a direction.
-#              Omit it for the composed-site confirmation preview.
+#   --explore  turn Explore mode ON (PUBLIC_EXPLORE_MODE=true) so `/explore`
+#              renders: the calibration row, the drawn ladder, and every board's
+#              still with its own argument. There is no picker and no board
+#              route. Omit it for the composed-site confirmation preview.
 #
 # Requires `vercel login` (assumed done). The shareable link opens WITHOUT a
 # Vercel login automatically: the script enables automation Protection Bypass
@@ -93,5 +94,5 @@ SHARE="${URL}?x-vercel-protection-bypass=${BYPASS}&x-vercel-set-bypass-cookie=tr
 echo "PREVIEW_DEPLOYED:${PROJECT}"
 echo "PREVIEW_URL:${URL}"
 echo "SHAREABLE_URL:${SHARE}"
-[ "$EXPLORE" = "true" ] && echo "EXPLORE_MODE:on (direction picker visible)" || echo "EXPLORE_MODE:off"
+[ "$EXPLORE" = "true" ] && echo "EXPLORE_MODE:on (/explore renders the stills)" || echo "EXPLORE_MODE:off"
 echo "Send SHAREABLE_URL to the client: it opens with no Vercel login. Logged-in reviewers can also leave Toolbar Comments."

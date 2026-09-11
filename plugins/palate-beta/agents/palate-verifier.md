@@ -50,9 +50,11 @@ never held to the bold bar.
    no MCP connection is expected to reach you ungrounded; failing it here would route the
    label into a hard block through the report, which is the one thing it must not do.
 
-2. **Uniqueness gate** (the Explore variants are genuinely distinct, not ritually
-   varied): render each variant to HTML, then
-   `node scripts/gate-uniqueness.mjs <variant-1.html> <variant-2.html> ...`
+2. **Uniqueness gate** (the Explore boards are genuinely distinct, not ritually
+   varied): nothing is rendered for this any more. Each board is a hand-drawn artboard and
+   `boards-render.mjs` has already archived it, self-contained, at
+   `.palate/explore/shots/<id>/rendered.html`, so pass those files:
+   `node scripts/gate-uniqueness.mjs .palate/explore/shots/b1/rendered.html .palate/explore/shots/b2/rendered.html ...`
    Exit 2 = a near-duplicate pair (same shape AND same skin). Lead duplicates from
    different backbones and re-skin from different donors.
 
@@ -231,12 +233,13 @@ never held to the bold bar.
         escalates, it does not ship.
      Sample a FRESH opponent each cycle (do not let the build learn one opponent); a periodic
      human spot-check stays advisable (a single judge, even pairwise, shares correlated errors).
-   - **Built Explore (HIGH-INTENSITY builds).** A bold brief must not collapse Explore to
+   - **A full Explore (HIGH-INTENSITY builds).** A bold brief must not collapse Explore to
      "concept-level, converged to the boldest". The done gate ENFORCES this on `manifest.variants`
      (the BUILDER-recorded field): a high-intensity build with `variants: []` is failed as "Explore
      collapsed to concept-level". You cannot write the manifest, so your job is to CHECK it and fail
-     the commission if it collapsed; record `explore: { "built_routes": <n> }` in the report as the
-     advisory human-readable echo (the gate reads `manifest.variants`, NOT this field). Calm /
+     the commission if it collapsed; record `explore: { "boards_drawn": <n> }` in the report as the
+     advisory human-readable echo (the gate reads `manifest.variants`, NOT this field). They are
+     DRAWN artboards, not built routes: count the files under `.palate/explore/seed/`. Calm /
      conversion / tiny-edit briefs keep the skip (`references/explore-stage.md`).
    - **The restraint clause is part of the judgement, not a motion count.** Maximal
      motion is not the bar; fit is. A janky WebGL hero FAILS (jank, a thrown console
@@ -340,9 +343,9 @@ never held to the bold bar.
    screenshot path in the report and at least one named observation per failing section.
    For a HIGH-INTENSITY build (`manifest.commission.intensity == "high"`) also write the
    `ambition` and `pairwise` blocks from step 6 - the done gate reads them to enforce the bold bar;
-   omitting them leaves it unproven. (The built-Explore check is enforced on `manifest.variants`,
-   which the BUILDER records; `explore.built_routes` in the report is the advisory human-readable
-   echo, not a gated field.)
+   omitting them leaves it unproven. (The full-Explore check is enforced on `manifest.variants`,
+   which the BUILDER records; `explore.boards_drawn` in the report is the advisory human-readable
+   echo of the artboards under `.palate/explore/seed/`, not a gated field.)
 
 ## The self-correction loop
 If anything fails, return the findings so the build can fix the NAMED sections,

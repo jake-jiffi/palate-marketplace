@@ -124,9 +124,10 @@ async function autoScroll(page, maxMs) {
   await page.waitForTimeout(450);
 }
 
-// Find every section + its data-section-id (emitted by SectionMark.astro in
-// Explore mode). Falls back to the element index when no id is present, so a
-// composed (non-Explore) page is still clipped per section.
+// Find every section + its data-section-id (marked directly on the root of each rendered
+// piece; boards are artboards now, not Astro pages, so nothing runs this in Explore mode any
+// more). Falls back to the element index when no id is present, so a composed page is still
+// clipped per section.
 // Tag each section in-page with a stable, unique data-ss-shot id (deduped) and
 // return the ids. We then screenshot each element by handle, which Playwright
 // scrolls into view and clips to, so below-fold sections capture correctly (the

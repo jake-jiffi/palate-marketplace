@@ -623,6 +623,8 @@ if [ -f "$FIDELITY_GATE" ] && [ "${PALATE_GATE_FIDELITY:-1}" = "1" ]; then
   proof=$(jq -r '(.explore.proof.verified_at // .explore.proof.url // empty)' "$MANIFEST" 2>/dev/null || echo "")
   if [ "${npicks:-0}" -lt 1 ]; then
     fidelity_skip="no picks recorded"
+  elif [ "$(jq -r '[.explore.question_round.motion, .explore.question_round.mix, .explore.question_round.cms] | map(select(type=="string" and length>0)) | length' "$MANIFEST" 2>/dev/null || echo 0)" -lt 3 ]; then
+    fail "The direction was picked but the question round was not recorded. Before Compose, ask the person how the picked rung should move, what to mix in from the other boards, and who edits the copy, then record it: scripts/palate-pick.mjs --answer motion=... --answer mix=... --answer cms=..."
   elif [ -z "$proof" ]; then
     fidelity_skip="Compose has not recorded the motion proof for src/pages/index.astro yet"
   else

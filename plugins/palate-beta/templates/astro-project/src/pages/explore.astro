@@ -4,11 +4,11 @@
  *
  * ========================== WHY THIS PAGE EXISTS ===========================
  *
- * Explore's whole value is that it is a declared RANGE, and a link to five URLs does not
- * communicate a range. Handed `/boards/b1` through `/boards/b5` with no framing, a client
- * reads five guesses, opens two, picks the one nearest what they already had in mind, and the
- * ladder has bought nothing. Worse, the restrained rung reads as "the boring one" rather than
- * as one deliberate end of a span the boldest rung defines.
+ * Explore's whole value is that it is a declared RANGE, and a link to five stills does not
+ * communicate a range. Handed five thumbnails with no framing, a client reads five guesses,
+ * opens two, picks the one nearest what they already had in mind, and the ladder has bought
+ * nothing. Worse, the restrained rung reads as "the boring one" rather than as one deliberate
+ * end of a span the boldest rung defines.
  *
  * So this page does five things a list of links cannot:
  *   1. says what just happened, in the client's language, not the build's,
@@ -30,9 +30,9 @@
  * ============================ IT IS TEMPORARY =============================
  *
  * Explore mode only. It renders nothing unless PUBLIC_EXPLORE_MODE=true and at least one board
- * is registered, and it is DELETED at Compose along with the `/boards/*` routes and
- * `public/_explore/`. It must never be linked from the site's own navigation and it carries
- * noindex, because it is a working document for one client, not a page of the site.
+ * is registered, and it is DELETED at Compose along with `public/_explore/`. It must never be
+ * linked from the site's own navigation and it carries noindex, because it is a working
+ * document for one client, not a page of the site.
  *
  * It is styled from the brand tokens like everything else: the client is looking at their own
  * brand while they choose, and a picker in some neutral tool-grey would be the one surface in
@@ -68,7 +68,12 @@ function readArtefact(rel) {
 }
 
 const manifest = readArtefact("build-manifest.json") || {};
-const canvasUrl = typeof manifest?.explore?.canvas_url === "string" ? manifest.explore.canvas_url : null;
+// `explore.canvas.url` is the current shape (Task 2); `explore.canvas_url` is the older one,
+// read as a fallback so a manifest written before the canvas-first change still renders a link.
+const canvasUrl =
+  typeof manifest?.explore?.canvas?.url === "string" ? manifest.explore.canvas.url
+  : typeof manifest?.explore?.canvas_url === "string" ? manifest.explore.canvas_url
+  : null;
 const asked = Number(manifest?.commission?.intensity_asked) || null;
 
 const refs = (readArtefact(".palate/explore/refs.json") || [])
@@ -150,7 +155,7 @@ const askedRung = (() => {
         <ol class="ex-rail">
           {rungs.map((v) => (
             <li class="ex-rung">
-              <a href={v.href}>
+              <a href={`/_explore/${v.id}-full.png`}>
                 {/* The plot has a FIXED height on purpose: a percentage height against an auto
                     parent resolves to zero, which rendered every bar invisible and left the
                     page arguing for a range it never drew. */}
@@ -175,12 +180,16 @@ const askedRung = (() => {
                 pattern, which is an automatic fail in our own anti-pattern list, and the
                 verifier caught this page shipping eight of them. */}
             <div class="ex-card-head">
+              {/* The link opens the WHOLE board (`<id>-full.png`), never the card image.
+                  `<id>.png` is the top 900px, which is what the fidelity gate measures and the
+                  right size for a card; behind a link promising the still at full size it is a
+                  board cut off below the entrance. */}
               <h3>
-                <a href={v.href}><span class="ex-num">{v.ambition}</span>{v.name}</a>
+                <a href={`/_explore/${v.id}-full.png`}><span class="ex-num">{v.ambition}</span>{v.name}</a>
               </h3>
               <p class="ex-feeling">{v.feeling} <span class="ex-of">&middot; rung {v.ambition} of {maxAmbition}</span></p>
             </div>
-            <a class="ex-shot" href={v.href} data-board-shot={v.id}>
+            <a class="ex-shot" href={`/_explore/${v.id}-full.png`} data-board-shot={v.id}>
               <img src={`/_explore/${v.id}.png`} alt={`The entrance of ${v.name}`} width="1440" height="900" loading="lazy" />
             </a>
             <dl class="ex-dl">
@@ -193,7 +202,7 @@ const askedRung = (() => {
               {v.lookAt && <div><dt>Look at</dt><dd>{v.lookAt}</dd></div>}
               {v.donor && <div><dt>Craft drawn from</dt><dd><code>{v.donor}</code></dd></div>}
             </dl>
-            <a class="ex-open" href={v.href}>Open {v.name}</a>
+            <a class="ex-open" href={`/_explore/${v.id}-full.png`}>Open the whole board</a>
           </article>
         ))}
       </section>
@@ -205,17 +214,21 @@ const askedRung = (() => {
             Single-purpose pages for a campaign, judged on one job rather than on carrying the
             whole business.
           </p>
+          {/* NO STILL, AND NO LINK TO ONE. boards-render draws the ladder's rungs and nothing
+              else, so a landing board has no `/_explore/<id>.png` behind it: the card used to
+              render its name and its "open the still" link as dead ends. A landing page is
+              shown on the canvas, and this page says so rather than pointing at a 404. */}
           {landings.map((v) => (
             <article class="ex-card">
               <div class="ex-card-head">
-                <h3><a href={v.href}>{v.name}</a></h3>
+                <h3>{v.name}</h3>
                 <p class="ex-feeling">{v.feeling}</p>
               </div>
               <dl class="ex-dl">
                 <div><dt>What it is</dt><dd>{v.what}</dd></div>
                 <div><dt>Why</dt><dd>{v.why}</dd></div>
               </dl>
-              <a class="ex-open" href={v.href}>Open {v.name}</a>
+              <p class="ex-note">Shown on the canvas: landing boards are not drawn as stills here.</p>
             </article>
           ))}
         </section>

@@ -3,28 +3,34 @@
 Every site or landing-page build starts here. The point: stop guessing at the
 right direction, put a genuine RANGE of concepts in front of the client, let
 them point at sections and say "that hero, that CTA, that motion," then build
-the canonical pages from those picks. One project the whole way through - the
-board routes evolve into the final pages, nothing is rebuilt.
+the canonical pages from those picks. The directions are DRAWN before anything
+is built, so the range arrives in minutes and only the chosen one costs a build.
 
-## A board, not a whole page
+## A board is drawn, not built
 
-Explore builds **direction boards**, not eight complete home pages.
+Explore writes no Astro at all. Each rung is a hand-authored Claude Design
+artboard at `.palate/explore/seed/B<rung>.dc.html`, and that file IS the board:
+there is no route to open and nothing to serve. Astro is written ONCE, at
+Compose, for the direction the client picked.
 
-A board is a hero, the system strip, ONE inner section and a notes panel, on a
-route at `/boards/bN`. That is everything a direction can be judged on: the
-entrance, the design system underneath it, and the section the business is
-actually judged on. Building the rest of the page bought a great deal of token
-cost and almost no extra information, because everything after those three
-things is the same decision being re-made with more surface area.
+**And a board is the WHOLE home page in that direction**, navigation to footer,
+composed from the website kit (`src/lib/kit.ts`, the seventeen pieces, the
+rhythms in `src/lib/kit-grounding.ts`), declaring its rhythm the way the kit
+pages do. A hero plus one section was the cheaper unit while boards were built,
+and it is not what a client judges: they ask what the footer does, and a
+direction that answers "it was not drawn" is a mood board wearing a page's
+clothes. Drawing costs a fraction of building, so the whole page is affordable.
 
 **What that does NOT change**: the survey, DIVERGE and CONVERGE are untouched,
 the ladder is untouched, the endpoint rule is untouched, and it is still one
-distinct donor per rung. The unit of work got smaller. The thinking did not.
+distinct donor per rung. The medium changed. The thinking did not.
 
-The notes panel is what makes a quarter of a page enough. It carries what the
-direction is, why it is that for THIS business, the feeling, **what MOVES** (a
-still cannot show that, and it is the most expensive property on the page), the
-CTA labels to choose between, and the reference the craft came from.
+The motion is written ON the board, as text: one block with
+`class="motion-note"` carrying `data-palate-motion`, saying what moves, when and
+how it feels. An artboard is a still, so the direction's most expensive property
+is written where it is read rather than in a side panel. `what`, `why`,
+`feeling`, `donor` and `motion` in the registry carry the rest of the argument
+onto `/explore` and the canvas.
 
 ## The flow
 
@@ -42,47 +48,82 @@ CTA labels to choose between, and the reference the craft came from.
    three there is no BETWEEN for the client to point at, which is the whole use
    of a ladder. `scripts/gate-explore.mjs` holds that floor on a high-intensity
    brief (`PALATE_MIN_BOARDS`, default 3).
-2. **Generate boards** - one board per rung as routes `/boards/b1`..`/boards/bN`,
-   plus 1-3 landing-page boards as `/lp1`..`/lpN` if the brief warrants. Each
-   board is a real `.astro` page: its hero and its one inner section live as
-   components in `src/components/sections/`, each wrapped in `<SectionMark
-   id="bN-..."/>`, composed through `src/layouts/BoardFrame.astro`, which adds
-   `BoardNotes.astro` and sets `noindex`. Each
-   reproduces a named reference donor's craft from the MCP (see
-   `reference-library-usage.md`), one distinct donor per rung.
+2. **Draw the boards** - one artboard per rung at
+   `.palate/explore/seed/B1.dc.html` through `B<N>.dc.html`, plus 1-3
+   landing-page boards if the brief warrants (see the limit below). Each is the
+   whole home page in its direction, composed from the kit and grounded in the
+   survey: name the donor, read its section notes, and skin it with the LOCKED
+   brand tokens (`references/website-kit.md`, `reference-library-usage.md`).
+   One distinct donor per rung.
 
-   **THE FILE IS THE UNIT OF WORK.** Compose lifts a picked board's sections by
-   moving those component files, so a hero written inline in the board page can
-   only be re-extracted by copying markup, and a copy is where a picked direction
-   quietly becomes a reinterpretation of one.
+   **THE ARTBOARD CONTRACT.** `scripts/boards-render.mjs` holds every board to
+   it and names every fault ON THAT BOARD in one pass, then stops at the first
+   board that fails, so read it as a checklist before drawing rather than after:
 
-   **NO VARIANT IS REGISTERED UNTIL IT PASSES THE ANTI-AI GATE.** Run, per
-   board, before it enters `src/lib/variants.ts`: `scripts/ux-lint.sh` (the
-   mechanical ruleset), `scripts/verify-rendered.sh` on its route (the structural
-   tells a text rule cannot see, including the eyebrow/kicker), and the visual
-   loop against `visual-rubric.md` + `ai-slop-tells.md`. Critical/High is a hard
-   BLOCK: fix and re-run, and after 3 attempts drop the board and resample its
-   rung rather than show it. These gates used to run only at Compose, which is
-   downstream of the thing they protect: the client had already seen the tells.
-   The preview is the first impression of the product, so a board that looks
-   AI-made has lost the argument before anyone reads a word.
+   - The skeleton is exactly this, verbatim. The editor replaces `support.js` at
+     render time, and a different spelling stops the board being editable with
+     nothing saying so:
 
-   The bottom-right `<ExploreSwitcher />` picker lists
-   them by id + name (give each board an evocative `name` in
-   `src/lib/variants.ts`), **in ladder order, with its rung shown**: the range is
-   only useful if the client can SEE it is a range. Add `ambition` to each entry
-   (`{ id, name, href, ambition }`, 1..N, 1 = most restrained) and let the picker
-   read left-to-right as understated toward bold. A client who can see the ends
-   can say "somewhere around 5, with 8's motion on the hero", which is a far more
-   useful sentence than "I like that one". As each board is registered, also record it in
-   `build-manifest.json` under `explore.shown`
-   (`{ id, name, donor_slug, hero_pattern, position }`) so every direction SHOWN
-   is captured for the taste flywheel, not just the one picked
-   (`references/build-memory.md`).
-   Before generating each board, state a **Design Read** out loud (see
+     ```html
+     <!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>...</style></helmet>...</x-dc></body></html>
+     ```
+   - `x-dc` is 1440px wide (`x-dc{display:block;width:1440px;overflow:hidden}`).
+     The height is MEASURED, never declared: a frame neither scales nor crops,
+     so a guessed height clips the bottom off the board silently.
+   - **Every kit section the board renders is a root carrying
+     `data-section-id="<id>-<piece>"`**, where `piece` is the kit piece id
+     (`navigation`, `hero`, `trust`, `problem`, `benefits`, `demo`, `process`,
+     `pricing`, `faq`, `cta`, `footer`, `locality`, ...). Required at minimum:
+     `<id>-navigation`, `<id>-hero`, `<id>-cta`, `<id>-footer`, and
+     `<id>-<section>` for the registry's `section`, the inner section the client
+     is asked to look at. The hero is found by name, never by position.
+   - **The planned motion is written on the board**: one block with
+     `class="motion-note"` and `data-palate-motion`, 40 characters or more,
+     saying what moves, when and how it feels.
+   - Name every block element's role with a class, and **at least 60% of them
+     must carry one**, which is what the validator holds: the uniqueness gate signs structure by class, and a
+     board styled only inline signs it blind. Copy is literal markup, because a
+     viewer retypes it in place; use inline `style` only on the few properties
+     they should be able to drag.
+   - Images are bare basenames beside the artboard, double-quoted
+     (`<img src="b1-hero.jpg">`), 70 KB or less each, and only
+     png/jpg/jpeg/gif/webp/avif/bmp/svg. No `srcset`: it overrides the bare name
+     with a URL the canvas cannot fetch. A CSS `url()` obeys the same rules.
+   - Nothing is fetched from the network except Google Fonts
+     (`fonts.googleapis.com` / `fonts.gstatic.com`) through a `<link>` or an
+     `@import` in `<helmet>`; other faces travel as `@font-face` data URIs.
+     There is no egress inside the canvas, so anything else renders as a broken
+     box and nothing reports it.
+   - Exactly one `<script>`, `./support.js`. `a` and `a:hover` are defined.
+
+   **REGISTER EACH BOARD** in `src/lib/variants.ts` as
+   `{ id, name, artboard: "B<rung>.dc.html", ambition, what, why, feeling,
+   donor, section, motion, ctas }`. `artboard` is REQUIRED and is how every gate
+   downstream finds the board; `href` is deprecated and unused, because no route
+   exists.
+
+   **NO VARIANT IS REGISTERED UNTIL IT PASSES THE ANTI-AI GATE.** The mechanical
+   half is `boards-render.mjs` (the contract above) and `scripts/gate-explore.mjs`
+   (a rung with no argument, a motion plan that restates the `what`, two boards
+   on one donor, one CTA or four). The judged half is yours, and it is the half
+   that matters: hold the board against `references/anti-patterns.md`,
+   `references/visual-rubric.md` and `references/ai-slop-tells.md` before it
+   enters the registry, and LOOK at the still
+   (`.palate/explore/shots/<id>/hero.png`). `scripts/ux-lint.sh` does not read
+   `.palate/`, so nothing lints an artboard for you; it runs at Compose, which is
+   downstream of the thing it protects. A board that cannot be cleared in 3
+   attempts is dropped and its rung redrawn rather than shown. The preview is the
+   first impression of the product, so a board that looks AI-made has lost the
+   argument before anyone reads a word.
+
+   As each board is registered, it is also recorded in `build-manifest.json`
+   under `explore.shown` (`{ id, name, donor_slug, hero_pattern, position }`) so
+   every direction SHOWN is captured for the taste flywheel, not just the one
+   picked (`references/build-memory.md`).
+   Before drawing each board, state a **Design Read** out loud (see
    `references/critique-discipline.md`): "Reading this as: a {page kind} for
    {audience}, with a {vibe} language, leaning toward {design direction}." A
-   board whose Design Read is generic or missing is rejected and regenerated.
+   board whose Design Read is generic or missing is rejected and redrawn.
    Read `~/.config/palate/builds.log.json` (see `references/build-memory.md`)
    and exclude any hero pattern used in the last 3 Palate builds and any
    macrostructure used in the last 5 - the board set actively diversifies
@@ -90,43 +131,88 @@ CTA labels to choose between, and the reference the craft came from.
    and BIAS the set toward the operator's kept choices (its `summary`), while
    spending the returned `explorationBudget` on directions OUTSIDE the profile -
    bias, never pin (`references/build-memory.md`, "The positive taste profile").
-   **Match implementation complexity to the
-   aesthetic vision**: a maximalist board uses elaborate code; a minimalist
-   one practises restraint.
-2b. **Render the boards** - `node scripts/boards-render.mjs <project-dir>`
-   builds the site once, opens each board at 1440 and writes the hero stills
-   `/explore` shows, the archived renders the uniqueness and fidelity gates read,
-   and the canvas working files under `.palate/explore/seed/`. It stamps
-   `explore.shown_at`, which is half of the only number this stage produces.
+   **Match drawing complexity to the aesthetic vision**: a maximalist board is
+   drawn elaborately; a minimalist one practises restraint.
+2b. **Validate, measure, publish** - `node scripts/boards-render.mjs <project-dir>
+   [--out .palate/explore] [--refs .palate/explore/refs.json]`. It builds
+   nothing. It holds every registered artboard to the contract and REFUSES with
+   every fault named, stamps a stable `data-palate-k` on each element in place
+   (so the published canvas and the read-back align), archives the board as
+   `.palate/explore/shots/<id>/rendered.html` with its images, opens it over
+   `file://` at 1440, measures its real height, shoots `hero.png` (the 1440x900
+   entrance, which is what the fidelity gate compares and what `/explore` shows
+   on a card) and `full.png` (the whole board, which is what the card's link
+   opens), copies both to `public/_explore/<id>.png` and
+   `public/_explore/<id>-full.png`, and writes `canvas.json` and `README.md`
+   beside the seed. It records `manifest.explore = { ran, shown_at, boards }`,
+   and `shown_at` is half of the only number this stage produces, because time
+   to pick is `picked_at - shown_at`. **A refusal never deletes the seed**:
+   those are the operator's own drawings, not this script's output, and wiping
+   them over one oversized image would throw away hours of authoring.
 
-   **THEN SEED THE CANVAS, when the design skill is present.** Run `/design`
-   with those working files and publish WITHOUT export, so the link opens outside
-   the organisation. Record the URL as `manifest.explore.canvas_url` and `/explore`
-   will link to it first. **A missing design skill is not an error**: `/explore`
-   is the surface every tool can open, and the doctrine below is the same either
-   way.
+   **THEN PUBLISH THE CANVAS AT ONCE**, when the design skill is present. Seed
+   it from `.palate/explore/seed/` (the `README.md` written there says what to
+   title it and which artboard is which) and publish WITHOUT export, so the link
+   opens outside the organisation. Record `manifest.explore.canvas = { url }`
+   with the command, never by hand:
 
-3. **Pause - pick** - deploy a shareable Vercel preview with
-   `scripts/deploy-preview.sh <project-dir> <slug> --explore` and send the
-   client the `SHAREABLE_URL` (a live `*.vercel.app` link with the bottom-right
-   direction picker + Vercel Toolbar Comments for feedback). The client says
-   what they want; mix-and-match is the default ("b3 hero, b5 menu"),
-   whole-board or by-name shortcuts are fine ("go with Deep Trawl").
-   (`--local-preview` swaps this for a local dev-server link.)
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> \
+     --canvas-url https://claude.ai/code/artifact/<id>
+   ```
+
+   and `/explore` links to it first. **A missing design skill is not an error,
+   and silence is**: when no design skill can run in this session, record
+   `manifest.explore.canvas = { skipped: true, reason }` with
+   `--canvas-skipped "no design skill in this session"` and hand over `/explore`
+   instead. The two are mutually exclusive in one call, a link that is not
+   http(s) is refused, and so is a skip with no reason.
+   `scripts/gate-explore.mjs` blocks a build that showed boards and
+   recorded neither, because silence reads as "the client never saw a canvas at
+   all", which is worse than either honest outcome.
+
+3. **Pause - pick, then ask** - the client picks on the canvas, or from
+   `/explore` on a shareable Vercel preview
+   (`scripts/deploy-preview.sh <project-dir> <slug> --explore`, which turns
+   `PUBLIC_EXPLORE_MODE` on so `/explore` renders the stills, the calibration
+   row and the ladder; `--local-preview` swaps it for a local dev-server link).
+   Mix-and-match is the default ("b3 hero, b5 menu"); whole-board and by-name
+   shortcuts are fine ("go with Deep Trawl").
    **Record it with `/pick`** (`scripts/palate-pick.mjs`), never by hand: it
    writes `explore.picks` with the rung, its position on the ladder and the
    timestamp, so time to pick is `picked_at - shown_at` rather than a memory. It
    refuses an unregistered id, a rung outside the ladder and a second pick on a
-   surface that already has one, because everything downstream trusts this record.
-   Also record the calibration answer (`--intensity`, 1 to 4) and, when the client
-   worked on the canvas, read it back with `--canvas <extract-dir>`, which writes
-   `.palate/explore/feedback.json`.
-4. **Compose** - Claude builds the canonical pages (`src/pages/index.astro`,
-   etc.) from the picked sections, adopting the design tokens of the board
-   that set the dominant tone (usually whichever supplied the hero).
+   surface that already has one, because everything downstream trusts this
+   record. Also record the calibration answer (`--intensity`, 1 to 4).
+
+   **THEN THE QUESTION ROUND, ONE PASS.** Three questions asked together, the
+   moment the direction is settled, and answered in one command:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> \
+     --answer motion="..." --answer mix="..." --answer cms="..."
+   ```
+
+   `motion` is what should actually move on the picked rung (the board is a
+   still and the note on it is a plan, not something the client has agreed to);
+   `mix` is which sections to carry across from other boards; `cms` is whether
+   anyone but us will ever edit this site, which has to be settled before a page
+   shape depends on the answer. It writes `explore.question_round`, and
+   `scripts/gate-done.sh` refuses a build that picked a direction and never
+   asked. Asking the three one at a time across the build is how a client
+   answers the CMS question after the pages are written.
+
+   When the client worked on the canvas, read it back with
+   `--canvas <extract-dir>`, which diffs each artboard against the seed on
+   `data-palate-k` and writes `.palate/explore/feedback.json`.
+4. **Compose** - Claude writes the FIRST Astro of the build: the canonical
+   pages (`src/pages/index.astro`, etc.) in the picked direction, read off the
+   picked artboards, adopting the design tokens of the board that set the
+   dominant tone (usually whichever supplied the hero).
 
    **THE MOTION PROOF COMES FIRST, AND NOTHING IS BUILT ON TOP OF IT UNTIL IT
-   HAS BEEN SEEN.** Write `src/pages/index.astro`, run the full verify loop on
+   HAS BEEN SEEN.** Write `src/pages/index.astro` (the picked rung's home page,
+   and nothing else yet), run the full verify loop on
    `/` alone (`scripts/verify-rendered.sh <url> --routes /`), record the proof
    with the command below, and hand the preview URL to the client.
 
@@ -144,6 +230,11 @@ CTA labels to choose between, and the reference the craft came from.
    itself; the client sees it MOVING before three thousand pages are built on it.
    The cost of finding out here is one page.
 
+   **THE ANSWERS ARE HONOURED TOO.** `explore.question_round.mix` says which
+   sections come across from other rungs and `question_round.motion` says what
+   moves; both were asked at the pick precisely so Compose does not have to
+   guess, and a build that ignores them asked for nothing.
+
    **FEEDBACK IS HONOURED, NOT NOTED.** Read `.palate/explore/feedback.json`
    (written by `/pick --canvas`). Text edits on the picked surfaces are applied:
    a client who retyped a headline has written the copy. Every note is listed in
@@ -152,10 +243,10 @@ CTA labels to choose between, and the reference the craft came from.
    instructions: someone pulling a font size on a flattened snapshot is saying
    "bigger", not specifying 72px.
 
-   **KEEP THE SECTION IDENTITY ON THE LIFTED SECTION.** Put
-   `data-palate-section="bN-hero"` on each lifted section, matching the
-   `SectionMark` id it carried on the board. `scripts/gate-fidelity.mjs` reads it
-   to check the picked hero is the built page's entrance and the picked inner
+   **KEEP THE SECTION IDENTITY.** Put
+   `data-palate-section="bN-hero"` on each composed section, matching the
+   `data-section-id` it carried on the artboard. `scripts/gate-fidelity.mjs`
+   reads it against the picked board's own archived artboard to check the picked hero is the built page's entrance and the picked inner
    section is present at all, and then checks the section's tag-and-class
    skeleton as well, because an id is a label anyone can type and a skeleton is
    not.
@@ -186,14 +277,15 @@ CTA labels to choose between, and the reference the craft came from.
    (Philosophy / Hierarchy / Execution / Specificity / Restraint / Variety, 1
    to 5 each; revise if any axis is below 3); apply the **Conceptual Grounding
    Test** to every section - delete anything that cannot finish "This exists
-   because {a specific reason}". Board routes move to `_explore-archive/`
-   (gitignored) or are removed. The Stop hook appends this build to
+   because {a specific reason}". There is no board route to archive: the
+   artboards stay in `.palate/explore/`, which never ships. The Stop hook appends this build to
    `~/.config/palate/builds.log.json` automatically from the manifest once the
    build passes its gates, carrying the `explore` labels recorded above
    (`references/build-memory.md`), so the next Palate build diversifies away
    from this one. Ensure `explore.picks` is set before finishing.
 5. **Pause - confirm** - re-deploy the shareable Vercel preview without
-   `--explore` (`scripts/deploy-preview.sh <project-dir> <slug>`, picker off) so
+   `--explore` (`scripts/deploy-preview.sh <project-dir> <slug>`, so `/explore`
+   no longer renders) so
    the client reviews the composed direction on a clean shareable link and
    confirms before deep scaffold continues.
 6. **Continue Phase A** - fill `src/lib/content.ts` with real copy, finish the
@@ -212,7 +304,7 @@ defaults:
 | Brief shape | Explore? |
 |-------------|---------:|
 | New site or landing page (preview or production) | YES (default) |
-| HIGH-INTENSITY commission (`intensity: high`) | YES - mandatory, BUILT boards (cannot skip) |
+| HIGH-INTENSITY commission (`intensity: high`) | YES - mandatory, a drawn board per rung (cannot skip) |
 | "Build it like the {client} site we did last week" / direction already set | NO |
 | `--skip-explore` in the brief | NO |
 | Editing an existing scaffolded project (add a section, fix copy) | NO |
@@ -220,28 +312,29 @@ defaults:
 If you skip Explore, jump straight to Phase A as before.
 
 **A high-intensity commission cannot skip Explore.** When `manifest.commission.intensity == "high"`
-the bold mandate requires BUILT boards (at least `PALATE_MIN_BOARDS`, default 3, distinct
+the bold mandate requires a drawn board per rung (at least `PALATE_MIN_BOARDS`, default 3, distinct
 directions, not a concept-level convergence): collapsing Explore to one concept is the documented cause of Variety-flat bold
 builds, so `scripts/gate-done.sh` fails a high-intensity build with fewer than `PALATE_MIN_BOARDS` boards. The
 named-direction / `--skip-explore` escape applies ONLY when the user explicitly asked for one
 direction; in that case record `commission.explore_skip = true` with the reason so the gate
 honours it. Calm / conversion / tiny-edit briefs are unaffected.
 
-## Board scope - the entrance, the system, one section, the notes
+## Board scope - the whole home page, drawn
 
-Each board varies BOTH the structure (hero pattern, the inner section it shows,
-CTA placement, motion intensity) AND the underlying design tokens within the
-client's brand (type scale, density, accent colour treatment, motion strength).
-When the client picks a hero, they are also picking a design direction: the rest
-of the site inherits those tokens at Compose time, which is exactly why the
-system strip is on the board. It renders from the brand layer's custom
-properties alone, so two boards with different tokens look different in the
-strip with nobody drawing a swatch, and a board claiming a direction it did not
-implement is caught by its own strip reading identical to the one beside it.
+Each board varies BOTH the structure (hero pattern, which kit pieces it composes
+and in what rhythm, CTA placement, motion intensity) AND the underlying design
+tokens within the client's brand (type scale, density, accent colour treatment,
+motion strength). When the client picks a hero, they are also picking a design
+direction: the whole site inherits those tokens at Compose time, which is why
+two boards drawn on different tokens have to LOOK different, and a board
+claiming a direction it did not draw is caught by reading identical to the one
+beside it.
 
-The rest of the home page, and every other page (about, services, contact), are
-NOT generated per board. They are built once at Compose in the chosen direction.
-Boards only multiply where direction-setting happens.
+A board is the whole home page because drawing one costs a fraction of building
+one, and because the questions a client asks are about the parts a hero-plus-one-
+section board left out. Every OTHER page (about, services, contact) is still not
+drawn per board: those are built once at Compose in the chosen direction. Boards
+only multiply where direction-setting happens.
 
 ## The calibration row - ask how bold in pictures
 
@@ -277,7 +370,7 @@ mechanic that makes the visitor feel the transformation, a 3-beat arc, one named
 feeling, and its own donor from the library. Run the Story Engine's DIVERGE ->
 CONVERGE first (research -> the one true thing -> sample wide, at least the
 board count plus three, with self-tagged conventionality -> cull only what
-cannot be built -> curate the survivors onto the ladder), then build one board
+cannot be built -> curate the survivors onto the ladder), then draw one board
 per rung.
 
 The ladder is the product, not a side effect. Rung 1 is the most restrained
@@ -307,7 +400,8 @@ pelvic-health clinic) whose commission read "calm brand, calm build, anything th
 performs is wrong here" shipped 8 rungs spanning 1 to 2 keyframes and 3 to 4
 transitions, so the client was shown a range that was not one and could not ask for
 more than they saw. If the spread of motion, structure and conceptual distance from
-rung 1 to rung N is not obvious IN A STILL AND IN MOTION, the ladder has collapsed. **The restraint clause cuts both
+rung 1 to rung N is not obvious IN THE STILL AND IN THE MOTION EACH BOARD WRITES ON ITSELF, the
+ladder has collapsed. **The restraint clause cuts both
 ways** (`references/build-commission.md`, "The bold mandate"): if the brand is
 high-intensity (a label, a maximalist consumer brand, a creative studio, a launch, a
 culture / type brand) the bold mandate applies and a flat, safe board set FAILS the
@@ -377,7 +471,12 @@ regenerated. Every board must pass the feel gate (`critique-discipline.md`).
   a decision is the failure, not any particular family.
 - **Landing-page boards** (when included) are single-page, conversion-shaped:
   hero + value props + social proof + CTA + FAQ + footer. The full-site
-  boards are home pages that hint at site depth.
+  boards are home pages that hint at site depth. **Know the limit before you
+  promise one**: `boards-render.mjs` and `gate-explore.mjs` read the `variants`
+  export only, so a board registered in `landingVariants` is never validated,
+  never measured and gets no still, and `/explore` shows it with nothing behind
+  its picture. Register it in `variants` with a `B<rung>.dc.html` artboard if it
+  is to be treated like every other board.
 
 The two-layer doctrine from `reference-library-usage.md` applies: reference-led
 boards FAITHFULLY reproduce the donor's craft layer (structure, rhythm, type
@@ -389,34 +488,36 @@ set is the proof that the recipe was followed.
 
 ## Section identifiers - so the client can point
 
-Every section in every board wraps with `<SectionMark id="vN-hero" />` (or
-`vN-features`, `vN-cta`, etc.). In Explore mode (`PUBLIC_EXPLORE_MODE=true`)
-the label appears as a small top-corner badge. In production it does not
-render. The IDs follow a fixed convention so the picking conversation is
-unambiguous:
+Every kit section on every board carries `data-section-id="b1-hero"` (or
+`b1-services`, `b1-cta`) on its root element. The ids follow a fixed convention
+so the picking conversation is unambiguous:
 
-- `b1-hero` and `b1-services` (the hero and the one inner section this board shows)
-- `lp1-hero`, `lp1-value-props`, `lp1-form`, etc.
+- `b1-navigation`, `b1-hero`, `b1-cta` and `b1-footer` on every board, plus
+  `b1-<section>` for the inner section the registry says that board shows
+- `lp1-hero`, `lp1-value-props`, `lp1-form`, etc. on a landing-page board
 
-The id survives Compose as `data-palate-section` on the lifted section, which is
-what makes a pick checkable rather than asserted.
+The id survives Compose as `data-palate-section` on the composed section, which
+is what makes a pick checkable rather than asserted: `scripts/gate-fidelity.mjs`
+compares the two.
 
-This works alongside Vercel Toolbar Comments on Vercel preview deployments -
-the labels give the client structured pointing ("v3 hero"), Comments give them
-free-form notes on the same page. The two compose.
+On a Vercel preview this works alongside Toolbar Comments - the ids give the
+client structured pointing ("b3 hero"), Comments give them free-form notes on
+the same page. On the canvas the same job is done by selecting the element.
 
 ## The explore page (`/explore`) - the one thing the client opens first
 
-**A LINK TO FIVE URLS DOES NOT COMMUNICATE A RANGE.** Everything expensive about the
+**A PILE OF FIVE BOARDS DOES NOT COMMUNICATE A RANGE.** Everything expensive about the
 ladder is spent on the assumption that the client understands they are being shown a
-span. They do not, unless something says so. Handed `/boards/b1` through `/boards/b5` with no framing,
+span. They do not, unless something says so. Handed five stills with no framing,
 a client reads five guesses, opens two, picks whichever is nearest what they already
 had in mind, and the restrained rung reads as "the boring one" rather than as one
 deliberate end of a distance the boldest rung defines. So the preview always ships
-`src/pages/explore.astro`, and it is the URL you hand over, never `/boards/b1`.
-It shows each board inline (its rendered entrance, its notes, a link to the board),
-draws the calibration row above the ladder, and links the canvas first when one
-exists.
+`src/pages/explore.astro`, and it is the URL you hand over whenever there is no canvas.
+It shows each board inline (its entrance still from `/_explore/<id>.png`, its
+argument, its motion plan), links each card to the whole board at
+`/_explore/<id>-full.png`, draws the calibration row above the ladder, and links
+the canvas first when one exists. A landing board is shown on the canvas only:
+nothing draws a still for one, so `/explore` lists it without a link.
 
 It does four things a list of links cannot:
 
@@ -437,12 +538,14 @@ It does four things a list of links cannot:
 
 `scripts/gate-explore.mjs` enforces all of it and is wired into the done gate: it blocks
 when boards are registered and the page is missing, when a rung carries no
-`what`/`why`/`feeling`, when two rungs claim the same position, when the ladder has gaps,
-and when a name is "Option 2" or a feeling would describe any website ever built. It has
+`what`/`why`/`feeling`, when a registered board's artboard was never drawn, when two rungs
+claim the same position, when the ladder has gaps, when a name is "Option 2" or a feeling would
+describe any website ever built, and when the boards were shown and `explore.canvas` records
+neither a published `{ url }` nor a declined `{ skipped: true, reason }`. It has
 no opinion at all when no boards are registered, so it never touches a non-Explore
 build, and it SAYS that rather than exiting clean: `gate-explore: skipped (<reason>)` with
 exit 2, which the done gate records as `explore=skipped(<reason>)`. Exiting 0 there used to
-put `explore=pass` in the summary of every build that never ran Explore. The page is DELETED at Compose with the `/vN` routes; `gate-shipready.mjs` catches
+put `explore=pass` in the summary of every build that never ran Explore. The page is DELETED at Compose, with `public/_explore/`; `gate-shipready.mjs` catches
 it if it survives, because it names the rejected directions and belongs to nobody but this
 client.
 
@@ -458,8 +561,8 @@ Say all four of these, in this order:
    and say plainly that mixing is normal and expected: "rung 5, but with 8's hero and 2's
    navigation" is a better answer than a single page, and the section marks exist so they
    can point at one by name.
-3. **Offer another pass, and mean it.** Anything they want tried gets rebuilt into the
-   preview so they look at the real thing rather than a description of one. Changes are
+3. **Offer another pass, and mean it.** Anything they want tried gets redrawn onto the
+   canvas so they look at the thing itself rather than a description of one. Changes are
    cheap here and expensive after Compose, and saying so is what gets the useful feedback
    out rather than a polite yes.
 4. **THEN name the next phase explicitly.** Once a direction is settled it becomes the
@@ -472,42 +575,41 @@ Say all four of these, in this order:
 Do not skip step 3 to reach step 4 faster. A direction chosen without a round of changes
 is a direction nobody has argued with, and it comes back at Compose when it is expensive.
 
-## The direction picker (`ExploreSwitcher.astro`)
+## The two surfaces - the canvas and `/explore`
 
-A floating pill in the **bottom-right corner** - never a top bar, so it stays
-clear of the site's own navigation (a top-bar switcher is hard to work with and
-collides with the real header). The collapsed pill shows a status dot and the
-current direction (`v1 Deep Trawl`). Clicking it expands UPWARD into a panel
-headed `PREVIEW · PICK A DIRECTION` that lists every board by id + name
-(`v1 Deep Trawl`, `v2 Morning Paper`, ...) with the active one highlighted in
-mint. Built on a native `<details>` (zero JS).
+There are exactly two places a client looks at the set, and they show the same
+artboards.
 
-Each board gets a short, evocative **name** (not just `v1`) so the pick
-conversation is human: the client can say "go with Deep Trawl" or "v2 hero".
-Claude sets `{ id, name, href, ambition, what, why, feeling }` for each board in
-`src/lib/variants.ts` as they are generated; the picker reads that registry, renders only
-when `PUBLIC_EXPLORE_MODE=true` and at least one board exists, and always reflects what
-actually exists. It is mounted once in `BaseLayout.astro`.
+The **canvas** is the first choice whenever the design skill can run: the boards
+laid out in ladder order with the calibration references as row 0, where the
+client selects an element, retypes a word, drags a value and leaves a note, and
+`/pick --canvas` reads all of it back.
 
-**It lists in LADDER order and shows the rung, not the route id.** A panel in registration
-order hides the one property that makes the set worth building. It also always carries the
-way back to `/explore` ("All N directions, explained"), because a client who arrives on a
-deep link otherwise has no route to the page that frames what they are looking at, and "I
-opened one and could not get back" is how a range ends up judged on whichever page someone
-happened to click.
+**`/explore`** is the surface every tool can open and it ships either way: the
+entrance stills at `/_explore/<id>.png` over the whole board at
+`/_explore/<id>-full.png`, the calibration row, the drawn ladder, each
+rung's own argument, and the canvas link first when one exists. Each board gets
+a short, evocative **name** (not just `b1`) so the pick conversation is human:
+the client can say "go with Deep Trawl" or "b2 hero".
+
+There is no floating direction picker any more, and no board route behind one. A
+client moves through the set by scrolling one page or panning one canvas, which
+is what makes it read as a range rather than as a stack of tabs.
 
 ## Compose - turning picks into the canonical pages
 
 The mechanic when the client says "b3 hero + b5 menu":
 
-1. Take each picked board's section COMPONENT (`src/components/sections/B3Hero.astro`
-   etc.). Move the file; do not copy markup out of the board page.
-2. Write a new `src/pages/index.astro` that composes them in the obvious order
-   (hero -> body sections -> CTA), using the canonical
-   `loadPage(query, params, fallback)` pattern, and carry each section's id
-   across as `data-palate-section="b3-hero"`. Then finish the rest of the home
-   page in that direction: a board is a quarter of a page, so the sections the
-   boards did not show are written now, on the picked system.
+1. **Read the picked artboards; there are no files to lift.** A board is a
+   drawing, so open `.palate/explore/shots/b3/rendered.html` and its `hero.png`
+   and build the picked sections in Astro from the kit pieces that board
+   composed, on the board's own rhythm. This is the FIRST Astro of the build.
+2. Write a new `src/pages/index.astro` composing them in the board's order,
+   using the canonical `loadPage(query, params, fallback)` pattern, and carry
+   each section's id across as `data-palate-section="b3-hero"`. The board was
+   the whole home page, so the sections it drew are the sections the page has;
+   honour `explore.question_round.mix` for anything carried across from another
+   rung, and `question_round.motion` for what moves.
 3. **Adopt the design tokens of the dominant board** - by default, whichever
    supplied the hero (the hero sets the tone). Confirm with the client if it
    is ambiguous. Token overrides live in `src/styles/globals.css` (or the
@@ -536,19 +638,18 @@ The mechanic when the client says "b3 hero + b5 menu":
    `refs_get { slug, layer:"component_prompts" }`, and check the result against
    `refs_get { slug, layer:"do_dont" }` before emit. The composed section is grounded
    in how the best sites build that page, not assembled from memory.
-5. **Archive the board routes**. Move `src/pages/boards/` and
-   `src/pages/lp*.astro` into `_explore-archive/` (project-level, gitignored)
-   or remove them, delete `public/_explore/`, and clear `src/lib/variants.ts`.
-   The project shape returns to a normal Astro site: the routes that exist are
-   the routes that ship. `gate-shipready.mjs` fails the hand-over if any of the
-   three survive, because they name the directions the client did not choose.
+5. **Leave no Explore surface on the site.** Delete `public/_explore/`, clear
+   `src/lib/variants.ts`, and delete `src/pages/explore.astro`. There is no
+   board route to archive: `.palate/explore/` is working state and never ships.
+   `gate-shipready.mjs` fails the hand-over if the page or the stills survive,
+   because they name the directions the client did not choose.
 
 After Compose: `PUBLIC_EXPLORE_MODE` flips to `false` for the rest of the
 preview/production flow.
 
 ## Visual editing co-existence
 
-`PUBLIC_EXPLORE_MODE` (the switcher + section labels) and
+`PUBLIC_EXPLORE_MODE` (which is what makes `/explore` render at all) and
 `PUBLIC_SANITY_VISUAL_EDITING_ENABLED` (Sanity overlay) are independent. During
 Explore the visual-editing flag is normally OFF - we're picking structure, not
 editing content. It flips ON for the preview deployment after Compose, once
@@ -556,9 +657,10 @@ the canonical pages exist. Same pattern as today.
 
 ## Where this lives in the codebase
 
-Same Astro project from start to finish. During Explore the project has
-`src/pages/boards/b1.astro`..`bN.astro`, their section components under
-`src/components/sections/`, and (optionally) `lp1..lpN.astro`. After Compose
-those routes are gone and `src/pages/index.astro` plus the rest of the canonical
-site lives in their place. No rebuild, no fork, no second project - the boards
-ARE the project, just at an earlier shape.
+The artboards are the direction; the Astro project is the site. During Explore
+the project carries `.palate/explore/seed/B1.dc.html`..`BN.dc.html` and their
+images (working state, never shipped), `src/lib/variants.ts` and
+`src/pages/explore.astro`, and it has no page of its own at all. **It acquires
+its first page at Compose**, when the picked rung's home page is written in full
+and proved moving. One project, one build, and only the chosen direction is ever
+built.

@@ -34,9 +34,10 @@ Vercel: re-run `vercel deploy --prod` or push to `main`. Cloudflare: `npm run de
 (which builds first) or a `workflow_dispatch` on `deploy.yml`.
 
 **Never a bare `wrangler deploy`.** It does not build: `wrangler.toml` points at `./dist`, so it
-ships whatever is there, and four local commands rebuild `dist/` without `PUBLIC_SITE_ENV`
-(`verify-scaffold.sh`, `verify-is-real-astro.sh`, `phantom-utility-check.mjs` and
-`boards-render.mjs`). `serve-preview.sh` is NOT among them: it sets `preview` in both of its
+ships whatever is there, and three local commands rebuild `dist/` without `PUBLIC_SITE_ENV`
+(`verify-scaffold.sh`, `verify-is-real-astro.sh` and `phantom-utility-check.mjs`;
+`boards-render.mjs` is no longer one of them, because Explore draws artboards and builds
+nothing). `serve-preview.sh` is NOT among them: it sets `preview` in both of its
 modes, which is what lets the local round trip run with no secret. An unbaked build noindexes
 itself, and the contact endpoint refuses the post-deploy smoke header on it rather than
 honouring it, so the round trip skips with a reason instead of a live site quietly discarding

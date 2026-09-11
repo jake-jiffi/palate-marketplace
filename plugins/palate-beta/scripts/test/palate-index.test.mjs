@@ -147,10 +147,15 @@ test('a route linked only from a component is not an orphan', () => {
 test('the shipped template has a link graph, and says how much of one it read', () => {
   assert.ok(index.links.parsed > 0, 'the template parsed no links at all, so nothing downstream can be trusted');
   assert.ok(index.links.files > 0, 'no files were scanned for links');
-  assert.ok(index.routes.find((r) => r.path === '/').links.length > 0,
-    'home reaches no internal link, so every page it links to reads as an orphan');
+  // Home carried no link of its own in the raw scaffold even before this: the one edge it ever
+  // had was the shared layout's ExploreSwitcher, whose static href="/explore" was luck rather
+  // than a rule (palate-index.mjs's own comment says so), and boards are artboards now, so the
+  // switcher is gone. What the parser needs to prove is that it finds SOME real link somewhere
+  // in the repo, not that this particular scaffold page happens to have one.
+  assert.ok(index.routes.some((r) => r.links.length > 0),
+    'no route in the shipped template links anywhere, so nothing downstream can be trusted');
   assert.ok(!index.links.orphans.includes('/explore'),
-    'the switcher in the shared layout links /explore, so it is reached from every page');
+    '/explore is Explore scaffolding, exempt from orphan reporting by EXPLORE_ROUTE regardless of what links to it');
 });
 
 test('orphans are not computed when no link was parsed at all', () => {

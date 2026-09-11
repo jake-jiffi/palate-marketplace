@@ -10,7 +10,6 @@ import "@palate-projects/{{SLUG}}-brand/fonts.css";
 import "../styles/globals.css";
 import { ClientRouter } from "astro:transitions";
 import CmsVisualEditing from "../components/CmsVisualEditing.astro";
-import ExploreSwitcher from "../components/ExploreSwitcher.astro";
 import Motion from "../components/Motion.astro";
 import { business, businessJsonLd } from "../lib/business";
 
@@ -99,7 +98,6 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
   <body>
     {/* First in the tab order, so the bypass is reachable before the navigation it bypasses. */}
     <a class="skip-link" href="#main">Skip to content</a>
-    <ExploreSwitcher />
     <Motion />
     {/* A slot the page filled always renders; `chrome` governs the host header and footer only,
         and this template ships none, so a build that adds SiteHeader / SiteFooter renders those

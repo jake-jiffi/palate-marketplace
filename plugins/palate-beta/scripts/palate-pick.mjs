@@ -28,7 +28,8 @@
  * Usage:
  *   node scripts/palate-pick.mjs <projectDir> --hero b3 [--section b5] [--cta "Book a table"]
  *        [--intensity 3] [--note "..."] [--canvas <extract-dir>] [--second-pass] [--replace]
- *        [--proof <preview-url>]
+ *        [--proof <preview-url>] [--answer motion=... --answer mix=... --answer cms=...]
+ *        [--canvas-url <published-url> | --canvas-skipped "<reason>"]
  * Exit: 0 recorded, 1 refused (with the reason), 2 bad arguments.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -40,7 +41,10 @@ import { parseRegistry } from "./boards-render.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
-const VALUE_FLAGS = new Set(["--hero", "--section", "--cta", "--intensity", "--note", "--canvas", "--proof"]);
+const VALUE_FLAGS = new Set([
+  "--hero", "--section", "--cta", "--intensity", "--note", "--canvas", "--proof", "--answer",
+  "--canvas-url", "--canvas-skipped",
+]);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : null; };
 const flag = (k) => args.includes(k);
 const positional = [];
@@ -204,6 +208,62 @@ if (proofUrl) {
   patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString() };
 }
 
+/**
+ * WHERE THE BOARDS WENT: the canvas was published, or it was declined with a reason.
+ *
+ * `scripts/gate-explore.mjs` blocks a build that recorded `explore.shown_at` and then said
+ * nothing about the canvas, and until this flag existed the doctrine asked for the field and
+ * named no command to write it, so the only way to clear the gate was to hand-edit the
+ * manifest, which the same doctrine forbids. A gate with no writer is a gate people route
+ * around.
+ *
+ * The two are mutually exclusive in one call because they are opposite claims about the same
+ * set, and a call carrying both is a model guessing rather than reporting.
+ */
+const canvasUrl = flag("--canvas-url") ? (opt("--canvas-url") ?? "") : null;
+const canvasSkipped = flag("--canvas-skipped") ? (opt("--canvas-skipped") ?? "") : null;
+if (canvasUrl !== null && canvasSkipped !== null) {
+  refuse("--canvas-url and --canvas-skipped say opposite things about the same set: the canvas was published, or it was declined. Pass one.");
+}
+if (canvasUrl !== null) {
+  let usable = false;
+  try { const u = new URL(canvasUrl); usable = u.protocol === "http:" || u.protocol === "https:"; } catch { usable = false; }
+  if (!usable) {
+    refuse(`--canvas-url ${JSON.stringify(canvasUrl)} is not an http(s) URL. It is the link the client opens to work on the boards, so it has to be one they can open.`);
+  }
+  patch.explore.canvas = { url: canvasUrl, recorded_at: new Date().toISOString() };
+}
+if (canvasSkipped !== null) {
+  const reason = canvasSkipped.trim();
+  if (!reason) {
+    refuse("--canvas-skipped needs the reason. A declined canvas is an honest outcome and an unexplained one is silence, which is what the gate is refusing in the first place.");
+  }
+  patch.explore.canvas = { skipped: true, reason, recorded_at: new Date().toISOString() };
+}
+
+/**
+ * THE QUESTION ROUND: the three things Compose needs from the person before any Astro is
+ * built for the picked rung. `--answer` is repeatable (one flag per question, or several
+ * calls over a session) so every occurrence on this command line is collected, not just the
+ * last, and merge-by-field in manifest-merge.mjs lets a later call add `cms` without wiping a
+ * `motion` recorded an hour earlier.
+ */
+const ANSWER_KEYS = ["motion", "mix", "cms"];
+const answers = {};
+for (let i = 0; i < args.length; i++) if (args[i] === "--answer") {
+  const kv = String(args[i + 1] || "");
+  const eq = kv.indexOf("=");
+  const k = eq > 0 ? kv.slice(0, eq).trim() : "";
+  const v = eq > 0 ? kv.slice(eq + 1).trim() : "";
+  if (!ANSWER_KEYS.includes(k) || !v) {
+    refuse(`--answer takes one of motion, mix, cms (as key=text; got ${JSON.stringify(kv)}). These are the three things Compose needs from the person: how the picked rung should move, what to mix in from other boards, and who edits the copy.`);
+  }
+  answers[k] = v;
+}
+if (Object.keys(answers).length) {
+  patch.explore.question_round = { ...answers, answered_at: new Date().toISOString() };
+}
+
 if (flag("--second-pass")) {
   // COUNTS, never latches. A boolean would answer "did they ask for changes" and lose the
   // question worth asking, which is how many rounds a direction takes before it is settled.
@@ -230,8 +290,9 @@ if (canvasDir) {
 
 // ------------------------------------------------------------------------------- record
 if (!made.length && !patch.commission && !patch.explore.cta && !patch.explore.notes
-    && !patch.explore.proof && patch.explore.second_passes === undefined && canvasDir === null) {
-  badArgs("nothing to record. Pass at least one of --hero, --section, --intensity, --cta, --note, --proof, --second-pass or --canvas.");
+    && !patch.explore.proof && !patch.explore.question_round && !patch.explore.canvas
+    && patch.explore.second_passes === undefined && canvasDir === null) {
+  badArgs("nothing to record. Pass at least one of --hero, --section, --intensity, --cta, --note, --proof, --answer, --canvas-url, --canvas-skipped, --second-pass or --canvas.");
 }
 
 if (existsSync(manifestPath)) {
@@ -262,6 +323,16 @@ if (patch.explore.proof) {
   process.stdout.write(
     `palate-pick: motion proof recorded at ${patch.explore.proof.url}. The done gate measures the built home against the picked board from here.\n`,
   );
+}
+if (patch.explore.canvas) {
+  process.stdout.write(
+    patch.explore.canvas.url
+      ? `palate-pick: canvas published at ${patch.explore.canvas.url}. /explore links to it first.\n`
+      : `palate-pick: canvas declined, recorded as "${patch.explore.canvas.reason}". Hand over /explore instead.\n`,
+  );
+}
+if (patch.explore.question_round) {
+  process.stdout.write(`palate-pick: question round recorded (${Object.keys(answers).sort().join(", ")}).\n`);
 }
 if (patch.explore.second_passes !== undefined) process.stdout.write(`palate-pick: second pass ${patch.explore.second_passes}.\n`);
 if (feedbackCount !== null) {

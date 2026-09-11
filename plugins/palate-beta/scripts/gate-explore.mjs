@@ -10,11 +10,11 @@
  * expensive thing about the ladder is then wasted, and the restrained rung in particular reads
  * as "the boring one" rather than as one deliberate end of a span.
  *
- * So this gate holds five things that are easy to skip and impossible to notice missing:
+ * So this gate holds seven things that are easy to skip and impossible to notice missing:
  *
  *   1. THE COACHING PAGE EXISTS. `src/pages/explore.astro` is what says what happened, draws
  *      the ladder, and tells the client what to do next (react, mix across rungs, ask for
- *      changes, and only then build the whole site). A set of board routes with no such page
+ *      changes, and only then build the whole site). A set of boards with no such page
  *      is a pile of links.
  *   2. EVERY BOARD ARGUES FOR ITSELF. `what`, `why` and `feeling` on each entry are the
  *      difference between "I like that one" and "somewhere around 4, with 5's motion". They
@@ -24,13 +24,23 @@
  *   3. THE LADDER IS REAL. Every rung carries a distinct `ambition`, and they run 1..N with no
  *      gaps, because a set that is all rung 1 or has three rung 4s is a bag wearing a ladder's
  *      labels.
- *   4. THE BOARD EXISTS AND THE MOTION IS WRITTEN. A registered `href` with no page is a link
- *      the client clicks into a 404, and a board is mostly a STILL: a direction whose motion
- *      plan was never written is chosen with its most expensive property invisible. A `motion`
- *      that restates `what` is that field filled in rather than thought about.
+ *   4. THE ARTBOARD IS THE RUNG'S OWN, EXISTS, AND THE MOTION IS WRITTEN. `artboard` must be
+ *      exactly `B<rung>.dc.html`, because `/pick --canvas` derives that name from the rung and
+ *      a board naming any other file has its client edits read back from somewhere else. A
+ *      registered file that was never drawn is a rung the canvas cannot draw, and a board is
+ *      mostly a STILL: a direction whose motion plan was never written is chosen with its most
+ *      expensive property invisible. A `motion` that restates `what` is that field filled in
+ *      rather than thought about.
  *   5. THE SET IS A SET. One distinct donor per rung, because five boards drawn from one
  *      reference are one idea wearing five skins, and two or three CTA labels per board,
  *      because one is a guess and four is a survey.
+ *   6. A SHOWN CANVAS WAS PUBLISHED OR DECLINED. Once `explore.shown_at` is recorded,
+ *      `explore.canvas` must say what happened to it: a published `{ url }`, or a declined
+ *      `{ skipped: true, reason }`. Silence reads as "the client never got to see a canvas at
+ *      all", which is worse than either honest outcome. `/pick --canvas-url <url>` and
+ *      `/pick --canvas-skipped "<reason>"` are what write it.
+ *   7. A BOLD BRIEF HAS A REAL LADDER. Three rungs is the floor on a high-intensity brief,
+ *      because below three there is no "between" for a client to point at.
  *
  * ============================ FAIL-OPEN, ALWAYS ============================
  *
@@ -226,7 +236,8 @@ const words = (s) => new Set(String(s).toLowerCase().match(/[a-z]{4,}/g) || []);
 for (const o of entries) {
   const id = field(o, "id") || "(unnamed)";
   const name = field(o, "name");
-  const href = field(o, "href");
+  const artboardRaw = field(o, "artboard");
+  const artboard = typeof artboardRaw === "string" ? artboardRaw.trim() : "";
   const ambition = field(o, "ambition");
   const what = field(o, "what");
   const why = field(o, "why");
@@ -254,17 +265,20 @@ for (const o of entries) {
     continue;
   }
 
-  // --------------------------------------------------- 4. the board exists and moves
-  if (href) {
-    const route = String(href).replace(/^\/+/, "").replace(/\/+$/, "");
-    if (!existsSync(join(dir, "src/pages", `${route}.astro`))) {
-      add(
-        `${id} registers a board that does not exist`,
-        `href ${href} needs src/pages/${route}.astro and there is no such file. The client clicks it from /explore and lands on a 404, which is the one impression a preview cannot recover from.`,
-      );
-    }
-  } else {
-    add(`${id} has no href`, "nothing links to it, so it is registered and unreachable.");
+  // ------------------------------------------- 4. the artboard exists (the board IS the file)
+  if (!artboard) {
+    add(`${id} has no artboard`, `every board names its file, e.g. artboard: "B${ambition ?? 1}.dc.html". Without it nothing can be drawn on the canvas or shown on /explore.`);
+  } else if (artboard !== `B${ambition}.dc.html`) {
+    // NOT just the SHAPE of the name, the name itself. `/pick --canvas` derives the file it
+    // reads back from the rung (`B${ambition}.dc.html`), so a board at rung 3 registering
+    // B7.dc.html passes a pattern check and then aligns against a file the read-back will
+    // never open: the client's edits to that rung are silently dropped.
+    add(
+      `${id} names an artboard its rung will never open`,
+      `rung ${ambition} is read back as B${ambition}.dc.html and this board registers ${artboard}. The canvas read-back (/pick --canvas) derives the file from the rung, so anything else is edits nobody reads.`,
+    );
+  } else if (!existsSync(join(dir, ".palate/explore/seed", artboard))) {
+    add(`${id} registers a board that was never drawn`, `artboard ${artboard} needs .palate/explore/seed/${artboard} and there is no such file. The canvas shows a hole where rung ${ambition} should be.`);
   }
 
   {
@@ -359,11 +373,11 @@ if (rungs.length >= 2) {
 // enough steps for "somewhere between 3 and 4" to mean anything. Below three there is no
 // between. Only enforced on a high-intensity brief, where a collapsed Explore is the
 // documented cause of a Variety-flat build.
-let intensity = "";
+let manifest = null;
 try {
-  const m = JSON.parse(readFileSync(join(dir, "build-manifest.json"), "utf8"));
-  intensity = String(m?.commission?.intensity ?? "");
+  manifest = JSON.parse(readFileSync(join(dir, "build-manifest.json"), "utf8"));
 } catch { /* no manifest, no opinion */ }
+const intensity = String(manifest?.commission?.intensity ?? "");
 // An off-enum value fails toward BOLD, the same way gate-done.sh reads it: a wrongly-bold
 // build gets a loud gate and a wrongly-calm one gets a timid site nobody can explain.
 const isHigh = intensity !== "" && intensity !== "calm";
@@ -374,6 +388,23 @@ if (isHigh && entries.length < MIN_BOARDS) {
     `a high-intensity brief has ${entries.length} board(s)`,
     `the ladder needs at least ${MIN_BOARDS} rungs for a client to point BETWEEN them, and this brief records commission.intensity "${intensity}". Build the remaining rungs, or record commission.explore_skip with the named-direction reason.`,
   );
+}
+
+// ------------------------------------------------ 7. shown boards were put somewhere
+// The canvas is where the person iterates. Publishing it is not optional when the design skill
+// is present, and when it is absent that is RECORDED with a reason, never left silent.
+{
+  const ex = manifest?.explore || {};
+  if (ex.shown_at) {
+    const c = ex.canvas || {};
+    const ok = (typeof c.url === "string" && c.url.trim()) || (c.skipped === true && typeof c.reason === "string" && c.reason.trim());
+    if (!ok) {
+      add(
+        "The boards were shown but the canvas was neither published nor declined",
+        `explore.shown_at is ${ex.shown_at} and manifest.explore.canvas records nothing. Publish the canvas with the design skill and record explore.canvas = { url }, or record explore.canvas = { skipped: true, reason } when no design skill can run in this session.`,
+      );
+    }
+  }
 }
 
 if (!findings.length) {
