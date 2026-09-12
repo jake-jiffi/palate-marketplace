@@ -327,6 +327,33 @@ export const BOARD_QUESTION =
   'client? Judge composition, type, hierarchy, restraint and specificity; ignore that one is a drawing.';
 
 /**
+ * The page ENDING, which one entrance still could never speak for.
+ *
+ * A direction's closing call to action and its footer are the half of a page a client asks
+ * about first and the half a drawing is most likely to have phoned in, and a board judged on
+ * its entrance alone carried a verdict about the top of the page as though it were about the
+ * page. The question says what the two pictures are, because a foot crop with no context reads
+ * as a broken screenshot rather than as the end of a page.
+ */
+export const BOARD_FOOT_QUESTION =
+  'Two page endings, the closing call to action and the footer, one drawn for this client and one from a library ' +
+  'reference in its field. On the four rungs, how does the candidate compare as a piece of design a senior designer ' +
+  'would deliver? Judge composition, type, hierarchy, restraint and the care in the details; ignore that one is a drawing.';
+
+/**
+ * The INNER page, against the donor's entrance, because that is the only donor picture there is.
+ *
+ * The library holds no inner-page capture for a reference, so the comparison cannot be
+ * like-for-like and pretending otherwise would have a judge marking the candidate down for not
+ * being a home page. The question states the mismatch and asks the answerable thing: does this
+ * inner page hold the same STANDARD.
+ */
+export const BOARD_INNER_QUESTION =
+  "A drawn inner page for this client beside a library reference's home page entrance. On the four rungs, does the " +
+  "inner page hold the reference's standard as a piece of design a senior designer would deliver? Judge composition, " +
+  'type, hierarchy, restraint and specificity; ignore that one is a drawing and that the pages differ in role.';
+
+/**
  * State one board's comparison, both ways round.
  *
  * The run token is in BOTH ids for the same reason it is in the site ladder's: without it the
@@ -334,7 +361,7 @@ export const BOARD_QUESTION =
  * yesterday's boards would validate cleanly against today's request and be recorded as though
  * they described these drawings.
  */
-export function buildBoardPair({ id, boardPath, donorPath, donorSlug, runToken }) {
+export function buildBoardPair({ id, boardPath, donorPath, donorSlug, runToken, surface = null, question = BOARD_QUESTION }) {
   if (!id) throw new Error('buildBoardPair: no board id');
   if (!boardPath) throw new Error(`buildBoardPair: ${id} has no board hero`);
   if (!donorPath) throw new Error(`buildBoardPair: ${id} has no donor hero`);
@@ -346,16 +373,33 @@ export function buildBoardPair({ id, boardPath, donorPath, donorSlug, runToken }
    * likely to be lying around.
    */
   if (!runToken) throw new Error(`buildBoardPair: ${id} has no run token (judgements must be bound to the run they were written for)`);
+  /**
+   * A QUESTION IS NOT OPTIONAL AND NOT BLANK. The surfaces ask three different things, so the
+   * question is now a parameter, and a caller that passes an empty one would hand a judge two
+   * pictures and no instruction. That answer would still validate: a rung would come back, and
+   * it would be a rung about a question nobody asked.
+   */
+  if (typeof question !== 'string' || !question.trim())
+    throw new Error(`buildBoardPair: ${id} has no question (each surface asks its own; a blank one is two pictures and no instruction)`);
   const token = runToken;
+  /**
+   * The SURFACE is in the pair id and therefore in both comparison ids. Three pairs per
+   * direction sharing one id would make their judgements interchangeable, so a page ending read
+   * clearly worse could be scored as the entrance and the direction would pass on the wrong
+   * picture.
+   */
+  const pairId = surface ? `${id}:${surface}` : id;
   return {
-    id,
+    id: pairId,
+    board: id,
+    surface: surface ?? null,
     donor: donorSlug ?? null,
     runToken: token,
     comparisons: [
-      { id: `${id}:board-first@${token}`, candidate_is: 'A', A: boardPath, B: donorPath },
-      { id: `${id}:donor-first@${token}`, candidate_is: 'B', A: donorPath, B: boardPath },
+      { id: `${pairId}:board-first@${token}`, candidate_is: 'A', A: boardPath, B: donorPath },
+      { id: `${pairId}:donor-first@${token}`, candidate_is: 'B', A: donorPath, B: boardPath },
     ],
-    question: BOARD_QUESTION,
+    question,
     rungs: RUNGS.map((r) => r.id),
   };
 }

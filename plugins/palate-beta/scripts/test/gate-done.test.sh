@@ -214,7 +214,12 @@ const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
 m.explore = {
   ran: true,
   picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
-  proof: { url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z" },
+  // MEASURED, because a proof that is only a URL and a timestamp is nothing but a claim, and
+  // the gate now treats that as a skip rather than as a composed home.
+  proof: {
+    url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z",
+    measured: { animated: 3, running: 1, parallax: [{ selector: "img#hero", ratio: 0.42 }], header: { before: 120, after: 64 } },
+  },
   question_round: { motion: "a slow draw", mix: "nothing", cms: "false", answered_at: "2026-09-09T00:01:00Z" },
 };
 fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
@@ -230,6 +235,66 @@ elif printf '%s' "$fidp_summary" | grep -qF 'fidelity: '; then
   echo "ok   - a recorded motion proof makes the gate run, and it skips for its own reason"; pass=$((pass+1))
 else
   echo "FAIL - the fidelity gate reported nothing at all (got: $fidp_summary)"; fail=$((fail+1))
+fi
+
+# AND A PROOF THAT WAS DECLARED RATHER THAN MEASURED IS A SKIP THAT SAYS SO.
+#
+# This is the fault that put the check here. A real build recorded its proof of motion on the
+# agent's word: the board promised a 0.6x parallax, the record said the motion had been shown,
+# and the image moved 7 per cent of the scroll. `palate-pick.mjs --proof` measures now, so a
+# proof carrying no `measured` and no `reason` was either written by an older plugin or typed
+# into the manifest by hand. Measuring the direction against a home nobody has seen move is
+# not a check, so the gate skips and names the flag that would close it.
+FIDUM="$TMP/fidelity-unmeasured"; mkdir -p "$FIDUM/src/pages"
+printf -- '---\n---\n<h1>the composed home</h1>\n' > "$FIDUM/src/pages/index.astro"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
+  proof: { url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z" },
+  question_round: { motion: "a slow draw", mix: "nothing", cms: "false", answered_at: "2026-09-09T00:01:00Z" },
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$FIDUM/build-manifest.json"
+make_shots "$FIDUM" 0
+cp "$PASS/verify-report.json" "$FIDUM/verify-report.json"
+fidum_summary="$(bash "$GATE" "$FIDUM/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$fidum_summary" | grep -qF -- '--proof'; then
+  echo "ok   - a declared proof skips the fidelity gate and names the flag that measures it"; pass=$((pass+1))
+else
+  echo "FAIL - a proof recorded without a measurement was treated as a composed home (got: $fidum_summary)"; fail=$((fail+1))
+fi
+
+# AND THE HONEST ESCAPE IS NOT THE SAME THING. A preview the probe cannot reach (a tunnel, a
+# login) is recorded with `--proof-unmeasured "<reason>"`, which writes `measured: null` and the
+# reason. That is a person saying why, so the gate runs.
+FIDUR="$TMP/fidelity-unmeasured-reason"; mkdir -p "$FIDUR/src/pages"
+printf -- '---\n---\n<h1>the composed home</h1>\n' > "$FIDUR/src/pages/index.astro"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
+  proof: {
+    url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z",
+    measured: null, reason: "the preview is behind a tunnel this machine cannot open",
+  },
+  question_round: { motion: "a slow draw", mix: "nothing", cms: "false", answered_at: "2026-09-09T00:01:00Z" },
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$FIDUR/build-manifest.json"
+make_shots "$FIDUR" 0
+cp "$PASS/verify-report.json" "$FIDUR/verify-report.json"
+fidur_summary="$(bash "$GATE" "$FIDUR/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$fidur_summary" | grep -qF -- '--proof'; then
+  echo "FAIL - a proof with a stated reason was treated as a declared one (got: $fidur_summary)"; fail=$((fail+1))
+elif printf '%s' "$fidur_summary" | grep -qF 'fidelity: '; then
+  echo "ok   - a stated reason lets the fidelity gate run, and it skips for its own reason"; pass=$((pass+1))
+else
+  echo "FAIL - the fidelity gate reported nothing at all (got: $fidur_summary)"; fail=$((fail+1))
 fi
 
 # --- THE QUESTION ROUND: a pick with no round is refused, not silently skipped ---------

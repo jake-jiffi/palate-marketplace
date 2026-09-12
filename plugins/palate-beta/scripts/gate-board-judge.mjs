@@ -42,12 +42,41 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { invokedDirectly } from "./lib/invoked-directly.mjs";
 import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 import { parseRegistry } from "./boards-render.mjs";
-import { buildBoardPair, scoreBoardPair, BOARD_QUESTION, RUNGS } from "./reference-capture/ladder-local.mjs";
+import {
+  buildBoardPair, scoreBoardPair, BOARD_QUESTION, BOARD_FOOT_QUESTION, BOARD_INNER_QUESTION, RUNGS,
+} from "./reference-capture/ladder-local.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const engineRequire = createRequire(new URL("./reference-capture/", import.meta.url));
+
+/**
+ * THE THREE SURFACES A DIRECTION IS READ ON.
+ *
+ * The entrance was the whole judge, and a verdict about the top of a page was recorded as a
+ * verdict about the page. A client asks about the ending (the closing call to action and the
+ * footer) before they ask about anything below the fold, and they spend most of their time on
+ * an inner page, so both are compared too. The lowest reading stands, for the same reason the
+ * lower of the two orderings stands: a direction is as good as its weakest surface, and
+ * averaging is how a weak ending gets carried by a strong hero.
+ *
+ * `label` is what the refusal calls the surface, in the client's language rather than the
+ * file's: "page ending", never "foot.png".
+ */
+const SURFACES = {
+  entrance: { label: "entrance", question: BOARD_QUESTION, candidate: "hero.png", donor: "donor.jpg" },
+  foot: { label: "page ending", question: BOARD_FOOT_QUESTION, candidate: "foot.png", donor: "donor-foot.png" },
+  inner: { label: "inner page", question: BOARD_INNER_QUESTION, candidate: "inner.png", donor: "donor.jpg" },
+};
+
+/** How much of the bottom of a page is its ending. Enough for the CTA band and the footer. */
+const FOOT_PX = 900;
+
+/** The stills every direction owes before it can be judged at all. */
+const REQUIRED_SHOTS = ["hero.png", "full.png", "inner.png", "donor.jpg"];
 
 const skip = (reason) => {
   process.stderr.write(`gate-board-judge: skipped (${reason})\n`);
@@ -93,12 +122,32 @@ function record(projectDir, judgements) {
   return null;
 }
 
-/** What the board hero WAS when the comparison was stated. A redraw has to invalidate it. */
+/** What a still WAS when the comparison was stated. A redraw has to invalidate it. */
 const heroFingerprint = (p) => {
   try { return createHash("sha256").update(readFileSync(p)).digest("hex").slice(0, 16); } catch { return null; }
 };
 
-export function main(argv = process.argv.slice(2)) {
+/**
+ * Crop the bottom of a page into its own still.
+ *
+ * A full-page capture is judged whole by nobody: it is thousands of pixels tall, and a judge
+ * asked to compare two of them reads the top and answers about the entrance again. The ending
+ * is cropped so the question can be about the ending. A page shorter than the crop keeps its
+ * whole height rather than being padded, because a shorter page is a fact about the design.
+ */
+async function cropFoot(sharp, src, dest) {
+  const { width, height } = await sharp(src).metadata();
+  if (!width || !height) throw new Error(`${src} has no readable dimensions`);
+  const h = Math.min(FOOT_PX, height);
+  await sharp(src).extract({ left: 0, top: height - h, width, height: h }).png().toFile(dest);
+}
+
+/** Why a donor has no full capture, as boards-render recorded it, or a plain statement of fact. */
+function donorFullReason(dir) {
+  try { return readFileSync(join(dir, "donor-full.missing"), "utf8").trim(); } catch { return ""; }
+}
+
+export async function main(argv = process.argv.slice(2)) {
   /**
    * A FLAG WITH NO VALUE IS A REFUSAL, never a silent fall-through. `--judgements` with nothing
    * after it used to return null, which is exactly what "no --judgements at all" returns, so the
@@ -163,14 +212,60 @@ export function main(argv = process.argv.slice(2)) {
      */
     const missing = [];
     for (const b of boards) {
-      if (!existsSync(join(shotsDir, b.id, "hero.png"))) missing.push(`${b.id}/hero.png`);
-      if (!existsSync(join(shotsDir, b.id, "donor.jpg"))) missing.push(`${b.id}/donor.jpg`);
+      for (const f of REQUIRED_SHOTS) if (!existsSync(join(shotsDir, b.id, f))) missing.push(`${b.id}/${f}`);
     }
     if (missing.length)
       return skip(
-        `no board or donor hero for ${missing.join(", ")}: run node scripts/boards-render.mjs ${projectDir} ` +
+        `no still on disk for ${missing.join(", ")}: run node scripts/boards-render.mjs ${projectDir} ` +
           `(with .palate/explore/donor-heroes.json present, which is what fetches each donor hero) first`,
       );
+
+    /**
+     * THE PAGE ENDINGS ARE CROPPED BEFORE ANYTHING IS FINGERPRINTED, because the crop IS the
+     * candidate and a request naming a file nothing wrote is a comparison the subagent cannot
+     * make. A direction whose donor has no full capture keeps its other two surfaces: the
+     * library holds no `full.png` for some references, which is not the operator's fault and
+     * not a reason to stop an Explore. It is said out loud rather than silently dropped, since
+     * a missing surface and a surface that passed look identical in a record that does not
+     * distinguish them.
+     */
+    let sharp = null;
+    try { sharp = engineRequire("sharp"); } catch { sharp = null; }
+    /**
+     * NO SHARP IS A SKIP, not a two-surface pass. A library with no whole-page capture for a
+     * reference is a fact about the library and the ending is dropped; sharp missing is a local
+     * fault with a named fix, and judging every direction on two surfaces because of it would
+     * quietly hand back the instrument this task exists to widen.
+     */
+    if (!sharp) return skip("sharp not installed: run scripts/reference-capture/setup.sh");
+    const withFoot = new Set();
+    for (const b of boards) {
+      const dir = join(shotsDir, b.id);
+      if (!existsSync(join(dir, "donor-full.png"))) {
+        const why = donorFullReason(dir);
+        process.stderr.write(
+          `gate-board-judge: ${b.id} (${b.donor}): no donor-full.png on disk` +
+            `${why ? ` (${why})` : ""}, so the page ending is judged on nothing and is left out of the request.\n`,
+        );
+        continue;
+      }
+      try {
+        await cropFoot(sharp, join(dir, "full.png"), join(dir, "foot.png"));
+        await cropFoot(sharp, join(dir, "donor-full.png"), join(dir, "donor-foot.png"));
+        withFoot.add(b.id);
+      } catch (e) {
+        process.stderr.write(
+          `gate-board-judge: ${b.id}: the page ending could not be cropped (${e.message}), so it is left out of the request.\n`,
+        );
+      }
+    }
+
+    /** Every surface's candidate still, as it is right now. A redraw of any one restates the set. */
+    const fingerprints = (id) => ({
+      board_hero: heroFingerprint(join(shotsDir, id, "hero.png")),
+      board_foot: withFoot.has(id) ? heroFingerprint(join(shotsDir, id, "foot.png")) : null,
+      board_inner: heroFingerprint(join(shotsDir, id, "inner.png")),
+    });
 
     /**
      * ALREADY JUDGED IS NOT RE-JUDGED.
@@ -186,7 +281,13 @@ export function main(argv = process.argv.slice(2)) {
     const held = new Map((Array.isArray(recorded) ? recorded : []).map((j) => [j?.id, j]));
     const stale = boards.filter((b) => {
       const j = held.get(b.id);
-      return !j || !j.board_hero || j.board_hero !== heroFingerprint(join(shotsDir, b.id, "hero.png"));
+      // A RECORD WITH NO READABLE RUNG IS NOT A VERDICT. One reached the shortcut and printed
+      // "already judged: b1 undefined" over a drawing nothing had scored.
+      if (!j || !j.board_hero || !RUNGS.some((r) => r.id === j.rung)) return true;
+      const now = fingerprints(b.id);
+      // EVERY SURFACE, not only the entrance. A direction redrawn at its ending or its inner
+      // page and judged on the entrance alone would be waved through on verdicts nobody gave.
+      return ["board_hero", "board_foot", "board_inner"].some((k) => (j[k] ?? null) !== now[k]);
     });
     if (!stale.length) {
       /**
@@ -214,29 +315,54 @@ export function main(argv = process.argv.slice(2)) {
     }
 
     const runToken = randomBytes(4).toString("hex");
-    const pairs = boards.map((b) => ({
-      ...buildBoardPair({
-        id: b.id,
-        boardPath: join(shotsDir, b.id, "hero.png"),
-        donorPath: join(shotsDir, b.id, "donor.jpg"),
-        donorSlug: b.donor,
-        runToken,
-      }),
-      /**
-       * THE DRAWING THE JUDGE SAW. A request stands on disk after it is written, so a board
-       * redrawn in between (which is exactly what the refusal asks for) would otherwise have
-       * the OLD judgements applied to the NEW hero, and the redraw would be blessed by a
-       * verdict nobody gave it.
-       */
-      board_hero: heroFingerprint(join(shotsDir, b.id, "hero.png")),
-    }));
+    const pairs = [];
+    for (const b of boards) {
+      for (const surface of ["entrance", "foot", "inner"]) {
+        if (surface === "foot" && !withFoot.has(b.id)) continue;
+        const spec = SURFACES[surface];
+        const candidate = join(shotsDir, b.id, spec.candidate);
+        pairs.push({
+          ...buildBoardPair({
+            id: b.id,
+            surface,
+            question: spec.question,
+            boardPath: candidate,
+            donorPath: join(shotsDir, b.id, spec.donor),
+            donorSlug: b.donor,
+            runToken,
+          }),
+          /**
+           * THE DRAWING THE JUDGE SAW. A request stands on disk after it is written, so a board
+           * redrawn in between (which is exactly what the refusal asks for) would otherwise have
+           * the OLD judgements applied to the NEW still, and the redraw would be blessed by a
+           * verdict nobody gave it.
+           */
+          candidate,
+          candidate_sha: heroFingerprint(candidate),
+        });
+      }
+    }
     mkdirSync(dirname(requestPath), { recursive: true });
     writeFileSync(
       requestPath,
-      JSON.stringify({ runToken, question: BOARD_QUESTION, rungs: RUNGS.map((r) => r.id), pairs }, null, 2) + "\n",
+      JSON.stringify(
+        {
+          runToken,
+          // NO TOP-LEVEL QUESTION. The surfaces ask three different things and the dispatching
+          // doctrine says to pass "the question" verbatim, so one question beside three pairs
+          // is an instruction to ask the entrance's question over a page ending, and the answer
+          // would come back valid. Each pair carries its own; there is nothing else to pass.
+          questions: "each pair carries its own question: dispatch that pair's `question` verbatim",
+          rungs: RUNGS.map((r) => r.id),
+          pairs,
+        },
+        null,
+        2,
+      ) + "\n",
     );
     process.stdout.write(
-      `gate-board-judge: ${pairs.length} board(s), ${pairs.length * 2} comparisons stated in ${requestPath}\n` +
+      `gate-board-judge: ${boards.length} direction(s) on ${pairs.length} surface(s), ${pairs.length * 2} comparisons ` +
+        `stated in ${requestPath}\n` +
         `  Dispatch each comparison to a FRESH subagent (one per ordering, never both in one context), then run\n` +
         `  node scripts/gate-board-judge.mjs ${projectDir} --judgements <file> with [{ id, candidate_is, verdict }] per comparison.\n`,
     );
@@ -249,6 +375,14 @@ export function main(argv = process.argv.slice(2)) {
     return skip(`no comparisons stated yet: run node scripts/gate-board-judge.mjs ${projectDir} first`);
 
   /**
+   * A REQUEST FROM BEFORE THE THREE SURFACES IS STALE, not a two-thirds pass. Its pairs are one
+   * per direction with no `surface`, and its board set matches the registry exactly, so scoring
+   * it would judge every direction on its entrance alone and report a clean run.
+   */
+  if (request.pairs.some((p) => !p.surface))
+    return skip("the request was written before the page ending and the inner page were judged; re-run phase 1");
+
+  /**
    * THE REQUEST MUST STILL DESCRIBE THIS SET OF BOARDS.
    *
    * Phase 2 scored `request.pairs` and never looked at the registry it had just parsed, so a
@@ -257,7 +391,7 @@ export function main(argv = process.argv.slice(2)) {
    * with no evidence on disk for the same reason, and this is the same hole one phase along.
    */
   const registered = boards.map((b) => b.id);
-  const judgedSet = request.pairs.map((p) => p.id);
+  const judgedSet = [...new Set(request.pairs.map((p) => p.board))];
   const same = registered.length === judgedSet.length && registered.every((id, i) => id === judgedSet[i]);
   if (!same)
     return skip(
@@ -270,9 +404,11 @@ export function main(argv = process.argv.slice(2)) {
    * request would then hand the old verdicts to a new hero.
    */
   for (const p of request.pairs) {
-    if (!p.board_hero) continue; // a request from before the fingerprint existed claims nothing
-    if (heroFingerprint(join(shotsDir, p.id, "hero.png")) !== p.board_hero)
-      return skip(`hero.png for ${p.id} changed since the request was written; re-run phase 1`);
+    if (!p.candidate_sha || !p.candidate) continue; // a request from before the fingerprint existed claims nothing
+    if (heroFingerprint(p.candidate) !== p.candidate_sha)
+      return skip(
+        `${SURFACES[p.surface]?.candidate ?? "the still"} for ${p.board} changed since the request was written; re-run phase 1`,
+      );
   }
   const judgements = readJSON(resolve(judgementsFile));
   if (!Array.isArray(judgements)) {
@@ -289,8 +425,8 @@ export function main(argv = process.argv.slice(2)) {
   const want = request.pairs.length * 2;
   if (judgements.length !== want) {
     process.stderr.write(
-      `gate-board-judge: ${judgements.length} judgement(s) returned for ${request.pairs.length} board(s), which needs ${want} ` +
-        `(each board judged in both orders, by a fresh subagent each time). NOT a pass.\n`,
+      `gate-board-judge: ${judgements.length} judgement(s) returned for ${request.pairs.length} comparison pair(s), which needs ${want} ` +
+        `(each surface judged in both orders, by a fresh subagent each time). NOT a pass.\n`,
     );
     process.exitCode = 2;
     return;
@@ -308,34 +444,60 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   const judgedAt = new Date().toISOString();
-  const scored = [];
+  const bySurface = new Map(); // pair id -> the scored reading
   for (const pair of request.pairs) {
     const mine = judgements.filter((j) => pair.comparisons.some((c) => c.id === j.id));
-    let s;
     try {
-      s = scoreBoardPair(pair, mine);
+      bySurface.set(pair.id, scoreBoardPair(pair, mine));
     } catch (e) {
       process.stderr.write(`gate-board-judge: ${e.message}. NOT a pass.\n`);
       process.exitCode = 2;
       return;
     }
-    scored.push({ ...s, donor: pair.donor ?? null, run_token: request.runToken, judged_at: judgedAt });
   }
 
-  const heroOf = new Map(request.pairs.map((p) => [p.id, p.board_hero ?? null]));
-  const recordError = record(projectDir, scored.map((s) => ({
-    id: s.id,
-    donor: s.donor,
-    rung: s.rung,
-    consistent: s.consistent,
-    run_token: s.run_token,
-    judged_at: s.judged_at,
-    // WHICH DRAWING THIS VERDICT IS ABOUT. Phase 1 re-stated every comparison on every round,
-    // including the rounds where nothing had been redrawn, so a three-board Explore paid for six
-    // fresh subagents again to be told what the manifest already held. It can only skip safely
-    // if the record says which hero was judged, which is this.
-    board_hero: heroOf.get(s.id) ?? null,
-  })));
+  /**
+   * ONE RECORD PER DIRECTION, carrying the three readings and the LOWEST of them.
+   *
+   * `rung` stays the field it always was, because `gate-explore.mjs` reads exactly that and a
+   * direction is shown or not on it. The per-surface readings sit beside it: a null foot is a
+   * surface that was never judged, and it has to look different from one that passed, or the
+   * next reader takes silence for a clean bill.
+   */
+  const rungOrder = RUNGS.map((r) => r.id);
+  const scored = [];
+  for (const b of boards) {
+    const surfaces = ["entrance", "foot", "inner"];
+    const readings = new Map(
+      surfaces.map((sf) => [sf, bySurface.get(`${b.id}:${sf}`) ?? null]),
+    );
+    const present = surfaces.filter((sf) => readings.get(sf));
+    const lowest = present
+      .map((sf) => readings.get(sf).rung)
+      .reduce((a, r) => (rungOrder.indexOf(r) < rungOrder.indexOf(a) ? r : a));
+    const donor = request.pairs.find((p) => p.board === b.id)?.donor ?? b.donor ?? null;
+    scored.push({
+      id: b.id,
+      donor,
+      rung: lowest,
+      rungs: Object.fromEntries(surfaces.map((sf) => [sf, readings.get(sf)?.rung ?? null])),
+      consistent: present.every((sf) => readings.get(sf).consistent),
+      run_token: request.runToken,
+      judged_at: judgedAt,
+      // WHICH DRAWINGS THESE VERDICTS ARE ABOUT. Phase 1 re-stated every comparison on every
+      // round, including the rounds where nothing had been redrawn, so a three-board Explore
+      // paid for six fresh subagents again to be told what the manifest already held. It can
+      // only skip safely if the record says which stills were judged, which is this.
+      board_hero: request.pairs.find((p) => p.id === `${b.id}:entrance`)?.candidate_sha ?? null,
+      board_foot: request.pairs.find((p) => p.id === `${b.id}:foot`)?.candidate_sha ?? null,
+      board_inner: request.pairs.find((p) => p.id === `${b.id}:inner`)?.candidate_sha ?? null,
+      // Not recorded: the surface readings themselves, which live in `rungs`. `verdicts` is kept
+      // off the manifest for the same reason it always was, and used only for the refusal below.
+      verdicts: Object.fromEntries(present.map((sf) => [sf, readings.get(sf).verdicts])),
+    });
+  }
+
+  const recordError = record(projectDir, scored.map(({ verdicts, ...j }) => j));
   if (recordError) {
     process.stderr.write(`gate-board-judge: the judgements were scored but not recorded: ${recordError}. NOT a pass.\n`);
     process.exitCode = 2;
@@ -345,21 +507,48 @@ export function main(argv = process.argv.slice(2)) {
   const worse = scored.filter((s) => s.rung === "clearly_worse");
   if (worse.length) {
     for (const s of worse)
-      process.stderr.write(
-        `gate-board-judge: ${s.id} (${s.donor}) judged clearly worse than its donor: ${s.verdicts[0]} / ${s.verdicts[1]}. ` +
-          `Redraw it from the donor's hero before the canvas is published.\n`,
-      );
+      // NAMING THE SURFACE, because "redraw it" over a page whose entrance is fine and whose
+      // ending is not sends the operator to the wrong half of the drawing.
+      for (const [surface, verdicts] of Object.entries(s.verdicts)) {
+        if (verdicts[0] !== "clearly_worse" && verdicts[1] !== "clearly_worse") continue;
+        process.stderr.write(
+          `gate-board-judge: ${s.id} (${s.donor}) judged clearly worse than its donor at the ${SURFACES[surface].label}: ` +
+            `${verdicts[0]} / ${verdicts[1]}. Redraw it from the donor's hero before the canvas is published.\n`,
+        );
+      }
     process.exitCode = 2;
     return;
   }
 
   const shaky = scored.filter((s) => !s.consistent).map((s) => s.id);
+  /**
+   * THE PASS LINE NAMES THE SURFACES THAT WERE ACTUALLY JUDGED. It used to say "the entrance,
+   * the page ending and the inner page" whatever happened, so a run where a donor had no
+   * whole-page capture printed a claim about three surfaces over four comparisons. Phase 1's
+   * warning is a different invocation and usually a different transcript; this is the sentence
+   * an operator reads and reports.
+   */
+  const readOn = (s) => {
+    const judged = Object.keys(s.verdicts).map((sf) => SURFACES[sf].label);
+    const dropped = ["entrance", "foot", "inner"].filter((sf) => !(sf in s.verdicts)).map((sf) => SURFACES[sf].label);
+    return `${s.id} ${s.rung} (${judged.join(", ")}` +
+      (dropped.length ? `; no ${dropped.join(", no ")}, the donor has no whole-page capture` : "") + ")";
+  };
   process.stdout.write(
-    `Board judge passed: ${scored.length} board(s) judged against their own donors, both orders each ` +
-      `(${scored.map((s) => `${s.id} ${s.rung}`).join(", ")}).` +
+    `Board judge passed: ${scored.length} direction(s) judged against their own donors, both orders each, ` +
+      `read at the lowest surface: ${scored.map(readOn).join(", ")}.` +
       (shaky.length ? ` Unstable across the swap, read at the lower rung: ${shaky.join(", ")}.` : "") +
       "\n",
   );
 }
 
-if (invokedDirectly(import.meta.url)) main();
+/**
+ * The run is asynchronous now (the page endings are cropped before the comparisons are stated),
+ * so a rejection would otherwise print a stack and exit 1, which is neither the skip grammar nor
+ * the refusal grammar the callers read. It is caught and said in the file's own words.
+ */
+if (invokedDirectly(import.meta.url))
+  main().catch((e) => {
+    process.stderr.write(`gate-board-judge: ${e && e.message ? e.message : e}. NOT a pass.\n`);
+    process.exitCode = 2;
+  });

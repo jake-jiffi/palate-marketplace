@@ -21,6 +21,26 @@ and it is not what a client judges: they ask what the footer does, and a
 direction that answers "it was not drawn" is a mood board wearing a page's
 clothes. Drawing costs a fraction of building, so the whole page is affordable.
 
+**A DIRECTION IS FOUR ARTBOARDS, not one.** What an agency puts up to have a
+direction and a style signed off is the home page, the inner page the primary
+action lands on, the same home on a phone, and a sheet of the pieces as used
+with their states. Signing off on an entrance alone leaves the navigation, the
+enquiry form, the footer and every phone layout to be decided later, by nobody,
+and discovered by the client on the built site. So each direction owes, under
+`.palate/explore/seed/`:
+
+| File | What it is | Width | Marks |
+|------|------------|-------|-------|
+| `B<rung>.dc.html` | the whole home page | 1440 | `data-section-id="<id>-<piece>"` |
+| `I<rung>.dc.html` | the primary service page, navigation to footer | 1440 | `data-section-id="<id>-inner-<piece>"` |
+| `M<rung>.dc.html` | the same home stacked on a phone | `x-dc{width:390px}` | `data-section-id="<id>-<piece>"` |
+| `S<rung>.dc.html` | the kit pieces as used, with their states | 1440 | `data-kit-piece="<piece>:<Variation>:<state>"` |
+
+`scripts/boards-render.mjs` holds each to its own width, its own marks and the
+shared image, link and script rules, and REFUSES a registry that names none of
+them rather than deriving the three from the rung: a derived name lets a registry
+that declared nothing pass while the client is shown one board out of four.
+
 **What that does NOT change**: the survey, DIVERGE and CONVERGE are untouched,
 the ladder is untouched, the endpoint rule is untouched, and it is still one
 distinct donor per rung. The medium changed. The thinking did not.
@@ -38,6 +58,49 @@ onto `/explore` and the canvas.
    board count and whether to include landing-page boards. Then ask:
    "Proceed?"
 
+   **THE INTAKE COMES FIRST, AND IT IS ASKED IN ONE ROUND.** Nothing about the
+   range used to come from the person: the calibration question was asked after
+   the boards were already drawn, so the answer reached the canvas too late to
+   steer the research it was for. So the cheap half of the survey runs first.
+   Dispatch `palate-surveyor` with `calibration only` (its act 1: 3 or 4 real
+   sites from the client's own vertical spanning restrained to bold, written to
+   `.palate/explore/refs.json` with their stills), show that row, and ask all six
+   at once, in their language and not ours:
+
+   a. **which of the calibration references is closest** to how bold you want to
+      be, and what do you dislike about it?
+   b. **two or three sites in your field you admire**, and **one you do not**.
+   c. what is the one thing you want a visitor to do?
+      A **call, a form, a booking or a purchase**.
+   d. **the wow moment** - what should this site do that nothing else in your
+      field does? One sentence.
+   e. **the avoid list** - three to five things we must not do ("no purple", "no
+      stock people photos").
+   f. the host, who edits this copy in six months, and how many directions you
+      want to see (the count, per the paragraph below).
+
+   Ask them in ONE round, never one at a time: six separate questions across six
+   turns reads as an interrogation and the person answers the last three in three
+   words. **Ask them with `AskUserQuestion`** (SKILL.md, "Asking the person"),
+   four in the first call and two in the second: the calibration question's
+   options are the row's own positions ("1, Aesop: restrained ..."), the primary
+   action's are call / form / booking / buy, the count's are 3 / 5 / 8 with 5
+   recommended, and the avoid list is multi-select over the usual don'ts with
+   "Other" for theirs. The admired and disliked sites come in as "Other" on their
+   own question, because nobody can list a client's field for them. Where the
+   tool is absent, one message listing all six.
+
+   Record the answers on the checkpoint as
+   `plan_checkpoint.shown.intake = { calibration: { position: 1..4, why },
+   admired: [1 to 20], disliked: [1 to 20], primary_action, wow, avoid: [3 to 5] }`.
+   The write wall refuses a ladder whose checkpoint lacks any of them
+   (`hooks/palate-pretooluse.mjs`), because an unanswered intake is a range drawn
+   on our own taste rather than theirs. Then hand that block verbatim to the
+   surveyor's act 2: the calibration position sets the `intensity` facet and where
+   the ladder's ends sit, the admired sites are searched with `refs_for_business`,
+   the disliked and avoided are ruled out as donors, and the primary action is the
+   conversion spine every board places.
+
    **ASK FOR THE COUNT, AND SAY WHAT IT BUYS.** The count sets the RESOLUTION of
    the ambition ladder, never its range. Whether they pick 3 or 8, rung 1 is
    genuinely understated and rung N is genuinely bold; a larger number buys finer
@@ -48,13 +111,25 @@ onto `/explore` and the canvas.
    three there is no BETWEEN for the client to point at, which is the whole use
    of a ladder. `scripts/gate-explore.mjs` holds that floor on a high-intensity
    brief (`PALATE_MIN_BOARDS`, default 3).
-2. **Draw the boards** - one artboard per rung at
-   `.palate/explore/seed/B1.dc.html` through `B<N>.dc.html`, plus 1-3
-   landing-page boards if the brief warrants (see the limit below). Each is the
-   whole home page in its direction, composed from the kit and grounded in the
-   survey: name the donor, read its section notes, and skin it with the LOCKED
+2. **Draw the boards** - FOUR artboards per rung under `.palate/explore/seed/`
+   (`B<rung>.dc.html`, `I<rung>.dc.html`, `M<rung>.dc.html`,
+   `S<rung>.dc.html`, the table above), plus 1-3
+   landing-page boards if the brief warrants (see the limit below). All four are
+   the one direction, composed from the kit and grounded in the
+   survey: name the donor, read its section notes, and skin them with the LOCKED
    brand tokens (`references/website-kit.md`, `reference-library-usage.md`).
    One distinct donor per rung.
+
+   **THE INNER PAGE AND THE PHONE ARE THE SAME DIRECTION, NOT A SECOND ONE.**
+   `I<rung>.dc.html` is the page the primary action lands on (the answer to
+   intake question (c): the service the call, form, booking or purchase is for),
+   drawn navigation to footer at 1440 with its sections marked
+   `<id>-inner-<piece>` so the fidelity gate can tell an inner entrance from the
+   home one. `M<rung>.dc.html` is that direction's home page at
+   `x-dc{width:390px}`, the same sections in the same order stacked, with the
+   navigation drawn as `NavMobileSheet` CLOSED: a phone board opening on an open
+   drawer shows the drawer and hides the page. Drawn at any other width it is a
+   desktop board captioned "mobile", and the render refuses it.
 
    **THE DRAWING BRIEF - DRAW FROM THE DONOR, NOT FROM ITS NAME.** Before rung N
    is drawn, read the entry in `.palate/explore/donor-heroes.json` whose `rung`
@@ -69,7 +144,19 @@ onto `/explore` and the canvas.
    habit puts it. THEN re-skin to the LOCKED brand. The registry `why` names what
    this rung took from the donor, in those terms, because a `why` that could have
    been written without opening the reference is the tell that the reference was
-   never opened. **WHEN THE DONOR ROW RUNS, a registered board whose rung has no
+   never opened. **THE COPY ON A BOARD IS HELD TO THE CLIENT'S OWN FACTS**, drawn
+   board or built page alike: a quote is verbatim from a review the business has
+   published, attributed as it is published, never a name from the old site that
+   matches no reviewer anywhere; a rating and its count are read from the live
+   profile on the day, never the old site's number; a year or a decade appears only
+   when the business states it, because "45 years" is not "since the 1970s" and
+   arithmetic is not a source; a spec (a mesh grade, a lock, a turnaround) appears
+   only where they publish it. `gate-facts` never reads an artboard, so the person
+   picking a direction reads whatever the board says as true of the business, and
+   a board that carries a falsehood is a board the client cannot be shown. The
+   re-run of a build on this doctrine drew "4.8 on Google" and three testimonials
+   the previous build had already found to match no real reviewer, on its first
+   two boards, which is why this paragraph exists. **WHEN THE DONOR ROW RUNS, a registered board whose rung has no
    entry in that file is a refusal**: `boards-render.mjs` names the rung and
    writes nothing, rather than drawing half a donor row. It is only a refusal
    when the row runs. With no `donor-heroes.json` there at all the run records
@@ -78,6 +165,30 @@ onto `/explore` and the canvas.
    is NOT a path a build held to the stunning standard should ever take: no board
    sits beside the reference it reproduces, and the board judge then has nothing
    to compare and skips.
+
+   **THE DETAIL SHEET NAMES ITS PIECES AND WHERE THEY CAME FROM.** Every block
+   on `S<rung>.dc.html` is marked
+   `data-kit-piece="<piece>:<Variation>:<state>"`, with the piece and variation
+   ids taken from `src/lib/kit.ts`, and the sheet owes eight of them: the
+   navigation at rest and open, the footer, the closing call to action, the
+   enquiry form filled in and then with its errors shown, one card (from
+   `benefits`, `usecases` or `casestudies`) and one trust strip. **Inside each
+   of those blocks, write the provenance as a line a client can read**:
+   `"<Piece>: <Variation>, drawn from <donor>"`.
+   For example, "Navigation: NavSimple, drawn from aesop".
+   The same variation and donor go in the registry's `pieces`, and `boards-render.mjs` refuses a sheet whose required blocks do
+   not carry that line: the sheet is the only place a person ever reads where a
+   piece's craft came from, so a block without it looks finished and proves
+   nothing.
+
+   **AND THE SHEET IS CONTENT-LED, never a type specimen.** Every block carries
+   the real copy in the brand's voice, the form filled with a plausible enquiry
+   and then with the errors a real visitor would see. The format it collapses
+   into is the one Jake rejected on 9 September: an Ag ramp, a row of swatches
+   and a button pair, which is type DISPLAYED rather than used and reads
+   identical across every direction. `boards-render.mjs` measures the visible
+   copy inside the marked blocks and refuses a sheet under the floor, because a
+   sheet of correctly marked empty boxes passes every other rule.
 
    **THE ARTBOARD CONTRACT.** `scripts/boards-render.mjs` holds every board to
    it and names every fault ON THAT BOARD in one pass, then stops at the first
@@ -119,11 +230,27 @@ onto `/explore` and the canvas.
      box and nothing reports it.
    - Exactly one `<script>`, `./support.js`. `a` and `a:hover` are defined.
 
-   **REGISTER EACH BOARD** in `src/lib/variants.ts` as
-   `{ id, name, artboard: "B<rung>.dc.html", ambition, what, why, feeling,
-   donor, section, motion, ctas }`. `artboard` is REQUIRED and is how every gate
-   downstream finds the board; `href` is deprecated and unused, because no route
-   exists.
+   **REGISTER EACH DIRECTION** in `src/lib/variants.ts` as
+   `{ id, name, artboard: "B<rung>.dc.html",
+   presentation: { inner: "I<rung>.dc.html", mobile: "M<rung>.dc.html", sheet: "S<rung>.dc.html" },
+   pieces: { navigation: { variation, donor }, hero: {...}, trust: {...}, cta: {...},
+   forms: {...}, footer: {...}, [section]: {...} },
+   ambition, what, why, feeling, donor, section, motion, ctas }`. `artboard` is
+   REQUIRED and is how every gate downstream finds the home board; `presentation`
+   and `pieces` are REQUIRED too, and `href` is deprecated and unused, because no
+   route exists.
+
+   **`pieces` IS THE PROVENANCE, AND IT IS CHECKED IN BOTH DIRECTIONS.** Each
+   entry names the kit variation the piece is and the library reference its craft
+   was drawn from. `scripts/gate-explore.mjs` holds every `variation`
+   against src/lib/kit.ts (naming the piece it does belong to when it belongs to
+   another one), every `donor` against the manifest's `references_surveyed` (a
+   slug the survey never read is provenance invented after the fact), and the
+   sheet's own `data-kit-piece` marks against the variations recorded here, so a
+   direction whose sheet shows one footer and whose registry records another
+   cannot ship a footer nobody approved. The FILES are boards-render's half:
+   gate-explore checks the registry, and inventing a finding about a missing
+   artboard here would report one absence twice in two different words.
 
    **NO VARIANT IS REGISTERED UNTIL IT PASSES THE ANTI-AI GATE.** The mechanical
    half is `boards-render.mjs` (the contract above) and `scripts/gate-explore.mjs`
@@ -168,18 +295,37 @@ onto `/explore` and the canvas.
 2b. **Validate, measure, judge, publish** - `node scripts/boards-render.mjs <project-dir>
    [--out .palate/explore] [--refs .palate/explore/refs.json]
    [--donors .palate/explore/donor-heroes.json | --no-donors]`. It builds
-   nothing. It holds every registered artboard to the contract and REFUSES with
-   every fault named, stamps a stable `data-palate-k` on each element in place
-   (so the published canvas and the read-back align), archives the board as
-   `.palate/explore/shots/<id>/rendered.html` with its images, opens it over
-   `file://` at 1440, measures its real height, shoots `hero.png` (the 1440x900
-   entrance, which is what the fidelity gate compares and what `/explore` shows
-   on a card) and `full.png` (the whole board, which is what the card's link
-   opens), copies both to `public/_explore/<id>.png` and
-   `public/_explore/<id>-full.png`, and writes `canvas.json` and `README.md`
-   beside the seed. It records `manifest.explore = { ran, shown_at, boards }`,
-   and `shown_at` is half of the only number this stage produces, because time
-   to pick is `picked_at - shown_at`.
+   nothing. It holds all four of every direction's artboards to the contract and
+   REFUSES with every fault named, stamps a stable `data-palate-k` on each
+   element in place (so the published canvas and the read-back align), archives
+   each board as `.palate/explore/shots/<id>/rendered.html` with its images,
+   opens each over `file://` at its own width (1440, or 390 for the phone) and
+   measures its real height. It records
+   `manifest.explore = { ran, shown_at, boards }`, and `shown_at` is half of the
+   only number this stage produces, because time to pick is
+   `picked_at - shown_at`.
+
+   **FIVE STILLS PER DIRECTION: hero, full, inner, mobile and sheet.**
+   `shots/<id>/hero.png` is the home board's 1440x900 entrance (what the
+   fidelity gate compares and what a card shows), `full.png` the whole home board
+   end to end (what the card's link opens, and what the page ending is cropped
+   from), `inner.png` the inner page's own 1440x900 entrance, because the judge
+   compares it exactly as it compares the hero, and `mobile.png` and `sheet.png`
+   the phone and the sheet end to end, because those are evidence rather than
+   comparisons and a fold of a detail sheet is the navigation and nothing else.
+   They are copied to `public/_explore/<id>.png`, `<id>-full.png`,
+   `<id>-inner.png`, `<id>-mobile.png` and `<id>-sheet.png`, which is what
+   `/explore` shows.
+
+   **AND EACH DIRECTION IS LAID OUT AS ITS OWN CANVAS ROW: `B, D, I, M, S`** -
+   the home board, its donor card, the inner page, the phone and the detail
+   sheet, 80 px between frames, 120 px between rows, the calibration references
+   on row 0. Boards used to run left to right along one row, which read as a
+   strip of home pages. The columns are CONSTANTS rather than a running offset,
+   because the value of a row is comparison: a client scanning two directions
+   reads home against home and phone against phone, and a direction with no donor
+   must not slide its inner page into the donor's column or the row cannot be
+   read against the one above it.
 
    **IT ALSO DRAWS THE DONOR ROW, and that is on by default.** With
    `.palate/explore/donor-heroes.json` present it fetches each rung's
@@ -206,20 +352,61 @@ onto `/explore` and the canvas.
    PUBLISHED.** Every board is judged against the one thing it has to answer to,
    the library reference it was drawn from. It runs HERE, after the render, because
    it compares the board's `hero.png` with the donor's `donor.jpg` and neither
-   exists until the step above has drawn them. **YOU RUN IT, in your own session,
-   because the judging happens in subagents and the verifier has no Agent tool**
-   (the same division as the site ladder, `references/local-grade.md`). The
-   verifier states the comparisons and hands you the request path; the four steps
-   are yours:
+   exists until the step above has drawn them.
+
+   **IT READS THREE SURFACES, BECAUSE A DIRECTION IS AS GOOD AS ITS WEAKEST
+   ONE.** The entrance was once the whole judge, so a verdict about the top of a
+   page was recorded as a verdict about the page, while a client asks what the
+   ending does before they ask about anything below the fold and then spends most
+   of their time on an inner page. So the gate states **THREE pairs per direction
+   (the entrance, the page ending and the inner page), six comparisons** once
+   each pair is judged in both orders:
+
+   - **entrance** - `hero.png` against the donor's hero (`donor.jpg`).
+   - **page ending** - the bottom 900 px of `full.png` against the bottom 900 px
+     of the donor's own whole-page capture, cropped to `foot.png` and
+     `donor-foot.png` so the question can be about the ending rather than read as
+     the entrance again.
+   - **inner page** - `inner.png` against the donor's hero. The library holds no
+     inner page for a reference, so the question asks whether this page holds the
+     donor's standard, and it says so rather than pretending to compare like
+     with like.
+
+   The **lowest across the surfaces judged** stands, for the same reason the
+   lower of the two orderings stands: averaging is how a weak ending gets carried
+   by a strong hero. `manifest.explore.board_judgements[]` records
+   `rungs: { entrance, foot, inner }` beside the `rung` that is the lowest of
+   them, and a surface that was never judged records `null` there rather than
+   silence.
+
+   **A MISSING SURFACE AND A PASSING SURFACE MUST NOT LOOK ALIKE**, and the two
+   ways a surface goes missing are answered differently. `sharp not installed` is
+   a local fault with a named fix (`scripts/reference-capture/setup.sh`), so
+   phase 1 SKIPS loudly rather than quietly judging every direction on two
+   surfaces. A donor with **no whole-page capture** in the library is a fact
+   about the library and not the operator's doing, so the ending is dropped, the
+   direction keeps its other two surfaces, phase 1 names the direction on stderr,
+   and the pass line names ONLY the surfaces that were judged. `gate-explore.mjs`
+   then **WARNS rather than blocks** on a shown direction whose ending was never
+   judged, so "lowest across three surfaces" cannot quietly become "lowest across
+   the two we managed"; refusing over it would switch the instrument off on the
+   builds it exists to serve.
+
+   **YOU RUN IT, in your own session, because the judging happens in subagents
+   and the verifier has no Agent tool** (the same division as the site ladder,
+   `references/local-grade.md`). The verifier states the comparisons and hands
+   you the request path; the four steps are yours:
 
    1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>`
-      writes `<project-dir>/.palate/explore/judge-request.json`: the fixed
-      `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`,
-      `comparable`, `better`) and, per board, TWO comparisons, the same pair with
-      the images swapped.
+      writes `<project-dir>/.palate/explore/judge-request.json`: the four `rungs`
+      (`clearly_worse`, `somewhat_worse`, `comparable`, `better`) and, per
+      direction, its three pairs, EACH CARRYING ITS OWN `question` (there is no
+      top-level one, because the entrance's question asked over a page ending
+      comes back a valid answer to a question nobody meant), each pair holding
+      TWO comparisons, the same images swapped.
    2. **Dispatch ONE FRESH general-purpose subagent per comparison**, never two
       comparisons in one context. Give it NOTHING about this build: the two image
-      paths (`A` and `B`), the `question` verbatim, the four rung ids, which of
+      paths (`A` and `B`), THAT PAIR'S OWN `question` verbatim, the four rung ids, which of
       `A` or `B` the comparison names as the candidate, and "answer with
       `{ id, candidate_is, verdict }`: the comparison id, the letter you were told
       the candidate is, and one rung id, nothing else". **`candidate_is` is
@@ -231,11 +418,16 @@ onto `/explore` and the canvas.
       ordering is agreeing with itself rather than judging, and one that knows
       which image you drew is not judging either.
    3. Collect the answers into `<project-dir>/.palate/explore/judgements.json` as
-      `[{ id, candidate_is, verdict }]`, two per pair, each `id` copied verbatim.
+      `[{ id, candidate_is, verdict }]`, two per pair, each `id` copied verbatim:
+      six on a three-surface direction, four where the donor has no whole-page
+      capture and the ending was dropped.
    4. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>
       --judgements <project-dir>/.palate/explore/judgements.json` takes the LOWER
-      of the two readings, records `manifest.explore.board_judgements`, and exits
-      2 naming any board read `clearly_worse`. **Report its stderr verbatim**, and
+      of the two readings on each surface and the lowest of the surfaces, records
+      `manifest.explore.board_judgements`, and exits 2 naming any direction read
+      `clearly_worse` AND THE SURFACE IT WAS READ WORSE ON, because "redraw it"
+      over a page whose entrance is fine and whose ending is not sends you to the
+      wrong half of the drawing. **Report its stderr verbatim**, and
       publish the canvas only once it passes.
 
    **A board read `clearly_worse` than its donor is refused, at EVERY
@@ -288,8 +480,11 @@ onto `/explore` and the canvas.
    surface that already has one, because everything downstream trusts this
    record. Also record the calibration answer (`--intensity`, 1 to 4).
 
-   **THEN THE QUESTION ROUND, ONE PASS.** Three questions asked together, the
-   moment the direction is settled, and answered in one command:
+   **THEN THE QUESTION ROUND, ONE PASS.** Three questions asked together,
+   **as one AskUserQuestion call** (SKILL.md, "Asking the person"): `motion` and `cms` are
+   single-select with the recommended option first, `mix` is multi-select over
+   the other boards' sections. The moment the direction is settled, and answered
+   in one command:
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> \
@@ -323,8 +518,31 @@ onto `/explore` and the canvas.
    node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> --proof <preview-url>
    ```
 
+   **THAT COMMAND MEASURES THE PAGE, it does not take your word for it.** It runs
+   `scripts/motion-proof.mjs` against the URL and records what it read: the
+   sticky header's height before and after an 800 px scroll, how far each image,
+   video and background travelled over that scroll as a ratio of the scroll
+   distance (however the motion was built: the element, its wrapper, or the
+   background inside it), how many elements carry a CSS animation, how many
+   change with no input at all, and the same counts again under
+   `prefers-reduced-motion: reduce`. A page where none of that moves is REFUSED:
+   the motion proof is what the client was promised, so it is built before it is
+   recorded. **The measurements must match the board's motion note IN KIND** - a
+   promised parallax has to register as a parallax ratio, a promised marquee as
+   `running`, a promised sticky header as two different heights. A note that
+   promises one kind of motion and a page that delivers another is a Compose
+   defect, not a proof. A page too short to scroll reports NO parallax rather
+   than a ratio taken over the little it could scroll (`short_page: true`), so
+   on one of those the note has to be checked by eye; the other three
+   measurements still hold it to the floor, so a short page where nothing else
+   moves is refused like any other still page. If the preview genuinely cannot be reached from this
+   machine (a tunnel only the client's browser opens, a host behind a login),
+   say so rather than skipping: add
+   `--proof-unmeasured "<reason>"`, which records the URL with `measured: null`
+   and the reason.
+
    **RECORD IT WITH THAT COMMAND, never by editing the manifest.** It writes
-   `explore.proof = { url, verified_at }` through `manifest-merge.mjs`, which is
+   `explore.proof = { url, verified_at, measured }` through `manifest-merge.mjs`, which is
    the only write that survives the PostToolUse hook's own. It is also what
    `scripts/gate-done.sh` reads to decide whether there is a composed home page to
    measure at all: without it every build after Compose reports
@@ -441,9 +659,11 @@ only multiply where direction-setting happens.
 
 ## The calibration row - ask how bold in pictures
 
-The ladder is built BEFORE anyone has said how bold they want to be. The
-intensity in the commission is inferred from the brief and nothing has ever
-checked it.
+The intensity in the commission is INFERRED from the brief, and an inference
+about how bold a person wants to be is a guess until they have seen the range in
+pictures. So the question is **asked in the intake, before the deep survey**
+(step 1), and the ladder is built from the answer rather than checked against it
+afterwards.
 
 So the surveyor picks three or four references from the client's own vertical
 spanning restrained to bold, writes them to `.palate/explore/refs.json`, and
@@ -454,11 +674,18 @@ dismiss the row as being for a different sort of business. High taste at every
 position, because a weak restrained example teaches the client that restraint is
 the poor option.
 
-The answer is `commission.intensity_asked`, recorded by `/pick --intensity <n>`
-and drawn on the ladder as a marker. It sets the default pick suggestion. It does
-NOT govern the bold bar: `commission.intensity`, the inferred one, still does
-that, because a client under-reporting their own appetite is exactly the case the
-bar exists for.
+**THE ANSWER IS RECORDED IN TWO PLACES, AND THE LADDER READS BOTH.** The intake
+writes it to `plan_checkpoint.shown.intake.calibration = { position, why }`,
+which is what the write wall holds and what the surveyor's act 2 searches on.
+`src/pages/explore.astro` draws the marker on the ladder from
+`commission.intensity_asked` and then
+**falls back to `plan_checkpoint.shown.intake.calibration.position`**, so a
+build that only ever asked the intake still shows the client where their own
+answer sits. The later record is written by `/pick --intensity <n>` and
+overwrites the marker when it exists, which is right: it is the confirmation
+given after the boards were seen, and it sets the default pick suggestion. Neither governs the bold bar:
+`commission.intensity`, the inferred one, still does that, because a client
+under-reporting their own appetite is exactly the case the bar exists for.
 
 **TWO ROWS OF REAL SITES, AND THEY ANSWER DIFFERENT QUESTIONS.** The calibration
 row (`.palate/explore/refs.json`, drawn as `Ref<position>.dc.html` on row 0) is
@@ -627,13 +854,17 @@ a client reads five guesses, opens two, picks whichever is nearest what they alr
 had in mind, and the restrained rung reads as "the boring one" rather than as one
 deliberate end of a distance the boldest rung defines. So the preview always ships
 `src/pages/explore.astro`, and it is the URL you hand over whenever there is no canvas.
-It shows each board inline (its entrance still from `/_explore/<id>.png`, its
-argument, its motion plan), shows the donor still beside each rung card from
+It shows each direction inline (its entrance still from `/_explore/<id>.png`, its
+argument, its motion plan), shows the donor still beside each direction card from
 `/_explore/<id>-donor.jpg`, captioned `Drawn from <donor>`, so the reference a
 direction reproduces is on the page the client actually opens, links each card to
 the whole board at
 `/_explore/<id>-full.png`, draws the calibration row above the ladder, and links
-the canvas first when one exists. A landing board is shown on the canvas only:
+the canvas first when one exists. **It also shows the other three boards of the
+direction**, `<id>-inner.png`, `<id>-mobile.png` and `<id>-sheet.png`, captioned
+as the inner page, the phone and the details, because those three are what make
+the card a direction rather than a home page and the client should not have to
+open the canvas to see them. A landing board is shown on the canvas only:
 nothing draws a still for one, so `/explore` lists it without a link.
 
 It does four things a list of links cannot:
@@ -669,15 +900,15 @@ client.
 ## The hand-off - what you SAY when the preview is ready
 
 The preview being ready is the moment the build is most often mis-handled, because the
-natural instinct is to ask "which one?" and stop. That collapses a range into a vote.
+natural instinct is to ask "which direction?" and stop. That collapses a range into a vote.
 Say all four of these, in this order:
 
 1. **Send them to `/explore`, not to a board.** "Start here: it explains the set and
    walks the range from restrained to bold." One link, not eight.
 2. **Invite reaction, not selection.** Ask them to open BOTH ENDS before forming a view,
-   and say plainly that mixing is normal and expected: "rung 5, but with 8's hero and 2's
-   navigation" is a better answer than a single page, and the section marks exist so they
-   can point at one by name.
+   and say plainly that mixing is normal and expected: "direction 5, but with 8's hero and
+   2's navigation" is a better answer than a single page, and the section marks exist so
+   they can point at one by name.
 3. **Offer another pass, and mean it.** Anything they want tried gets redrawn onto the
    canvas so they look at the thing itself rather than a description of one. Changes are
    cheap here and expensive after Compose, and saying so is what gets the useful feedback
@@ -734,8 +965,11 @@ The mechanic when the client says "b3 hero + b5 menu":
 3b. **PROVE IT MOVING BEFORE BUILDING ANYTHING ELSE.** Run the full verify loop
    on `/` alone, hand the client the URL, and record the proof:
    `node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> --proof <preview-url>`.
-   Only after that is the rest of the site built. The fidelity gate does not run
-   until that stamp exists, so skipping it silently turns the check off.
+   That command MEASURES the page and refuses a page where nothing moves, so the
+   proof is a measurement rather than a claim; it has to match the board's motion
+   note in kind. Only after that is the rest of the site built. The fidelity gate
+   does not run until that stamp exists, so skipping it silently turns the check
+   off.
 4. Build the rest of the site's pages (`about`, `services`, etc.) in the same
    direction, ONE PER PAGE in `manifest.architecture` (W16). They get the chosen tokens
    automatically via the brand layer.
@@ -775,7 +1009,8 @@ the canonical pages exist. Same pattern as today.
 ## Where this lives in the codebase
 
 The artboards are the direction; the Astro project is the site. During Explore
-the project carries `.palate/explore/seed/B1.dc.html`..`BN.dc.html` and their
+the project carries `.palate/explore/seed/B1.dc.html`..`BN.dc.html` with
+`I<rung>`, `M<rung>` and `S<rung>` beside each of them, and their
 images (working state, never shipped), `src/lib/variants.ts` and
 `src/pages/explore.astro`, and it has no page of its own at all. Beside them, all
 generated and all re-derivable from what the surveyor and the operator wrote:

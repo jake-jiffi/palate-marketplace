@@ -621,12 +621,22 @@ if [ -f "$FIDELITY_GATE" ] && [ "${PALATE_GATE_FIDELITY:-1}" = "1" ]; then
   fidelity_skip="no picks recorded"
   npicks=$(jq -r '((.explore.picks // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
   proof=$(jq -r '(.explore.proof.verified_at // .explore.proof.url // empty)' "$MANIFEST" 2>/dev/null || echo "")
+  # AND WAS THE MOTION MEASURED, OR ONLY DECLARED? A real build recorded its proof on the
+  # agent's word: the board promised a 0.6x parallax, the record said the motion had been
+  # shown, and the image moved 7 per cent of the scroll. `palate-pick.mjs --proof` now runs
+  # `motion-proof.mjs` and stores what it read, so a proof with neither a `measured` block nor
+  # the `reason` that `--proof-unmeasured` writes is a claim rather than a record, and
+  # measuring the direction against a home nobody has seen move is not a check.
+  proof_measured=$(jq -r '(.explore.proof.measured // empty) | if . == null then empty else tostring end' "$MANIFEST" 2>/dev/null || echo "")
+  proof_reason=$(jq -r '(.explore.proof.reason // empty)' "$MANIFEST" 2>/dev/null || echo "")
   if [ "${npicks:-0}" -lt 1 ]; then
     fidelity_skip="no picks recorded"
   elif [ "$(jq -r '[.explore.question_round.motion, .explore.question_round.mix, .explore.question_round.cms] | map(select(type=="string" and length>0)) | length' "$MANIFEST" 2>/dev/null || echo 0)" -lt 3 ]; then
     fail "The direction was picked but the question round was not recorded. Before Compose, ask the person how the picked rung should move, what to mix in from the other boards, and who edits the copy, then record it: scripts/palate-pick.mjs --answer motion=... --answer mix=... --answer cms=..."
   elif [ -z "$proof" ]; then
     fidelity_skip="Compose has not recorded the motion proof for src/pages/index.astro yet"
+  elif [ -z "$proof_measured" ] && [ -z "$proof_reason" ]; then
+    fidelity_skip="the motion proof was declared, not measured. Re-record it with scripts/palate-pick.mjs --proof <preview-url>, which measures the page, or say why it cannot be measured with --proof-unmeasured \"<reason>\""
   else
     if fid_err="$(node "$FIDELITY_GATE" "$PROJ" 2>&1)"; then fid_rc=0; else fid_rc=$?; fi
     gate_classify fidelity "$fid_rc" "$fid_err"

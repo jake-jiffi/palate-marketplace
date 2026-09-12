@@ -45,6 +45,51 @@ export interface Variant {
    * this file. There is no route; Astro is built once, for the picked direction, at Compose.
    */
   artboard: string;
+  /**
+   * THE OTHER THREE ARTBOARDS OF THIS DIRECTION. REQUIRED.
+   *
+   * A direction is not a home page. What a design agency puts up to have a direction and a style
+   * signed off is the home page, the inner page the primary action lands on, the same home on a
+   * phone, and a sheet of the pieces AS USED with their states: the navigation closed and open,
+   * the footer, the closing call to action, the enquiry form filled in and then with its errors
+   * showing, one card, one trust strip. Signing off on an entrance alone means every one of
+   * those is decided later, by nobody, and discovered by the client on the built site.
+   *
+   * `inner` is 1440 wide and marks its sections `<id>-inner-<piece>`. `mobile` is drawn at
+   * 390 (`x-dc{width:390px}`), the same sections stacked, the navigation as NavMobileSheet
+   * closed. `sheet` is 1440 wide and marks every block `data-kit-piece="<piece>:<Variation>:
+   * <state>"`, with the piece and variation ids taken from `src/lib/kit.ts`.
+   *
+   * `boards-render.mjs` refuses a direction that names none of them, rather than deriving the
+   * names from the rung: a derived name lets a registry that declared nothing pass while the
+   * client is shown one board out of four.
+   */
+  presentation: {
+    /** The inner page artboard, e.g. "I1.dc.html". */
+    inner: string;
+    /** The mobile home artboard at 390, e.g. "M1.dc.html". */
+    mobile: string;
+    /** The detail sheet of the kit pieces as used, e.g. "S1.dc.html". */
+    sheet: string;
+  };
+  /**
+   * WHERE EVERY PIECE OF THIS DIRECTION CAME FROM. REQUIRED.
+   *
+   * One entry per piece: the kit variation it is (an id from `src/lib/kit.ts`, under that piece)
+   * and the library reference its craft was drawn from (a slug the survey actually read).
+   * Required at minimum: `navigation`, `hero`, `trust`, `cta`, `forms`, `footer`, and the
+   * direction's own `section`. `trust` is on that list because the trust strip is a required
+   * block on the detail sheet and is the block whose copy is most often invented. A direction is signed off piece by piece, so a direction that records none of this
+   * is one whose navigation, enquiry form and footer are decided later, by nobody, and discovered
+   * by the client on the built site.
+   *
+   * It is also the only place a client ever READS where a piece came from: the detail sheet
+   * prints it under each block ("Navigation: NavSimple, drawn from aesop"), and
+   * `boards-render.mjs` refuses a sheet whose blocks do not. `gate-explore.mjs` holds every
+   * variation against the kit and every donor against `references_surveyed`, and checks that the
+   * sheet shows the variations recorded here.
+   */
+  pieces: Record<string, { variation: string; donor: string }>;
   /** Deprecated. Boards have no route since canvas-first Explore; kept optional for old registries. */
   href?: string;
   /**
@@ -90,22 +135,44 @@ export const variants: Variant[] = [
   //   id: "b1",
   //   name: "The Quiet Room",
   //   artboard: "B1.dc.html",
+  //   presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
   //   ambition: 1,
   //   what: "One column, one photograph, and a great deal of air.",
   //   why: "The people arriving here are anxious and have usually been dismissed once already. Nothing on the page asks anything of them before they have read a sentence.",
   //   feeling: "unhurried, private, adult",
   //   donor: "therapy-in-london",
   //   section: "services",
+  //   pieces: {
+  //     navigation: { variation: "NavSimple", donor: "aesop" },
+  //     hero: { variation: "HeroServicePhoto", donor: "therapy-in-london" },
+  //     trust: { variation: "TrustRatings", donor: "lava-dental" },
+  //     cta: { variation: "CtaClosing", donor: "parsley-health" },
+  //     forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
+  //     footer: { variation: "FooterSimple", donor: "loom" },
+  //     services: { variation: "BenefitAlternating", donor: "greenwise" },
+  //   },
   //   motion: "Nothing moves on load. The photograph fades in slowly once it is scrolled to, and that is the whole budget.",
   //   ctas: ["Book a first visit", "Ask a question"],
   //   lookAt: "The way the first screen holds a single idea rather than a menu of them.",
   // },
 ];
 
-/** Landing-page boards, only when the brief warrants. Routes /lp1, ... Same required fields. */
-export const landingVariants: Variant[] = [];
+/**
+ * Landing-page boards, only when the brief warrants. Same required fields, MINUS
+ * `presentation`: a landing board is shown on the canvas alone, and boards-render draws the
+ * ladder's rungs and nothing else, so it has no inner page, no phone board and no detail sheet
+ * to name.
+ */
+export const landingVariants: Omit<Variant, "presentation">[] = [];
 
-/** Ladder order, and the single place that order is decided. */
-export function byAmbition(list: Variant[]): Variant[] {
+/**
+ * Ladder order, and the single place that order is decided.
+ *
+ * Generic on purpose: it sorts by one field, and a landing board is a `Variant` minus its
+ * `presentation`, so a signature demanding the whole type refused the very list this file
+ * declares. Constrained to what it actually reads, and it returns the caller's own type, so
+ * `byAmbition(landingVariants)` still hands back landing boards rather than widening them.
+ */
+export function byAmbition<T extends { ambition?: number }>(list: T[]): T[] {
   return [...list].sort((a, b) => (a.ambition ?? 0) - (b.ambition ?? 0));
 }

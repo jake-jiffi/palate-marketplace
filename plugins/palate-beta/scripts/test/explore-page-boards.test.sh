@@ -44,16 +44,58 @@ trap cleanup EXIT
 SITE="$TMP/site"
 scaffold_site "$SITE" boardtest || exit 2
 
+# --- the shipped registry TYPE-CHECKS against the page that reads it --------------------
+# RUN ON THE PRISTINE SCAFFOLD, before the fixture registry below overwrites src/lib/variants.ts.
+# The fixture declares its own copy of the Variant interface, so a check run after it proves
+# something about the fixture and NOTHING about the file a client is shipped. Caught by watching
+# this very assertion pass with the fault reintroduced.
+#
+# A landing board is a Variant minus its `presentation`, and `byAmbition` used to demand the
+# whole type, so `byAmbition(landingVariants)` on line 48 of this very page was a type error
+# that no build reported: Astro does not type-check on build, and nothing in the suite ran
+# `astro check`. Seven seconds, against a fault that reaches a client's repository.
+#
+# THE BAR IS A CEILING, NOT ZERO. The shipped template carries 22 pre-existing errors that
+# belong to other files (optional dependencies that are not installed by default: three,
+# @react-three/*, @zag-js/*, astro-pagefind; implicit `any` in a few frontmatter blocks; a
+# `Cannot find name` in api/contact.ts and one in lib/kit-grounding.ts). Fixing them is not this
+# test's job and asserting zero would mean either fixing them here or deleting the check. A
+# ceiling fails the moment an error is ADDED, which is the thing worth catching, and the second
+# assertion below is absolute: nothing the Explore registry touches may be among them.
+CHECK_BASELINE=22
+( cd "$SITE" && ./node_modules/.bin/astro check ) > "$TMP/astro-check.txt" 2>&1
+checkerrs=$(sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" | grep -cE "^src/.* - error" || true)
+if [ "${checkerrs:-999}" -le "$CHECK_BASELINE" ]; then
+  ok "astro check reports no new type errors ($checkerrs, ceiling $CHECK_BASELINE)"
+else
+  bad "astro check reports $checkerrs errors, over the $CHECK_BASELINE this template ships with"
+  sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" | grep -E "^src/.* - error" | head -8 | sed 's/^/      /'
+fi
+if sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" \
+   | grep -E "^src/.* - error" \
+   | grep -qiE "variants\.ts|landingVariants|byAmbition|presentation"; then
+  bad "a type error names the Explore registry, so the boards the client is shown do not type-check"
+  sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" | grep -iE "variants\.ts|landingVariants|byAmbition|presentation" | head -6 | sed 's/^/      /'
+else
+  ok "no type error names the Explore registry or the page that reads it"
+fi
+
+
 # --- two registered directions, each an artboard, no route -------------------------------
 cat > "$SITE/src/lib/variants.ts" <<'TS'
 export interface Variant {
   id: string; name: string; artboard: string; href?: string; ambition: number; what: string;
   why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[];
+  // Optional HERE only: this fixture also registers a landing board, and a landing board is
+  // shown on the canvas alone, so it names no artboards of its own. The shipped Variant
+  // requires it, because every rung on the ladder is four boards.
+  presentation?: { inner: string; mobile: string; sheet: string };
   clip?: string; lookAt?: string;
 }
 export const variants: Variant[] = [
   {
     id: "b1", name: "The Quiet Room", artboard: "B1.dc.html", ambition: 1,
+    presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
     what: "One column, one photograph, and a great deal of air.",
     why: "The people arriving are anxious and have been dismissed once already.",
     feeling: "unhurried, private, adult",
@@ -63,6 +105,7 @@ export const variants: Variant[] = [
   },
   {
     id: "b2", name: "The Long Table", artboard: "B2.dc.html", ambition: 2,
+    presentation: { inner: "I2.dc.html", mobile: "M2.dc.html", sheet: "S2.dc.html" },
     what: "A wide table of the work, read left to right.",
     why: "This buyer compares before they commit, so the comparison is the page.",
     feeling: "candid, unhurried",
@@ -145,6 +188,13 @@ writeFileSync(out + "/b2.png", pngFixture(1440, 900));
 // image stays the 1440x900 entrance.
 writeFileSync(out + "/b1-full.png", pngFixture(1440, 2400));
 writeFileSync(out + "/b2-full.png", pngFixture(1440, 2400));
+// THE OTHER THREE BOARDS OF EACH DIRECTION. A direction is four boards now, and the card shows
+// all four: the entrance, the inner page, the phone and the sheet of the pieces as used.
+for (const id of ["b1", "b2"]) {
+  writeFileSync(out + "/" + id + "-inner.png", pngFixture(1440, 900));
+  writeFileSync(out + "/" + id + "-mobile.png", pngFixture(390, 1600));
+  writeFileSync(out + "/" + id + "-sheet.png", pngFixture(1440, 2200));
+}
 ' "$SITE/public/_explore" || { echo "explore-page-boards: could not write the board stills. NOT a pass." >&2; exit 2; }
 
 node -e '
@@ -212,6 +262,28 @@ hasnt "a build whose donor row was skipped shows no donor image" '-donor.jpg'
 has   "and the board stills are unaffected by the skip"          '/_explore/b1.png'
 rm -rf "$SITE/dist"
 
+# --- and the run whose ONLY record of the calibration answer is the intake ---------------
+# The client answers it in the intake, before the deep survey, and it lands on
+# `plan_checkpoint.shown.intake.calibration.position`. `commission.intensity_asked` is written
+# later, by `/pick --intensity`, which the doctrine runs AFTER the client has picked, so a build
+# handed over exactly as the doctrine describes used to ship a ladder with no marker on it: the
+# one number the client gave about the range, missing from the page built to show them the range.
+cp "$SITE/build-manifest.json" "$TMP/manifest-ordinary.json"
+cat > "$SITE/build-manifest.json" <<'JSON'
+{
+  "schema": 3,
+  "project": ".",
+  "explore": { "ran": true, "canvas": { "url": "https://claude.ai/code/artifact/fixture-canvas" } },
+  "commission": { "intensity": "high" },
+  "plan_checkpoint": { "shown": { "intake": { "calibration": { "position": 3, "why": "the bold one" } } } }
+}
+JSON
+build_explore build-intake || exit 2
+has "the intake position alone draws the marker"             'you said about here'
+has "and it lands where the later record would have put it"  'data-asked-direction="2"'
+cp "$TMP/manifest-ordinary.json" "$SITE/build-manifest.json"
+rm -rf "$SITE/dist"
+
 # --- then the ordinary run, which DID draw one ------------------------------------------
 setrow none || { echo "explore-page-boards: could not restore the manifest. NOT a pass." >&2; exit 2; }
 ( cd "$SITE" && PUBLIC_EXPLORE_MODE=true ./node_modules/.bin/astro build ) > "$TMP/build.log" 2>&1 || {
@@ -253,6 +325,28 @@ has "the b1 card shows its donor's hero"      'src="/_explore/b1-donor.jpg"'
 has "the b2 card shows its donor's hero"      'src="/_explore/b2-donor.jpg"'
 has "the donor still is captioned"            'Drawn from the-modern-house'
 
+# --- "direction" IS THE CLIENT'S WORD. A rung is internal (the ledger, the ladder module,
+# gate-board-judge.mjs), and this page is what the client actually reads, so it must say
+# "Direction N of M" and never say "rung".
+has "the first card labels itself as a direction, e.g. Direction 1 of" 'Direction 1 of'
+hasnt "the page the client reads never says rung"                      'rung'
+
+# --- the other three boards of the direction -------------------------------------------
+# A client signing off a DIRECTION is signing off the inner page, the phone and the pieces as
+# used, not only an entrance. Each still is linked at full size and captioned, or the row is
+# three pictures nobody can point at by name.
+has "b1 shows its inner page"                 'data-board-extra="b1-inner"'
+has "b1 shows its mobile board"               'data-board-extra="b1-mobile"'
+has "b1 shows its detail sheet"               'data-board-extra="b1-sheet"'
+has "b2 shows its inner page"                 'data-board-extra="b2-inner"'
+has "b2 shows its detail sheet"               'data-board-extra="b2-sheet"'
+has "the inner still is linked at full size"  'href="/_explore/b1-inner.png"'
+has "the mobile still is linked at full size" 'href="/_explore/b1-mobile.png"'
+has "the sheet still is linked at full size"  'href="/_explore/b1-sheet.png"'
+has "the inner still is captioned"            'Inner page'
+has "the mobile still is captioned"           'Mobile'
+has "the sheet still is captioned"            'The details'
+
 # --- the calibration row, above the ladder ----------------------------------------------
 has "the calibration question is asked"       'how bold you want to be'
 has "reference 1 is shown"                    'Aesop'
@@ -268,7 +362,7 @@ lcol=$(grep -bo 'more restrained' "$HTML" | head -1 | cut -d: -f1)
 # --- the marker: where they said they were aiming ---------------------------------------
 has "the ladder marks the calibration answer" 'you said about here'
 # intensity_asked 3 of 3 references maps to the top rung of a 2-rung ladder.
-has "the marker sits on the mapped rung"      'data-asked-rung="2"'
+has "the marker sits on the mapped direction" 'data-asked-direction="2"'
 
 # --- the canvas, first when there is one ------------------------------------------------
 has "the canvas is linked"                    'https://claude.ai/code/artifact/fixture-canvas'

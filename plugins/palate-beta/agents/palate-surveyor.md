@@ -65,6 +65,46 @@ Read `~/.config/palate/builds.log.json` if it exists (fall back to
 the last few builds and DELIBERATELY avoid reusing them, so successive builds do
 not converge on the same sites.
 
+## You run in TWO ACTS. Read the prompt for which one you are in.
+
+The survey used to run once, off the brief alone, and the client was asked how bold to be
+only after the boards were drawn: the answer arrived too late to steer the research it was
+for. So the cheap half runs first, the person answers, and the expensive half is steered by
+what they said.
+
+**ACT 1, when the prompt says `calibration only`.** Run step 6 below and NOTHING else: 3 or 4
+`refs_search` calls on the client's vertical plus one `refs_get_screenshot` per reference,
+write `.palate/explore/refs.json` and the stills, and return the `CALIBRATION ROW:` line on
+its own. Do not fan out, do not pick a backbone, do not write `donor-heroes.json`. A handful
+of calls, then stop: the main agent is waiting to show this row to the person and ask them six
+questions, and every call you make before they answer is a call spent on a guess.
+
+**ACT 2, the deep survey.** The prompt carries **the intake** verbatim, which is what the
+person answered against that row:
+
+```
+calibration: { position: 1..4, why }   admired: [...]   disliked: [...]
+primary_action: call | form | booking | buy            wow: "..."   avoid: [...]
+```
+
+It is not context, it is the brief for this act. Steer the fan-out by it:
+
+- **The `intensity` facet from the calibration position.** `refs_search`'s `intensity` enum is
+  `whisper | calm | confident | bold | spectacle`. Position 1 searches `whisper` and `calm`,
+  2 `calm` and `confident`, 3 `confident` and `bold`, 4 `bold` and `spectacle`. The `why`
+  says what they disliked about the reference they picked, so it is a filter on top of that
+  band rather than a second opinion about it.
+- **`refs_for_business` on each site they admire**, by URL or name. That is the one call that
+  routes a real business to its own vertical, and a site the client named is worth more than a
+  facet search we chose.
+- **`disliked` and `avoid` are exclusions, never a donor.** A reference that reproduces
+  anything on either list is not a donor, whatever it scores. Say in `AVOIDED` which ones you
+  dropped for that reason, so the refusal is visible rather than assumed.
+- **The `primary_action` is the conversion spine.** Every donor is read for where it puts THAT
+  action, and the packet names it.
+
+Both acts obey everything below: the MCP probe, the sentinels, and the packet shape.
+
 ## The fan-out (aim for 15-20 calls, breadth first)
 1. `refs_for_business` (or `refs_match_brief`) to map the brief to a vertical and
    a starting build plan (a backbone + donors).
@@ -84,7 +124,8 @@ not converge on the same sites.
    WHY of each choice, and `refs_get { slug, layer:"do_dont" }` for the backbone.
 5. `refs_get_screenshot` the relevant **inner pages** (pricing, menu, booking,
    services) of the donors. View **at least 3 inner pages**.
-6. **THE CALIBRATION ROW.** Pick 3 or 4 references from the client's own vertical that
+6. **THE CALIBRATION ROW. This step IS act 1, and in act 1 it is the only step you run.**
+   Pick 3 or 4 references from the client's own vertical that
    span restrained to bold, and write them to `.palate/explore/refs.json` in the project.
    This is row 0 of the canvas, the row the client is shown FIRST above the boards, under the question "which
    of these is closest to how bold you want to be?".
@@ -114,7 +155,8 @@ not converge on the same sites.
    where it does on the range (never a compliment, an argument), and `screenshot` is
    relative to `refs.json`. `node scripts/boards-render.mjs <project-dir> --refs .palate/explore/refs.json`
    draws them as row 0 of the canvas and `/explore` shows them above the ladder. The
-   client's answer is recorded by `/pick --intensity <n>` as `commission.intensity_asked`.
+   client's answer is recorded on the checkpoint as `plan_checkpoint.shown.intake.calibration`
+   before act 2 runs, and again by `/pick --intensity <n>` as `commission.intensity_asked`.
 
 7. **THE DONOR ROW.** Every rung of the ambition ladder reproduces ONE library reference, and
    until now that reference was a bare slug in a registry: its hero never reached the canvas
@@ -164,9 +206,12 @@ TOKEN INTENT: <3-5 lines distilled from the DESIGN.md rationale - which type sca
 DO/DONT: <the 2-3 load-bearing do/don't rules from the backbone's do_dont layer>
 INNER PAGES SEEN: <slug>/<page>, ...
 CALIBRATION ROW: <slug> (1, restrained) .. <slug> (N, bold) - written to .palate/explore/refs.json
-AVOIDED (recent builds): <slugs you deliberately skipped>
-COMPOSITION NOTE: pick the backbone for structure, compose specific moves from at
-least three donors, re-skin every identity layer, never clone one reference.
+AVOIDED (recent builds, and the intake's disliked + avoid lists): <slugs you deliberately
+skipped, each with which list dropped it>
+COMPOSITION NOTE: the primary action is <call | form | booking | buy>, and every donor
+below was read for where it puts that action. Pick the backbone for structure, compose
+specific moves from at least three donors, re-skin every identity layer, never clone one
+reference.
 ```
 
 Keep it tight. The main build will read this packet and start composing.

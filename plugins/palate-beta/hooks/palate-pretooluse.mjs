@@ -179,6 +179,33 @@ function DIVERGE_REQUIRED_MESSAGE(mode) {
 const EXPLORE_MODES = ["ladder", "named-direction", "supplied-example"];
 const CHECKPOINT_EXEMPTIONS = ["tiny-work", "named-direction"];
 const nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
+const nonEmptyList = (v, min, max) =>
+  Array.isArray(v) && v.length >= min && v.length <= max && v.every(nonEmpty);
+
+// THE INTAKE. A ladder Explore is the one mode that DRAWS a range, and until now nothing about
+// that range came from the person: the v3 run asked the calibration question after the boards
+// were already on the canvas, so the answer arrived too late to steer the research it was for,
+// and the checkpoint was satisfied by a brief that named none of this. These six answers are
+// what the deep survey is steered by (the intensity facet, the sites to search, the donors ruled
+// out, the conversion spine), so they are recorded BEFORE the survey or they steer nothing.
+// Named directions and supplied examples draw no ladder and are not asked.
+function intakeValid(intake) {
+  if (!intake || typeof intake !== "object") return false;
+  const cal = intake.calibration;
+  if (!cal || typeof cal !== "object") return false;
+  if (!Number.isInteger(cal.position) || cal.position < 1 || cal.position > 4) return false;
+  if (!nonEmpty(cal.why)) return false;
+  // 1 to 20: one named site is enough to steer a search, and a list past twenty is a dump of
+  // somebody's bookmarks rather than an answer. The bound is stated in the deny message and in
+  // SKILL.md's checkpoint, so it refuses nothing an agent was not told about.
+  if (!nonEmptyList(intake.admired, 1, 20)) return false;
+  if (!nonEmptyList(intake.disliked, 1, 20)) return false;
+  if (!nonEmpty(intake.primary_action)) return false;
+  if (!nonEmpty(intake.wow)) return false;
+  // 3 to 5, the range the doctrine asks for: fewer is too thin to rule a donor out, more is a
+  // list nobody held to and the drawing quietly ignores.
+  return nonEmptyList(intake.avoid, 3, 5);
+}
 
 function checkpointValid(m) {
   const c = m && m.plan_checkpoint;
@@ -194,6 +221,7 @@ function checkpointValid(m) {
   if (!ex || typeof ex !== "object" || !EXPLORE_MODES.includes(ex.mode)) return false;
   if (ex.mode === "ladder") {
     if (!Number.isInteger(ex.count) || ex.count < 3) return false;
+    if (!intakeValid(shown.intake)) return false;
   } else if (!nonEmpty(ex.source)) {
     return false; // what was named, or what was supplied (a path or a URL)
   }
@@ -217,12 +245,33 @@ const CHECKPOINT_REQUIRED_MESSAGE =
   "             cms: false | \"sanity\" (ask: who edits this copy in six months?),\n" +
   "             explore: { mode: \"ladder\", count: N>=3 }\n" +
   "                   | { mode: \"named-direction\", source: \"the site or direction they named\" }\n" +
-  "                   | { mode: \"supplied-example\", source: \"path or URL of the HTML / mock-up to rebuild in Astro\" } },\n" +
+  "                   | { mode: \"supplied-example\", source: \"path or URL of the HTML / mock-up to rebuild in Astro\" },\n" +
+  "             intake: { ... } (a LADDER only, see below) },\n" +
   "    go: { given: true, how: \"asked\"|\"brief\", quote: \"their words, or the brief clause that pre-authorised it\" } }\n" +
   "  how: \"brief\" is accepted ONLY for named-direction and supplied-example; a ladder Explore must be ASKED.\n" +
   "Not everyone wants variations: named-direction and supplied-example SKIP Explore (record the same\n" +
   "reason on commission.explore_skip). Tiny reversible work, or a brief that names its direction, may\n" +
   "record the skip instead: plan_checkpoint = { exempt: \"tiny-work\"|\"named-direction\", reason }.\n" +
+  "\n" +
+  "A LADDER ALSO NEEDS THE INTAKE, ASKED BEFORE THE DEEP SURVEY AND IN ONE ROUND. A ladder is\n" +
+  "the one decision that draws a RANGE, and until these are answered nothing about that range\n" +
+  "came from the person. The surveyor's first act is the calibration row only (3 or 4 real sites\n" +
+  "from their vertical, restrained to bold); show it, then ask all six in ONE round, in their own\n" +
+  "words, through AskUserQuestion where the harness has it and four questions to a call (SKILL.md,\n" +
+  "\"Asking the person\"):\n" +
+  "  1. Which of these is closest to how bold you want to be, and what do you dislike about it?\n" +
+  "  2. Two or three sites in your field you admire, and one you do not.\n" +
+  "  3. What is the one thing you want a visitor to do: call, fill in a form, book, or buy?\n" +
+  "  4. What should this site do that nothing else in your field does? (the wow moment)\n" +
+  "  5. Three to five things we must not do (\"no purple\", \"no stock people photos\").\n" +
+  "  6. Host, who edits the copy in six months, and how many directions you want to see.\n" +
+  "Then record their answers and run the deep survey with them:\n" +
+  "  shown.intake = { calibration: { position: 1..4, why },\n" +
+  "                   admired: [\"...\"] (1 to 20), disliked: [\"...\"] (1 to 20),\n" +
+  "                   primary_action: \"call\"|\"form\"|\"booking\"|\"buy\",\n" +
+  "                   wow: \"one sentence\", avoid: [\"...\"] (3 to 5) }\n" +
+  "Every field is required and none may be blank. named-direction and supplied-example draw no\n" +
+  "ladder, so neither is asked for an intake.\n" +
   "PALATE_GATE_CHECKPOINT=0 releases this wall for a session that genuinely cannot ask.";
 
 function SURVEY_REQUIRED_MESSAGE(gateReason, calls) {

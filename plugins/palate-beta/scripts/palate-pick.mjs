@@ -28,7 +28,8 @@
  * Usage:
  *   node scripts/palate-pick.mjs <projectDir> --hero b3 [--section b5] [--cta "Book a table"]
  *        [--intensity 3] [--note "..."] [--canvas <extract-dir>] [--second-pass] [--replace]
- *        [--proof <preview-url>] [--answer motion=... --answer mix=... --answer cms=...]
+ *        [--proof <preview-url> [--proof-unmeasured "<reason>"]]
+ *        [--answer motion=... --answer mix=... --answer cms=...]
  *        [--canvas-url <published-url> | --canvas-skipped "<reason>"]
  * Exit: 0 recorded, 1 refused (with the reason), 2 bad arguments.
  */
@@ -43,6 +44,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const VALUE_FLAGS = new Set([
   "--hero", "--section", "--cta", "--intensity", "--note", "--canvas", "--proof", "--answer",
+  "--proof-unmeasured",
   "--canvas-url", "--canvas-skipped",
 ]);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : null; };
@@ -201,11 +203,71 @@ if (note) {
  * be named in the doctrine and copied verbatim.
  */
 const proofUrl = opt("--proof");
+const proofUnmeasured = flag("--proof-unmeasured") ? (opt("--proof-unmeasured") ?? "") : null;
+if (proofUnmeasured !== null && !proofUrl) {
+  badArgs("--proof-unmeasured says why the preview could not be measured, so it needs the preview: pass --proof <url> with it.");
+}
 if (proofUrl) {
   if (!/^https?:\/\/\S+$/.test(proofUrl)) {
     refuse(`--proof ${proofUrl} is not a URL. It is the preview the client was shown the home page moving on, so it has to be one they can open.`);
   }
-  patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString() };
+  if (proofUnmeasured !== null) {
+    // THE HONEST ESCAPE, and it is recorded rather than silent. Some previews cannot be driven
+    // from this machine: a tunnel that only the client's browser reaches, a staging host behind
+    // a login. The proof is still worth recording, and what the gate must never see is an
+    // unmeasured proof that looks exactly like a measured one.
+    const reason = proofUnmeasured.trim();
+    if (!reason) {
+      refuse("--proof-unmeasured needs the reason the probe could not reach the preview. Without it this flag is a way of not measuring that leaves no trace, which is the fault it exists to make visible.");
+    }
+    patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString(), measured: null, reason };
+  } else {
+    /**
+     * MEASURE IT. A real build recorded this proof on the agent's word: the board promised a
+     * 0.6x parallax, the record said the motion had been shown, and the image moved 7 per cent
+     * of the scroll. The person who opened the preview said there was no motion. Nothing could
+     * have contradicted the record, because the record held nothing that could be wrong.
+     */
+    const probe = join(HERE, "motion-proof.mjs");
+    let measured = null;
+    let probeErr = "";
+    try {
+      measured = JSON.parse(execFileSync(process.execPath, [probe, proofUrl], {
+        encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 8 * 1024 * 1024,
+        // A bound, because the probe drives a browser at a URL somebody typed. Without it a
+        // page that never finishes loading hangs the command the doctrine tells every build to
+        // run, and a hang reads as a broken tool rather than as an unreachable preview.
+        timeout: 60_000,
+      }));
+    } catch (e) {
+      probeErr = (e.stderr || e.message || "").toString().trim().split("\n")[0];
+    }
+    if (!measured) {
+      refuse(`the preview at ${proofUrl} could not be measured (${probeErr || "the probe returned nothing"}). If the page really is out of this machine's reach, say so: --proof ${proofUrl} --proof-unmeasured "<reason>".`);
+    }
+    const parallax = Array.isArray(measured.parallax) ? measured.parallax : [];
+    /**
+     * A WITHHELD MEASUREMENT IS NEITHER EVIDENCE NOR A LICENCE.
+     *
+     * On a page too short to scroll the probe reports no parallax at all, because every ratio
+     * would be a small number divided by a smaller one. Reading that empty list as "nothing
+     * moves" would refuse a page on a measurement nobody took; making it PROVE the page moves,
+     * which is what the first fix did, let a wholly static short page record a motion proof.
+     * So on a short page the parallax clause is simply not part of the floor, and the other
+     * three still are.
+     */
+    const shortPage = measured.short_page === true;
+    const still = (measured.animated || 0) === 0
+      && (measured.running || 0) === 0
+      && (shortPage || parallax.every((p) => (Number(p.ratio) || 0) < 0.05))
+      && measured.header?.before === measured.header?.after;
+    if (still) {
+      refuse(shortPage
+        ? `nothing measurable moves at ${proofUrl}: no animation, nothing running, the header unchanged, and the page is too short to scroll far enough to measure a parallax. Build the motion the board promised, or if this preview cannot be driven from here say so: --proof ${proofUrl} --proof-unmeasured "<reason>".`
+        : `nothing measurable moves at ${proofUrl}; the motion proof is what the client was promised, build it before recording it.`);
+    }
+    patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString(), measured };
+  }
 }
 
 /**
@@ -256,7 +318,7 @@ for (let i = 0; i < args.length; i++) if (args[i] === "--answer") {
   const k = eq > 0 ? kv.slice(0, eq).trim() : "";
   const v = eq > 0 ? kv.slice(eq + 1).trim() : "";
   if (!ANSWER_KEYS.includes(k) || !v) {
-    refuse(`--answer takes one of motion, mix, cms (as key=text; got ${JSON.stringify(kv)}). These are the three things Compose needs from the person: how the picked rung should move, what to mix in from other boards, and who edits the copy.`);
+    refuse(`--answer takes one of motion, mix, cms (as key=text; got ${JSON.stringify(kv)}). These are the three things Compose needs from the person: how the picked direction should move, what to mix in from other boards, and who edits the copy.`);
   }
   answers[k] = v;
 }
@@ -313,7 +375,7 @@ for (const p of made) {
   const shown = explore.shown_at ? Date.parse(explore.shown_at) : NaN;
   const took = Number.isFinite(shown) ? Math.round((Date.parse(p.picked_at) - shown) / 1000) : null;
   process.stdout.write(
-    `palate-pick: ${p.surface} = ${p.variant_id}, rung ${p.rung} of ${N} (position ${p.position})` +
+    `palate-pick: ${p.surface} = ${p.variant_id}, direction ${p.rung} of ${N} (position ${p.position})` +
     `${took !== null ? `, time to pick ${took}s` : ", time to pick unknown (no shown_at: boards-render did not stamp this build)"}\n`,
   );
 }
@@ -368,10 +430,26 @@ export function diffCanvas(seedDir, extractDir, boards) {
   const out = [];
   const clean = [];
   const unaligned = [];
-  const byRung = new Map(boards.map((b) => [Number(b.ambition), b.id]));
 
+  /**
+   * EVERY SURFACE OF EVERY DIRECTION, not only the home board.
+   *
+   * A direction is four artboards on the canvas, and the client can edit any of them. Diffing
+   * `B<n>` alone meant a reworded form error on the detail sheet, or a headline retyped on the
+   * phone, came back as "no change was made on the canvas": the most specific instruction a
+   * client can give, silently dropped. Every entry now carries the surface it was made on, so
+   * Compose applies a sheet edit to the sheet.
+   */
+  const surfaces = boards.flatMap((b) => boardSurfaces(b).map((s) => ({ ...s, board: b })));
+  const byFile = new Map(surfaces.map((s) => [s.file, { board: s.board.id, surface: s.surface }]));
   for (const b of boards) {
-    const file = `B${b.ambition}.dc.html`;
+    // The donor card is the plugin's own, but a note can be written beside it and it belongs to
+    // the direction it sits with.
+    if (Number.isFinite(Number(b.ambition))) byFile.set(`D${Number(b.ambition)}.dc.html`, { board: b.id, surface: "donor" });
+  }
+
+  for (const { board: b, surface, file } of surfaces) {
+    const label = surface === "home" ? b.id : `${b.id} ${surface}`;
     const a = join(seedDir, file);
     const z = join(extractDir, file);
     if (!existsSync(a) || !existsSync(z)) continue;
@@ -395,9 +473,10 @@ export function diffCanvas(seedDir, extractDir, boards) {
     };
     const keyed = before.keyed && after.keyed && !dupes(before.styles) && !dupes(after.styles);
     if (!keyed) {
-      unaligned.push({ board: b.id, why: before.keyed && after.keyed ? "duplicated element keys" : "no element keys in the seed or the extract" });
+      unaligned.push({ board: label, why: before.keyed && after.keyed ? "duplicated element keys" : "no element keys in the seed or the extract" });
       out.push({
         board: b.id,
+        surface,
         kind: "unaligned",
         path: file,
         before: null,
@@ -412,14 +491,14 @@ export function diffCanvas(seedDir, extractDir, boards) {
     const textAfter = new Map(after.texts.map((t) => [t.key, t.text]));
     for (const [key, text] of textBefore) {
       if (!textAfter.has(key)) continue;   // removals are reported once, below
-      if (textAfter.get(key) !== text) out.push({ board: b.id, kind: "text", path: key, before: text, after: textAfter.get(key) });
+      if (textAfter.get(key) !== text) out.push({ board: b.id, surface, kind: "text", path: key, before: text, after: textAfter.get(key) });
     }
 
     const styleBefore = new Map(before.styles.map((t) => [t.key, t.style]));
     const styleAfter = new Map(after.styles.map((t) => [t.key, t.style]));
     for (const [key, style] of styleBefore) {
       if (!styleAfter.has(key)) continue;
-      if (styleAfter.get(key) !== style) out.push({ board: b.id, kind: "style", path: key, before: style, after: styleAfter.get(key) });
+      if (styleAfter.get(key) !== style) out.push({ board: b.id, surface, kind: "style", path: key, before: style, after: styleAfter.get(key) });
     }
 
     // ONE ENTRY PER ELEMENT, whichever way it went. A deleted band is a decision the client
@@ -428,13 +507,13 @@ export function diffCanvas(seedDir, extractDir, boards) {
     const keysAfter = new Set([...styleAfter.keys(), ...textAfter.keys()]);
     for (const key of keysBefore) {
       if (keysAfter.has(key)) continue;
-      out.push({ board: b.id, kind: "removed", path: key, before: textBefore.get(key) ?? styleBefore.get(key) ?? null, after: null });
+      out.push({ board: b.id, surface, kind: "removed", path: key, before: textBefore.get(key) ?? styleBefore.get(key) ?? null, after: null });
     }
     for (const key of keysAfter) {
       if (keysBefore.has(key)) continue;
-      out.push({ board: b.id, kind: "added", path: key, before: null, after: textAfter.get(key) ?? styleAfter.get(key) ?? null });
+      out.push({ board: b.id, surface, kind: "added", path: key, before: null, after: textAfter.get(key) ?? styleAfter.get(key) ?? null });
     }
-    clean.push(b.id);
+    clean.push(label);
   }
 
   // The annotations, which are where a client writes a sentence rather than dragging a value.
@@ -445,7 +524,8 @@ export function diffCanvas(seedDir, extractDir, boards) {
     for (const n of backCanvas.annotations || []) {
       const before = was.has(n.id) ? was.get(n.id) : null;
       if (before === n.text) continue;
-      out.push({ board: boardForAnnotation(n, backCanvas, byRung), kind: "note", path: n.id, before, after: n.text });
+      const where = boardForAnnotation(n, backCanvas, byFile);
+      out.push({ board: where.board, surface: where.surface, kind: "note", path: n.id, before, after: n.text });
     }
   }
   return { entries: out, clean, unaligned };
@@ -454,22 +534,49 @@ export function diffCanvas(seedDir, extractDir, boards) {
 function readJson(p) { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; } }
 
 /**
- * Which board a note belongs to.
+ * The artboards one direction is made of, and what each of them is.
  *
- * An annotation the plugin wrote names its board in its id. One a CLIENT wrote does not, so it
- * is attributed by geometry: the artboard whose horizontal span contains it. A note that
- * belongs to no frame is recorded against the whole set rather than dropped, because an
+ * `presentation` is required of a registry written by the current template, and absent from an
+ * older one and from the ladder recovered out of `explore.boards` after Compose clears the
+ * registry. A surface with no file is simply not diffed: this reads a canvas back, and refusing
+ * here would turn an old build's feedback into an error message.
+ */
+function boardSurfaces(b) {
+  const p = b.presentation || {};
+  return [
+    { surface: "home", file: b.artboard || `B${b.ambition}.dc.html` },
+    { surface: "inner", file: p.inner },
+    { surface: "mobile", file: p.mobile },
+    { surface: "sheet", file: p.sheet },
+  ].filter((s) => s.file);
+}
+
+/**
+ * Which board, and which of its surfaces, a note belongs to.
+ *
+ * An annotation the plugin wrote names both in its id. One a CLIENT wrote names neither, so it
+ * is attributed by geometry, and the geometry changed underneath it: the canvas lays one ROW
+ * per direction, so every home board sits at x 0 and the old horizontal-span test attributed
+ * every free-form note on the canvas to direction 1. A client's sentence about the boldest
+ * direction was applied to the most restrained one, in the file Compose is told to honour.
+ *
+ * So a note belongs to the frame whose x span AND y span contain it, any of the five in the
+ * row. Rows are 120 apart and the slop is 40, so a note below one row cannot reach the next.
+ * A note inside no frame is recorded against the whole set rather than dropped, because an
  * unattributable sentence from a client is still the most valuable line on the canvas.
  */
-function boardForAnnotation(note, canvas, byRung) {
-  const named = /^board-(.+)$/.exec(note.id || "");
-  if (named) return named[1];
+function boardForAnnotation(note, canvas, byFile) {
+  const named = /^(board|inner|mobile|sheet|donor)-(.+)$/.exec(note.id || "");
+  if (named) return { board: named[2], surface: named[1] === "board" ? "home" : named[1] };
+  const SLOP = 40;
   for (const f of canvas.artboards || []) {
-    const m = /^B(\d+)\.dc\.html$/.exec(f.file || "");
-    if (!m) continue;
-    if (note.x >= f.x - 40 && note.x <= f.x + f.w + 40) return byRung.get(Number(m[1])) || null;
+    const where = byFile.get(f.file || "");
+    if (!where) continue;
+    const inX = note.x >= f.x - SLOP && note.x <= f.x + f.w + SLOP;
+    const inY = note.y >= f.y - SLOP && note.y <= f.y + f.h + SLOP;
+    if (inX && inY) return where;
   }
-  return null;
+  return { board: null, surface: null };
 }
 
 /**

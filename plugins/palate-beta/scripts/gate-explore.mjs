@@ -41,6 +41,14 @@
  *      `/pick --canvas-skipped "<reason>"` are what write it.
  *   7. A BOLD BRIEF HAS A REAL LADDER. Three rungs is the floor on a high-intensity brief,
  *      because below three there is no "between" for a client to point at.
+ *   8. EVERY PIECE NAMES ITS VARIATION AND ITS DONOR. A direction is signed off piece by piece,
+ *      so `pieces` records the kit variation used for the navigation, the hero, the closing
+ *      band, the enquiry form, the footer and the direction's own inner section, and the
+ *      reference each one's craft came from. A variation the kit does not carry is a promise
+ *      the build cannot keep, and a donor nobody surveyed is provenance invented afterwards.
+ *   9. THE DETAIL SHEET AND THE REGISTRY AGREE. The sheet is the artefact the client signs;
+ *      the registry is what Compose builds from. A direction whose sheet shows one footer and
+ *      whose registry records another ships a footer nobody approved.
  *
  * ============================ FAIL-OPEN, ALWAYS ============================
  *
@@ -56,8 +64,14 @@
  * Usage: node scripts/gate-explore.mjs [projectDir]
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { pluginRootRefusal } from "../hooks/project-dir.mjs";
+// ONE PARSER FOR THE KIT AND FOR THE REGISTRY'S NESTED BLOCKS. boards-render checks the detail
+// sheet's marks against the same manifest, and two parsers reading one file differently is how a
+// check passes on one surface and fails on the other. Importing runs nothing: that module only
+// calls main() when it is the entry point.
+import { parseKitVariations, splitPieces, presentationOf } from "./boards-render.mjs";
 
 const dir = process.argv[2] || ".";
 
@@ -233,7 +247,15 @@ const seenDonor = new Map();
 const parsed = [];
 const words = (s) => new Set(String(s).toLowerCase().match(/[a-z]{4,}/g) || []);
 
-for (const o of entries) {
+for (const entry of entries) {
+  /**
+   * THE NESTED PROVENANCE IS CUT OUT BEFORE ANY OTHER FIELD IS READ. `pieces` carries a `donor:`
+   * per entry and `field()` takes the first match anywhere in the object, so a board whose
+   * `pieces` block sits above its own `donor:` line would report the NAVIGATION's reference as
+   * the direction's, and "two boards drawn from one reference" would then be a claim about the
+   * wrong slug on a set where nothing of the sort happened.
+   */
+  const { pieces, rest: o } = splitPieces(entry);
   const id = field(o, "id") || "(unnamed)";
   const name = field(o, "name");
   const artboardRaw = field(o, "artboard");
@@ -246,7 +268,8 @@ for (const o of entries) {
   const section = field(o, "section");
   const motion = field(o, "motion");
   const ctas = arrayField(o, "ctas");
-  parsed.push({ id, ambition });
+  const presentation = presentationOf(o);
+  parsed.push({ id, ambition, pieces, section, presentation, sheet: presentation?.sheet || null });
 
   const missing = [];
   if (typeof ambition !== "number") missing.push("ambition");
@@ -257,10 +280,14 @@ for (const o of entries) {
   if (!section) missing.push("section");
   if (!motion) missing.push("motion");
   if (!ctas) missing.push("ctas");
+  // WITHOUT IT, CHECK 10 SKIPS IN SILENCE. The sheet is named by `presentation.sheet`, so a
+  // registry that declares no presentation has no sheet to compare its own provenance against,
+  // and the comparison would simply not happen on the direction least likely to survive it.
+  if (!presentation || !presentation.inner || !presentation.mobile || !presentation.sheet) missing.push("presentation");
   if (missing.length) {
     add(
       `${id} does not argue for itself`,
-      `missing ${missing.join(", ")}. Every rung needs its own position on the ladder, what it is, why it is doing that for THIS business, the feeling it carries, the reference its craft came from, the section it shows, what MOVES on it, and the CTA labels the client can choose between. Without them the client can only judge on taste, and a board is mostly a still, so unwritten motion is unseen motion.`,
+      `missing ${missing.join(", ")}. Every rung needs its own position on the ladder, what it is, why it is doing that for THIS business, the feeling it carries, the reference its craft came from, the section it shows, what MOVES on it, the CTA labels the client can choose between, and the other three artboards of the direction (presentation: { inner, mobile, sheet }). Without them the client can only judge on taste, and a board is mostly a still, so unwritten motion is unseen motion.`,
     );
     continue;
   }
@@ -279,6 +306,26 @@ for (const o of entries) {
     );
   } else if (!existsSync(join(dir, ".palate/explore/seed", artboard))) {
     add(`${id} registers a board that was never drawn`, `artboard ${artboard} needs .palate/explore/seed/${artboard} and there is no such file. The canvas shows a hole where rung ${ambition} should be.`);
+  }
+
+  /**
+   * AND THE OTHER THREE FILES, AT DONE TIME.
+   *
+   * boards-render.mjs refuses a missing inner, phone or sheet file before it opens a browser,
+   * which is the right place at DRAW time and a hole at DONE time: `gate-done.sh` runs this gate
+   * and never runs boards-render, and the judge fingerprints the stills under `shots/` rather
+   * than the seed. So a registry naming `S3.dc.html` after the file was deleted, renamed or
+   * never committed cleared every done-time gate, check 10 silently skipped the provenance
+   * comparison, and the seed handed to the next session was one board short with nothing saying
+   * so. A direction is four artboards; the client is otherwise shown one of them missing.
+   */
+  for (const [kind, file] of Object.entries(presentation)) {
+    if (file && !existsSync(join(dir, ".palate/explore/seed", file))) {
+      add(
+        `${id} registers a ${kind} board that was never drawn`,
+        `presentation.${kind} names ${file} and there is no .palate/explore/seed/${file}. A direction is four artboards and the client is shown one short.`,
+      );
+    }
   }
 
   {
@@ -464,6 +511,171 @@ if (judgeApplies) {
     }
   }
 }
+
+// ------------------------------------ 9. every piece names its variation and its donor
+/**
+ * THE KIT MANIFEST, which every registered variation is checked against.
+ *
+ * The project's own copy first, because a build may legitimately have added a piece, and the
+ * plugin's template as the fallback for a registry written before the site was scaffolded.
+ * Neither parsing is a FINDING rather than a silence: checking a variation against an empty
+ * manifest accepts every variation, which is the same as not checking at all.
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
+function loadKit() {
+  for (const p of [join(dir, "src/lib/kit.ts"), join(HERE, "..", "templates", "astro-project", "src", "lib", "kit.ts")]) {
+    if (!existsSync(p)) continue;
+    try {
+      const kit = parseKitVariations(readFileSync(p, "utf8"));
+      if (kit.size) return kit;
+    } catch { /* try the next one */ }
+  }
+  return new Map();
+}
+const kit = loadKit();
+
+/**
+ * The pieces every direction owes, whatever it chose.
+ *
+ * These six plus the direction's own inner section are what a client is actually signing off:
+ * how they are greeted, why they should believe it, how they are asked, how they enquire, and
+ * what the page says at the bottom. `trust` is on the list because the trust strip is a required
+ * block on the detail sheet, and a sheet block with no registered provenance is a block whose
+ * copy nobody can trace. A direction that records none of them is one whose navigation, form and footer are
+ * decided later, by nobody, and discovered by the client on the built site.
+ */
+const REQUIRED_PIECES = ["navigation", "hero", "trust", "cta", "forms", "footer"];
+// A donor is only checkable against a survey that exists. A build with no `references_surveyed`
+// says nothing here rather than blocking every direction over a manifest nobody wrote.
+const surveyed = new Set(
+  (Array.isArray(manifest?.references_surveyed) ? manifest.references_surveyed : [])
+    .map((r) => (typeof r === "string" ? r : r?.slug)).filter(Boolean),
+);
+if (!kit.size) {
+  add(
+    "The website kit manifest could not be read",
+    `neither ${join(dir, "src/lib/kit.ts")} nor the plugin's template parsed, so every variation these directions register is UNCHECKED rather than clean: a navigation the kit cannot build would pass here and fail at Compose.`,
+  );
+}
+for (const v of parsed) {
+  const want = [...REQUIRED_PIECES, ...(v.section && !REQUIRED_PIECES.includes(v.section) ? [v.section] : [])];
+  if (!v.pieces) {
+    add(
+      `${v.id} records where none of its pieces came from`,
+      `add pieces: { ${want.map((p) => `${p}: { variation, donor }`).join(", ")} }. A direction is signed off piece by piece, so each one names the kit variation it is (src/lib/kit.ts) and the reference its craft came from. Without it the detail sheet cannot print its provenance and nobody can say afterwards which reference the navigation came from.`,
+    );
+    continue;
+  }
+  const missing = want.filter((p) => !v.pieces[p] || !v.pieces[p].variation || !v.pieces[p].donor);
+  if (missing.length) {
+    add(
+      `${v.id} names no variation or donor for ${missing.join(", ")}`,
+      `every one of ${want.join(", ")} needs both: the kit variation it is, and the reference it was drawn from. A piece with one and not the other is half a record, and the half that goes missing is always the donor.`,
+    );
+  }
+  for (const [piece, prov] of Object.entries(v.pieces)) {
+    if (!prov?.variation) continue;
+    if (kit.size) {
+      if (kit.has(piece)) {
+        if (!kit.get(piece).has(prov.variation)) {
+          // WHERE IT ACTUALLY BELONGS, when it belongs anywhere. A real variation filed under
+          // the wrong piece passes a spell check and builds nothing, and "it is not one of
+          // navigation's" is a much slower answer than "FooterSimple belongs to footer".
+          const home = [...kit].find(([, vars]) => vars.has(prov.variation))?.[0];
+          add(
+            `${v.id}'s ${piece} names the variation ${prov.variation}`,
+            home
+              ? `${prov.variation} belongs to ${home} in src/lib/kit.ts, not to ${piece}. The sheet the client signs off would show a ${piece} the build has no way to compose.`
+              : `src/lib/kit.ts has no such variation. ${piece} carries ${[...kit.get(piece).keys()].join(", ") || "none"}. A variation nobody can build is a promise made on the build's behalf.`,
+          );
+        }
+      } else if (![...kit.values()].some((vars) => vars.has(prov.variation))) {
+        // A BESPOKE SECTION NAME. The registry's `section` is free text ("menu", "proof"), so
+        // its key cannot be held to one piece's list; it is still held to the kit as a whole,
+        // because a variation that belongs to no piece at all belongs to nothing.
+        add(
+          `${v.id}'s ${piece} names the variation ${prov.variation}`,
+          `"${piece}" is the direction's own section name rather than a kit piece, so ANY variation in src/lib/kit.ts is acceptable here and ${prov.variation} is none of them. The kit carries ${[...kit].map(([p, vars]) => `${p}: ${[...vars.keys()].join(", ")}`).join("; ")}. Name the one this section is built from, so the sheet and Compose describe the same thing.`,
+        );
+      }
+    }
+    if (surveyed.size && prov.donor && !surveyed.has(prov.donor)) {
+      add(
+        `${v.id}'s ${piece} is drawn from ${prov.donor}, which nobody surveyed`,
+        `${prov.donor} is not in build-manifest.json's references_surveyed, so its craft was never read. Provenance naming an unread reference is provenance invented after the fact: read it (refs_get) or name the reference the piece was genuinely drawn from.`,
+      );
+    }
+  }
+}
+
+// -------------------------------------------- 10. the detail sheet and the registry agree
+/**
+ * The sheet is what the client signs; the registry is what Compose builds from. A direction
+ * whose sheet shows FooterGrouped and whose registry records FooterSimple ships a footer nobody
+ * approved, and neither artefact is wrong on its own, which is why only comparing them finds it.
+ *
+ * CONTAINMENT, not equality: a real sheet carries the navigation twice, the bar at rest and the
+ * drawer on a phone, and those are two different kit variations. What has to hold is that the
+ * variation the registry records is one the sheet actually shows.
+ *
+ * A sheet that has not been drawn yet is not a disagreement. boards-render owns the missing
+ * file, and inventing a finding here would report one absence twice in two different words.
+ */
+const SHEET_CHECKED = ["navigation", "footer", "cta", "forms"];
+for (const v of parsed) {
+  if (!v.pieces || !v.sheet) continue;
+  const p = join(dir, ".palate/explore/seed", v.sheet);
+  if (!existsSync(p)) continue;
+  let html = "";
+  try { html = readFileSync(p, "utf8"); } catch { continue; }
+  const shown = new Map();
+  for (const m of html.matchAll(/\bdata-kit-piece="([^"]*)"/g)) {
+    const [piece, variation] = m[1].split(":").map((x) => x.trim());
+    if (!piece || !variation) continue;
+    if (!shown.has(piece)) shown.set(piece, new Set());
+    shown.get(piece).add(variation);
+  }
+  for (const piece of SHEET_CHECKED) {
+    const prov = v.pieces[piece];
+    if (!prov?.variation || !shown.has(piece)) continue;
+    if (!shown.get(piece).has(prov.variation)) {
+      add(
+        `${v.id}'s sheet and its registry disagree about the ${piece}`,
+        `src/lib/variants.ts records ${prov.variation} and ${v.sheet} shows ${[...shown.get(piece)].join(", ")}. The sheet is what the client signs off and the registry is what Compose builds from, so one of them ships a ${piece} nobody approved. Redraw the block or correct the registry.`,
+      );
+    }
+  }
+}
+
+/**
+ * A SURFACE THAT WENT UNJUDGED IS SAID OUT LOUD, and it is a WARNING rather than a finding.
+ *
+ * The judge reads three surfaces per direction and the page ending is dropped when the library
+ * holds no whole-page capture for that reference (`rungs.foot: null`). That is a fact about the
+ * library, not the operator's doing, so refusing over it would switch the instrument off on the
+ * builds it is meant to serve. But nothing downstream reads `rungs`, so without this line
+ * "lowest across three surfaces" quietly becomes "lowest across the two we managed" and the
+ * record is indistinguishable from one that was judged whole.
+ *
+ * A record with NO `rungs` at all predates the surfaces and claims nothing, so it is not warned
+ * about: crying wolf on every older build is how a warning gets ignored.
+ */
+const SURFACE_NAMES = { entrance: "entrance", foot: "page ending", inner: "inner page" };
+const warnings = [];
+if (judgeApplies && manifest?.explore?.shown_at) {
+  for (const v of parsed) {
+    const rungs = judgedById.get(v.id)?.rungs;
+    if (!rungs || typeof rungs !== "object") continue;
+    const dropped = Object.keys(SURFACE_NAMES).filter((k) => k in rungs && rungs[k] === null);
+    if (!dropped.length) continue;
+    warnings.push(
+      `${v.id} (${judgedById.get(v.id)?.donor ?? v.donor}) was judged on ${dropped.length === 1 ? "two surfaces" : "fewer than three surfaces"}: ` +
+        `no ${dropped.map((k) => SURFACE_NAMES[k]).join(", no ")}. The library holds no whole-page capture for that reference, so ` +
+        `${v.id}'s rung is the lowest of the surfaces that WERE judged, not of all three.`,
+    );
+  }
+}
+for (const w of warnings) console.error(`Explore gate warning: ${w}`);
 
 if (!findings.length) {
   console.log(`Explore gate passed: ${entries.length} board(s), each with a rung, a description, an argument, a feeling, a distinct donor, a motion plan and its CTA options, and a page that explains the range.`);

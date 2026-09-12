@@ -189,6 +189,19 @@ runs() { # <desc> <function name>
   if out="$("$2" 2>&1)"; then ok "$1"; else bad "$1 ($out)"; fi
 }
 
+# A GREP CANNOT TELL A TRUE SENTENCE FROM A FALSE ONE. The claim above is about what a command
+# DOES, so it is run: a page holding nothing but text is served on a loopback port and
+# palate-pick is asked to record it as the motion proof. The refusal is the assertion.
+probe_refuses_a_still_page() {
+  local proj out rc
+  proj="$(mktemp -d)"
+  printf '%s\n' '{"schema":3,"explore":{"ran":true}}' > "$proj/build-manifest.json"
+  out="$(node "$ROOT/scripts/test/fixtures/still-page-server.mjs" "$ROOT/scripts/palate-pick.mjs" "$proj" 2>&1)" && rc=0 || rc=$?
+  rm -rf "$proj"
+  [ "$rc" -ne 0 ] || { echo "palate-pick recorded a proof for a page where nothing moves: $out"; return 1; }
+  printf '%s' "$out" | grep -qF "nothing measurable moves" || { echo "the refusal did not name the fault: $out"; return 1; }
+}
+
 # A throwaway project whose `npm` is a stub: it writes down the environment each script was
 # given, and for a long-running script serves one 200 so serve-preview.sh can finish and hand
 # over a URL the way it does for a real site.
@@ -553,6 +566,130 @@ present "explore-stage.md names the record a skipped donor row leaves" \
 present "explore-stage.md says two judgements are owed per pair" \
   "references/explore-stage.md" "two per pair"
 
+# ================= THE PRESENTATION SET, PINNED ==========================================
+# A direction stopped being a home page at beta.21: `boards-render.mjs` validates FOUR artboards
+# per direction (KINDS: home, inner, mobile, sheet), refuses a registry with no `presentation`,
+# and shoots five stills. Doctrine that still says "one artboard per rung" describes a client
+# shown one board out of four, which is exactly the sign-off this change exists to widen.
+present "explore-stage says a direction is four artboards" \
+  "references/explore-stage.md" "A DIRECTION IS FOUR ARTBOARDS"
+present "explore-stage names the inner-page artboard" \
+  "references/explore-stage.md" "I<rung>.dc.html"
+present "explore-stage names the phone artboard" \
+  "references/explore-stage.md" "M<rung>.dc.html"
+present "explore-stage names the detail sheet artboard" \
+  "references/explore-stage.md" "S<rung>.dc.html"
+present "explore-stage names the width a phone board is drawn at" \
+  "references/explore-stage.md" "x-dc{width:390px}"
+present "explore-stage names the mark the inner page's sections carry" \
+  "references/explore-stage.md" "<id>-inner-<piece>"
+# The pipeline table is where an agent grounds when it wants the whole shape in one screen, and
+# it kept telling the agent to draw one board per rung, which boards-render now refuses.
+present "pipeline.md says a direction is four artboards" \
+  "references/pipeline.md" "{B,I,M,S}<rung>.dc.html"
+# The sheet is the one board with a MINIMUM text budget in the validator (SHEET_MIN_TEXT), because
+# the format it is most likely to collapse into is the type specimen Jake rejected on 9 September.
+present "explore-stage bans the type specimen on the detail sheet" \
+  "references/explore-stage.md" "never a type specimen"
+# The registry fields boards-render and gate-explore both REFUSE a direction without.
+present "explore-stage registers the other three artboards" \
+  "references/explore-stage.md" "presentation: { inner:"
+present "explore-stage registers where every piece came from" \
+  "references/explore-stage.md" "pieces: { navigation:"
+present "SKILL.md A.4 registers the other three artboards" \
+  "SKILL.md" "presentation: { inner:"
+present "SKILL.md A.4 registers where every piece came from" \
+  "SKILL.md" "pieces: { navigation:"
+present "explore-stage names the caption every sheet block prints" \
+  "references/explore-stage.md" "Navigation: NavSimple, drawn from aesop"
+# The five stills and the row. A row is a COMPARISON (the columns are constants in boards-render
+# for that reason), so the doctrine names the order a client reads across.
+present "explore-stage names the five stills a direction owes" \
+  "references/explore-stage.md" "hero, full, inner, mobile and sheet"
+present "explore-stage names the direction's own canvas row" \
+  "references/explore-stage.md" "B, D, I, M, S"
+present "explore-stage names the public stills /explore shows" \
+  "references/explore-stage.md" "<id>-sheet.png"
+
+# ================= THE JUDGE READS THREE SURFACES ========================================
+# `SURFACES` in gate-board-judge.mjs is entrance, foot and inner: three pairs per direction, each
+# judged in both orders, and `rung` is the LOWEST across the surfaces judged. Doctrine saying
+# "two comparisons of its entrance still" describes a verdict about the top of a page recorded as
+# a verdict about the page.
+present "explore-stage says the judge states three pairs per direction" \
+  "references/explore-stage.md" "THREE pairs per direction"
+present "explore-stage says three pairs are six comparisons" \
+  "references/explore-stage.md" "six comparisons"
+present "explore-stage names the lowest surface as the one that stands" \
+  "references/explore-stage.md" "lowest across the surfaces judged"
+present "SKILL.md A.4 says the judge states three pairs per direction" \
+  "SKILL.md" "THREE pairs per direction"
+present "palate-verifier.md says the judge states three pairs per direction" \
+  "agents/palate-verifier.md" "THREE pairs per direction"
+# Each pair asks its OWN question. The request carries no top-level `question`, so a surface told
+# to pass "the question" verbatim would ask the entrance's question over a page ending.
+present "palate-verifier.md hands over each pair's own question" \
+  "agents/palate-verifier.md" "each pair carries its own"
+absent "palate-verifier.md no longer promises one question for every pair" \
+  "agents/palate-verifier.md" "carries \`question\`, the four"
+# A MISSING SURFACE AND A PASSING SURFACE MUST NOT LOOK ALIKE. sharp missing is a local fault with
+# a named fix and phase 1 SKIPS on it; a donor with no whole-page capture is a fact about the
+# library, so the ending is dropped, the pass line names only what was judged, and gate-explore
+# warns rather than fails.
+present "explore-stage says a missing sharp skips the judge rather than judging two surfaces" \
+  "references/explore-stage.md" "sharp not installed"
+present "explore-stage says a donor with no whole-page capture drops the ending" \
+  "references/explore-stage.md" "no whole-page capture"
+present "explore-stage says the unjudged ending is a warning, never a block" \
+  "references/explore-stage.md" "WARNS rather than blocks"
+
+# ================= WHAT GATE-EXPLORE NOW HOLDS ===========================================
+# It checks the REGISTRY (every variation against src/lib/kit.ts, every donor against
+# references_surveyed, the sheet's marks against the registry's variations); boards-render owns
+# the missing FILES. Doctrine that credits either with the other's checks sends an operator to
+# the wrong script with a real finding.
+present "explore-stage says the kit is what a variation is checked against" \
+  "references/explore-stage.md" "against src/lib/kit.ts"
+present "explore-stage says a donor is checked against the survey" \
+  "references/explore-stage.md" "references_surveyed"
+present "SKILL.md A.4 says the gate checks the variations and the donors" \
+  "SKILL.md" "references_surveyed"
+
+# ================= MOMENT 2 NO LONGER PROMISES ROUTES ====================================
+# `/v1`..`/vN` have not existed since canvas-first Explore (beta.17): a board is an artboard and
+# there is no route to open. The checkpoint that told the agent to hand over those links was the
+# last surface still promising them.
+absent "SKILL.md's checkpoint no longer promises /v1../vN routes" \
+  "SKILL.md" "The preview link is live with"
+present "SKILL.md's checkpoint hands over the canvas, else /explore" \
+  "SKILL.md" "the canvas is live (else \`/explore\`)"
+
+# ================= THE CALIBRATION ANSWER IS ASKED ONCE AND RECORDED TWICE ================
+# The intake asks it BEFORE the deep survey and the wall holds it on the checkpoint, so the old
+# premise ("the ladder is built before anyone has said how bold they want to be") is false. But
+# explore.astro draws the marker from `commission.intensity_asked`, which only
+# `palate-pick.mjs --intensity` writes and only AFTER the boards were seen, so the page falls
+# back to the intake position. The doctrine has to say so or an agent reading it expects a
+# ladder with no marker on the one handover the doctrine actually describes.
+absent "explore-stage no longer says the ladder is built before the question is asked" \
+  "references/explore-stage.md" "The ladder is built BEFORE anyone has said how bold they want to be."
+present "explore-stage says the calibration answer is asked at the checkpoint" \
+  "references/explore-stage.md" "asked in the intake, before the deep survey"
+present "explore-stage says the ladder marker falls back to the intake position" \
+  "references/explore-stage.md" "falls back to \`plan_checkpoint.shown.intake.calibration.position\`"
+present "explore-stage says the later record overwrites the marker" \
+  "references/explore-stage.md" "overwrites the marker when it"
+
+# ================= THE REGISTRY AND THE FILE MAP, PINNED =================================
+present "build-manifest.md records the four artboards a direction registers" \
+  "references/build-manifest.md" "presentation:{ inner, mobile, sheet }"
+present "build-manifest.md records where every piece came from" \
+  "references/build-manifest.md" "pieces:{ <piece>:{ variation, donor } }"
+present "commands/README.md says the seed holds four artboards per direction" \
+  "commands/README.md" "four hand-drawn artboards"
+present "commands/README.md says the judge states three surfaces" \
+  "commands/README.md" "three surfaces"
+
 # ================= THE TWO TOOL RULINGS, PINNED ==========================================
 # The surveyor WRITES its packet's two files (.palate/explore/refs.json and donor-heroes.json)
 # and saves the reference stills beside them, so a frontmatter of read-only tools describes an
@@ -578,6 +715,115 @@ present "SKILL.md A.4 asks for the shape the judge validates" \
   "SKILL.md" "[{ id, candidate_is, verdict }]"
 present "SKILL.md A.4 tells the subagent which letter is the candidate" \
   "SKILL.md" "candidate_is"
+
+present "explore-stage holds board copy to the client's own facts" references/explore-stage.md "arithmetic is not a source"
+present "explore-stage says gate-facts never reads an artboard" references/explore-stage.md "never reads an artboard"
+
+# THE INTAKE. The v3 run asked the calibration question after the boards were drawn, so the
+# answer could not steer anything it was for. The surveyor now runs in two acts and the wall
+# holds the six answers on the checkpoint; these assertions pin the doctrine that says so.
+present "the surveyor names its calibration-only first act" \
+  "agents/palate-surveyor.md" "calibration only"
+present "the surveyor names the intake it is handed for the deep survey" \
+  "agents/palate-surveyor.md" "the intake"
+present "the surveyor sets the intensity facet from the calibration answer" \
+  "agents/palate-surveyor.md" "\`intensity\` facet from the calibration position"
+present "the surveyor searches the admired sites with refs_for_business" \
+  "agents/palate-surveyor.md" "\`refs_for_business\` on each site they admire"
+present "the surveyor treats the avoid list as an exclusion" \
+  "agents/palate-surveyor.md" "never a donor"
+present "the surveyor names the primary action in the composition note" \
+  "agents/palate-surveyor.md" "COMPOSITION NOTE: the primary action is"
+present "SKILL.md's checkpoint names the recorded intake" "SKILL.md" "shown.intake"
+present "SKILL.md's checkpoint says the intake comes before the deep survey" \
+  "SKILL.md" "BEFORE THE DEEP SURVEY"
+present "explore-stage step 1 asks which calibration reference is closest" \
+  "references/explore-stage.md" "which of the calibration references is closest"
+present "explore-stage step 1 asks for admired sites" \
+  "references/explore-stage.md" "two or three sites in your field you admire"
+present "explore-stage step 1 asks for one they do not admire" \
+  "references/explore-stage.md" "one you do not"
+present "explore-stage step 1 asks for the primary action" \
+  "references/explore-stage.md" "call, a form, a booking or a purchase"
+present "explore-stage step 1 asks for the wow moment" \
+  "references/explore-stage.md" "the wow moment"
+present "explore-stage step 1 asks for the avoid list" \
+  "references/explore-stage.md" "the avoid list"
+present "explore-stage step 1 says the six are asked in one round" \
+  "references/explore-stage.md" "ONE round"
+present "explore-stage step 1 records them on the checkpoint" \
+  "references/explore-stage.md" "plan_checkpoint.shown.intake"
+
+# ASKING THE PERSON. Prose questions in a terminal get prose answers, or none: the person has
+# to type, so they answer the first and skip the rest. Where the harness has a structured
+# question tool, every question the skill puts to a person goes through it.
+matches "SKILL.md carries an Asking the person house rule" "SKILL.md" "^### Asking the person"
+present "the rule names the tool" "SKILL.md" "AskUserQuestion"
+present "the rule asks for 2 to 4 options per question" "SKILL.md" "two to four options"
+present "the rule puts the recommended option first and labels it" "SKILL.md" "(Recommended)"
+present "the rule caps a round at four questions in one call" "SKILL.md" "four questions in ONE call"
+present "the rule asks for multi-select where answers are not exclusive" "SKILL.md" "multi-select"
+present "the rule falls back to prose only where the tool is absent" "SKILL.md" "only where the tool is absent"
+# ...and it is APPLIED at each checkpoint moment, pinned to that moment's own line. A single
+# "AskUserQuestion appears in SKILL.md" is satisfied by the house rule alone, which is exactly
+# the assertion that goes on passing after the application is deleted.
+matches "checkpoint moment 2 asks the pick round through the tool" \
+  "SKILL.md" "^2\. \*\*After Explore.*AskUserQuestion"
+matches "checkpoint moment 3 asks the Compose confirm through the tool" \
+  "SKILL.md" "^3\. \*\*After Compose.*AskUserQuestion"
+matches "checkpoint moment 4 asks the provisioning confirm through the tool" \
+  "SKILL.md" "^4\. \*\*Before production provisioning.*AskUserQuestion"
+matches "A.5's question round is one call of the tool" \
+  "SKILL.md" "A\.5 PAUSE.*AskUserQuestion"
+present "explore-stage asks the intake through the tool" \
+  "references/explore-stage.md" "AskUserQuestion"
+present "explore-stage asks the question round through the tool" \
+  "references/explore-stage.md" "as one AskUserQuestion call"
+
+# THE MOTION PROOF IS A MEASUREMENT. A board is a still, so the motion note is the one promise
+# the client cannot see before they choose, and until the probe existed the proof of it was a
+# URL, a timestamp and the agent's word. On a real build that word was wrong by an order of
+# magnitude: 0.6x promised, 7 per cent delivered, and the person said there was no motion. The
+# doctrine has to say the command measures, or a model reads it as a stamp again.
+present "explore-stage says the proof command measures the page" \
+  "references/explore-stage.md" "MEASURES THE PAGE, it does not take your word for it"
+present "explore-stage names the probe" \
+  "references/explore-stage.md" "scripts/motion-proof.mjs"
+present "explore-stage says a still page is refused" \
+  "references/explore-stage.md" "A page where none of that moves is REFUSED"
+present "explore-stage says the measurement must match the note in kind" \
+  "references/explore-stage.md" "must match the board's motion note IN KIND"
+present "explore-stage names the honest escape rather than a skip" \
+  "references/explore-stage.md" "--proof-unmeasured"
+present "SKILL.md A.6 says the proof is measured" \
+  "SKILL.md" "THE PROOF IS MEASURED, NOT DECLARED"
+present "SKILL.md A.6 names the field the gate reads" \
+  "SKILL.md" "explore.proof.measured"
+# ...where the browser it drives is installed. Without it the probe skips, and a skip is not a
+# refusal: asserting on it would turn a missing dependency into a doctrine failure.
+if node --input-type=module -e 'import { createRequire } from "node:module"; createRequire(process.argv[1]).resolve("playwright");' \
+     "$ROOT/scripts/reference-capture/index.mjs" >/dev/null 2>&1; then
+  runs "the probe refuses a page where nothing moves, so the doctrine is not describing an intention" \
+    probe_refuses_a_still_page
+else
+  ok "the probe refusal is not checked here (the capture engine's browser is not installed)"
+fi
+
+# THE HAND-OFF IS WHAT THE AGENT SAYS TO THE CLIENT, and the client's word for an Explore
+# option is "direction", never "rung" or "ladder" (those stay internal, in the gate code and
+# the ladder module). The rest of this file legitimately says "rung" elsewhere, describing the
+# registry and the artboard file names, so this check is scoped to the hand-off section alone
+# rather than the whole file, which `absent` cannot do.
+present "explore-stage's hand-off names the mistake as asking which direction, not which rung" \
+  "references/explore-stage.md" 'ask "which direction?" and stop'
+handoff="$(awk '/^## The hand-off/{flag=1} /^## The two surfaces/{flag=0} flag' "$ROOT/references/explore-stage.md")"
+if [ -z "$handoff" ]; then
+  bad "explore-stage.md has no hand-off section to check (the heading moved or was deleted)"
+elif printf '%s' "$handoff" | grep -qi 'rung\|ladder'; then
+  bad "the hand-off still says 'rung' or 'ladder' somewhere a client-facing script should say 'direction'"
+else
+  ok "the hand-off never says 'rung' or 'ladder'"
+fi
 
 echo "---"
 echo "passed=$pass failed=$fail"

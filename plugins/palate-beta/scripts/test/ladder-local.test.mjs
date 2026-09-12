@@ -463,3 +463,59 @@ test('a missing, duplicate, unknown or wrongly-oriented judgement throws rather 
   const bare = boardJudgements(p, 'comparable', 'comparable').map(({ id, verdict }) => ({ id, verdict }));
   assert.throws(() => scoreBoardPair(p, bare), /has no candidate_is/);
 });
+
+/**
+ * THE JUDGE ON THREE SURFACES.
+ *
+ * One entrance said almost nothing about a page's ending, and nothing at all about the inner
+ * page a client will spend most of their time on. A pair is now built per SURFACE, and the
+ * surface is in the pair's id and in both comparison ids, because the alternative is three
+ * pairs per direction whose ids are identical and whose judgements are therefore
+ * interchangeable.
+ */
+import { BOARD_FOOT_QUESTION, BOARD_INNER_QUESTION } from '../reference-capture/ladder-local.mjs';
+
+test('a surface is named in the pair id, in both comparison ids, and kept beside the direction', () => {
+  const p = buildBoardPair({
+    id: 'b1', surface: 'foot', question: BOARD_FOOT_QUESTION, runToken: 'deadbeef',
+    boardPath: '/tmp/b1/foot.png', donorPath: '/tmp/b1/donor-foot.png', donorSlug: 'aesop',
+  });
+  assert.equal(p.id, 'b1:foot');
+  assert.equal(p.board, 'b1', 'the direction the pair belongs to is lost, so nothing can group the surfaces');
+  assert.equal(p.surface, 'foot');
+  assert.equal(p.comparisons[0].id, 'b1:foot:board-first@deadbeef');
+  assert.equal(p.comparisons[1].id, 'b1:foot:donor-first@deadbeef');
+  assert.equal(p.question, BOARD_FOOT_QUESTION);
+  assert.match(p.question, /page endings/);
+});
+
+test('the inner page is asked whether it HOLDS the reference standard, not whether it matches it', () => {
+  const p = buildBoardPair({
+    id: 'b2', surface: 'inner', question: BOARD_INNER_QUESTION, runToken: 'deadbeef',
+    boardPath: '/tmp/b2/inner.png', donorPath: '/tmp/b2/donor.jpg', donorSlug: 'linear',
+  });
+  assert.equal(p.id, 'b2:inner');
+  // The donor has no inner page on disk, so a question about sameness would be asking about two
+  // different jobs. The question says the roles differ and asks about the standard.
+  assert.match(p.question, /hold the reference's standard/);
+  assert.match(p.question, /differ in role/);
+});
+
+test('no surface leaves the pair exactly as it was, on the entrance question', () => {
+  const p = pair('b1', 'deadbeef');
+  assert.equal(p.id, 'b1');
+  assert.equal(p.board, 'b1');
+  assert.equal(p.surface, null);
+  assert.equal(p.comparisons[0].id, 'b1:board-first@deadbeef');
+  assert.match(p.question, /how does the candidate compare to the reference/);
+});
+
+test('a blank question throws rather than asking a judge nothing', () => {
+  assert.throws(
+    () => buildBoardPair({
+      id: 'b1', surface: 'foot', question: '   ', runToken: 'deadbeef',
+      boardPath: '/tmp/b1/foot.png', donorPath: '/tmp/b1/donor-foot.png',
+    }),
+    /question/i,
+  );
+});

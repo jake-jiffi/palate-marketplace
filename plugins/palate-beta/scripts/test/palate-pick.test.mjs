@@ -16,6 +16,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -78,6 +80,63 @@ const run = async (args) => {
     return { status: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" };
   }
 };
+
+/**
+ * THE PROOF IS NOW A MEASUREMENT, so the tests that exercise it need a page that really moves
+ * and a page that really does not. Two fixtures served from this process, on a loopback port,
+ * because the probe drives a browser and a browser will not read a string.
+ */
+const MOVING_PAGE = `<!doctype html><meta charset="utf-8"><title>Moving</title>
+<style>
+  body { margin: 0; }
+  header { position: sticky; top: 0; height: 120px; background: #222; }
+  header.small { height: 60px; }
+  section { min-height: 1400px; }
+  .pulse { width: 80px; height: 80px; background: #e2553d; animation: slide 1s infinite alternate; }
+  @keyframes slide { from { transform: translateX(0); } to { transform: translateX(120px); } }
+</style>
+<header id="top">Header</header>
+<section id="one">
+  <img id="para" width="400" height="300" alt="a still"
+       src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==">
+  <div class="pulse"></div>
+</section>
+<section id="two"><p>More copy.</p></section>
+<script>
+  addEventListener("scroll", () => {
+    document.getElementById("para").style.transform = "translateY(" + (scrollY * 0.4) + "px)";
+    document.getElementById("top").classList.toggle("small", scrollY > 100);
+  });
+</script>`;
+
+const STILL_PAGE = `<!doctype html><meta charset="utf-8"><title>Still</title>
+<style>body { margin: 0; } header { height: 120px; background: #222; } section { min-height: 1400px; }</style>
+<header id="top">Header</header>
+<section id="one"><img id="para" width="400" height="300" alt="a still"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></section>
+<section id="two"><p>More copy.</p></section>`;
+
+async function serve(html) {
+  const s = createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(html);
+  });
+  await new Promise((ok) => s.listen(0, "127.0.0.1", ok));
+  return { url: `http://127.0.0.1:${s.address().port}/`, close: () => new Promise((ok) => s.close(ok)) };
+}
+
+// The probe needs the capture engine's browser. Where it is not installed the measured half of
+// these assertions cannot run, and skipping loudly is the honest outcome: a suite that quietly
+// passes without the instrument is how a dead check survives.
+let hasBrowser = true;
+try { createRequire(join(ROOT, "scripts", "reference-capture", "index.mjs"))("playwright"); }
+catch { hasBrowser = false; }
+
+// A URL nobody is listening on, for the calls whose subject is the RECORD rather than the
+// measurement: they pass --proof-unmeasured, which is the flag for a page the probe cannot
+// reach.
+const UNREACHABLE = "https://palate-fixture.vercel.app/";
+const NO_PROBE = ["--proof-unmeasured", "the preview is behind a tunnel this machine cannot open"];
 
 test("a hero pick is recorded with its rung, its position and when", async () => {
   const dir = project();
@@ -160,16 +219,174 @@ test("the calibration answer, the CTA, a note and a second pass are all recorded
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("the motion proof is a command, not a JSON edit", async () => {
+test("the motion proof is a command, not a JSON edit", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
   const dir = project();
-  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/"]);
+  const site = await serve(MOVING_PAGE);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, r.stderr);
+    const proof = manifestOf(dir).explore.proof;
+    assert.equal(proof.url, site.url);
+    assert.ok(Date.parse(proof.verified_at) > 0, "the proof carries no timestamp");
+    // THE MEASUREMENT IS THE RECORD. A proof that is a URL and a timestamp is the agent's word,
+    // and on a real build that word was wrong by an order of magnitude.
+    assert.ok(proof.measured, "the proof carries no measurement");
+    assert.ok(proof.measured.animated >= 1, `the page loops and the record says animated ${proof.measured.animated}`);
+    assert.ok(Math.max(0, ...proof.measured.parallax.map((x) => x.ratio)) > 0.3,
+      `the hero moves at 0.4 of the scroll and the record says ${JSON.stringify(proof.measured.parallax)}`);
+    // The done gate reads exactly this to decide whether there is a composed home to measure, so
+    // a model that cannot write it leaves the fidelity gate skipped on every real build.
+    assert.match(r.stdout, /motion proof/i);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a page where nothing measurably moves is refused, not recorded", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(STILL_PAGE);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 1, `a still page must be refused:\n${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /nothing measurable moves/);
+    assert.equal(manifestOf(dir).explore.proof, undefined, "a refused proof was recorded anyway");
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+/**
+ * THE FLOOR HAS FOUR CLAUSES AND THREE OF THEM WERE NEVER EXERCISED. A refusal condition whose
+ * clauses are only ever tested together is a refusal condition where any one of them could be
+ * inverted, missing or always-true and every test would still pass. These two pages each move in
+ * exactly ONE of the four ways, so each recording proves its own clause carries weight.
+ */
+const PARALLAX_ONLY = `<!doctype html><meta charset="utf-8"><title>Parallax only</title>
+<style>body { margin: 0; } header { height: 90px; background: #222; } section { min-height: 1400px; }</style>
+<header>Header</header>
+<section id="one"><div id="layer"><img id="para" width="400" height="300" alt="a still"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></div></section>
+<section id="two"><p>More copy.</p></section>
+<script>
+  addEventListener("scroll", () => {
+    document.getElementById("layer").style.transform = "translateY(" + (scrollY * 0.35) + "px)";
+  });
+</script>`;
+
+const HEADER_ONLY = `<!doctype html><meta charset="utf-8"><title>Header only</title>
+<style>
+  body { margin: 0; }
+  header { position: sticky; top: 0; height: 120px; background: #222; }
+  header.small { height: 56px; }
+  section { min-height: 1400px; }
+</style>
+<header id="top">Header</header>
+<section id="one"><p>Copy.</p></section>
+<section id="two"><p>More copy.</p></section>
+<script>
+  addEventListener("scroll", () => {
+    document.getElementById("top").classList.toggle("small", scrollY > 100);
+  });
+</script>`;
+
+test("a page whose only motion is a parallax is recorded, not refused", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(PARALLAX_ONLY);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, `a real parallax is motion:\n${r.stdout}${r.stderr}`);
+    const measured = manifestOf(dir).explore.proof.measured;
+    assert.equal(measured.animated, 0, "this fixture is meant to move in one way only");
+    assert.equal(measured.running, 0, "this fixture is meant to move in one way only");
+    assert.ok(Math.max(0, ...measured.parallax.map((x) => x.ratio)) >= 0.05,
+      `the parallax is the only thing keeping this page off the floor: ${JSON.stringify(measured.parallax)}`);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a page whose only motion is the header is recorded, not refused", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(HEADER_ONLY);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, `a header that moves out of the way is motion:\n${r.stdout}${r.stderr}`);
+    const measured = manifestOf(dir).explore.proof.measured;
+    assert.equal(measured.animated, 0, "this fixture is meant to move in one way only");
+    assert.equal(measured.running, 0, "this fixture is meant to move in one way only");
+    assert.notEqual(measured.header.before, measured.header.after,
+      `the header is the only thing keeping this page off the floor: ${JSON.stringify(measured.header)}`);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+/**
+ * A page too short to scroll is the one case where the probe cannot answer about parallax, and
+ * the first fix turned that into a page that could never be refused at all: a wholly static
+ * short page recorded a motion proof. The withheld reading is not evidence of stillness AND it
+ * is not a licence either. So on a short page the parallax clause is simply not part of the
+ * floor, and the other three still are.
+ */
+const SHORT_STATIC = `<!doctype html><meta charset="utf-8"><title>Short</title>
+<style>body { margin: 0; } section { height: 460px; }</style>
+<section id="one"><img id="para" width="200" height="150" alt="a still"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></section>`;
+
+const SHORT_MOVING = `<!doctype html><meta charset="utf-8"><title>Short, moving</title>
+<style>
+  body { margin: 0; } section { height: 460px; }
+  .pulse { width: 80px; height: 80px; background: #e2553d; animation: slide 1s infinite alternate; }
+  @keyframes slide { from { transform: translateX(0); } to { transform: translateX(120px); } }
+</style>
+<section id="one"><div class="pulse"></div></section>`;
+
+test("a short page where nothing else moves is still refused", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(SHORT_STATIC);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 1, `a static page is a static page, short or not:\n${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /too short/, `the refusal has to say why the parallax was not measured: ${r.stderr}`);
+    assert.match(r.stderr, /--proof-unmeasured/, "the refusal does not name the way through");
+    assert.equal(manifestOf(dir).explore.proof, undefined, "a refused proof was recorded anyway");
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a short page that does move is recorded on the motion it has", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(SHORT_MOVING);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, `a short page with a running animation moves:\n${r.stdout}${r.stderr}`);
+    const measured = manifestOf(dir).explore.proof.measured;
+    assert.equal(measured.short_page, true, "this fixture is meant to be too short to scroll");
+    assert.deepEqual(measured.parallax, [], "the parallax reading is withheld on a short page");
+    assert.ok(measured.animated >= 1);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a preview the probe cannot reach is refused until the reason is given", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  // Nothing listens on port 1: the shape of a preview that died or a tunnel that never came up.
+  const r = await run([dir, "--proof", "http://127.0.0.1:1/"]);
+  assert.equal(r.status, 1, `an unmeasurable preview must be refused:\n${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, /--proof-unmeasured/, "the refusal does not name the way through");
+  assert.equal(manifestOf(dir).explore.proof, undefined);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--proof-unmeasured records the reason instead of a measurement", async () => {
+  const dir = project();
+  const r = await run([dir, "--proof", UNREACHABLE, ...NO_PROBE]);
   assert.equal(r.status, 0, r.stderr);
   const proof = manifestOf(dir).explore.proof;
-  assert.equal(proof.url, "https://palate-fixture.vercel.app/");
-  assert.ok(Date.parse(proof.verified_at) > 0, "the proof carries no timestamp");
-  // The done gate reads exactly this to decide whether there is a composed home to measure, so
-  // a model that cannot write it leaves the fidelity gate skipped on every real build.
-  assert.match(r.stdout, /motion proof/i);
+  assert.equal(proof.url, UNREACHABLE);
+  assert.equal(proof.measured, null, "an unmeasured proof must say so, not leave the field out");
+  assert.match(proof.reason, /tunnel/);
+
+  // And the reason is not optional: an empty one is silence wearing the flag's name.
+  const blank = await run([dir, "--proof", UNREACHABLE, "--proof-unmeasured", "  "]);
+  assert.equal(blank.status, 1, blank.stdout);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -224,13 +441,13 @@ test("the proof still records after Compose has cleared the registry", async () 
   // re-verify and a SECOND --proof. Refusing it with a message about picks is how the fidelity
   // gate ends up skipped on exactly the builds someone cared enough to iterate on.
   writeFileSync(join(dir, "src/lib/variants.ts"), "export const variants = [];\n");
-  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/second/"]);
+  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/second/", ...NO_PROBE]);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(manifestOf(dir).explore.proof.url, "https://palate-fixture.vercel.app/second/");
 
   // And with the file gone entirely, which is the archive-first order.
   rmSync(join(dir, "src/lib/variants.ts"));
-  const gone = await run([dir, "--proof", "https://palate-fixture.vercel.app/third/", "--second-pass"]);
+  const gone = await run([dir, "--proof", "https://palate-fixture.vercel.app/third/", ...NO_PROBE, "--second-pass"]);
   assert.equal(gone.status, 0, gone.stderr);
   assert.equal(manifestOf(dir).explore.proof.url, "https://palate-fixture.vercel.app/third/");
   assert.equal(manifestOf(dir).explore.second_passes, 1);
@@ -263,7 +480,7 @@ test("a directory that is not a Palate site is refused, never reported as record
   // invocation takes a <project-dir> the model supplies, and on a real build the manifest sat at
   // a repo root while the site sat one level down, which turned every gate off. A success line
   // on an empty directory is that fault with a reassuring message on top of it.
-  const r = await run([empty, "--proof", "https://palate-fixture.vercel.app/"]);
+  const r = await run([empty, "--proof", UNREACHABLE, ...NO_PROBE]);
   assert.equal(r.status, 2, `an empty directory must be bad arguments, not a recorded proof:\n${r.stdout}${r.stderr}`);
   assert.match(r.stderr, /Not an Explore build/);
   assert.ok(!/motion proof recorded/.test(r.stdout), "it printed a success line for a directory holding nothing");
@@ -272,7 +489,7 @@ test("a directory that is not a Palate site is refused, never reported as record
   // And the case N3 opened stays open: the registry gone, the manifest present.
   const dir = project();
   rmSync(join(dir, "src/lib/variants.ts"));
-  const ok = await run([dir, "--proof", "https://palate-fixture.vercel.app/"]);
+  const ok = await run([dir, "--proof", UNREACHABLE, ...NO_PROBE]);
   assert.equal(ok.status, 0, ok.stderr);
   assert.ok(manifestOf(dir).explore.proof.url);
   rmSync(dir, { recursive: true, force: true });
@@ -381,6 +598,110 @@ test("a text edit and a new note on the canvas become feedback Compose must hono
   assert.match(style[0].after, /font-size:72px/);
 
   assert.match(r.stdout, /3 change/, "the run does not say how much feedback it found");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * A DIRECTION IS FOUR BOARDS ON ONE ROW, and the read-back has to know which one was edited.
+ *
+ * Every B frame now sits at x 0 on its own row, so a note attributed by horizontal span alone
+ * lands on direction 1 whichever direction it was written beside: one client's sentence about
+ * the boldest direction applied to the most restrained one, in a file Compose is told to
+ * honour. Attribution is by the frame whose x AND y spans contain the note.
+ */
+const FOUR = `export interface Variant { id: string; }
+export const variants: Variant[] = [
+  { id: "b1", name: "The Quiet Room", artboard: "B1.dc.html",
+    presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
+    ambition: 1, what: "A", why: "B", feeling: "quiet", donor: "aesop", section: "services",
+    motion: "One fade.", ctas: ["Book"] },
+  { id: "b2", name: "The Long Table", artboard: "B2.dc.html",
+    presentation: { inner: "I2.dc.html", mobile: "M2.dc.html", sheet: "S2.dc.html" },
+    ambition: 2, what: "C", why: "D", feeling: "candid", donor: "leoleo", section: "proof",
+    motion: "Rows settle.", ctas: ["See"] },
+];
+export const landingVariants: Variant[] = [];
+`;
+
+test("an edit on the detail sheet is read back and tagged with its surface", async () => {
+  const dir = project();
+  writeFileSync(join(dir, "src/lib/variants.ts"), FOUR);
+  const body = (copy) => `<div data-palate-k="k1" style="padding:40px">` +
+    `<h2 data-palate-k="k2" style="font-size:32px">${copy}</h2></div>`;
+  for (const [n, id] of [[1, "b1"], [2, "b2"]]) {
+    for (const f of [`B${n}`, `I${n}`, `M${n}`, `S${n}`]) seedBoard(dir, `${f}.dc.html`, body(`${f} as drawn`));
+    void id;
+  }
+  writeFileSync(join(dir, ".palate/explore/seed/canvas.json"),
+    JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+
+  const extract = join(dir, "extract");
+  mkdirSync(extract, { recursive: true });
+  for (const f of ["B1", "I1", "M1", "S1", "B2", "I2", "M2", "S2"]) {
+    const src = readFileSync(join(dir, ".palate/explore/seed", `${f}.dc.html`), "utf8");
+    writeFileSync(join(extract, `${f}.dc.html`), f === "S2" ? src.replace("S2 as drawn", "S2, with the form error reworded") : src);
+  }
+  writeFileSync(join(extract, "canvas.json"),
+    JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+
+  const r = await run([dir, "--canvas", extract]);
+  assert.equal(r.status, 0, r.stderr);
+  const fb = JSON.parse(readFileSync(join(dir, ".palate/explore/feedback.json"), "utf8"));
+  const text = fb.filter((f) => f.kind === "text");
+  assert.equal(text.length, 1, `expected one text edit on the sheet, got ${JSON.stringify(fb)}`);
+  assert.equal(text[0].board, "b2");
+  assert.equal(text[0].surface, "sheet", "the edit was read back without saying which board it was on");
+  assert.equal(text[0].after, "S2, with the form error reworded");
+  // Every surface of every direction is diffed, not only the home board.
+  assert.match(r.stdout, /read cleanly/i);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a note beside the second direction's sheet is attributed to that direction, not the first", async () => {
+  const dir = project();
+  writeFileSync(join(dir, "src/lib/variants.ts"), FOUR);
+  for (const f of ["B1", "I1", "M1", "S1", "B2", "I2", "M2", "S2"]) {
+    seedBoard(dir, `${f}.dc.html`, `<div data-palate-k="k1"><p data-palate-k="k2" style="font-size:18px">${f}</p></div>`);
+  }
+  // The rows boards-render lays: every B at x 0, the sheet at 4310, row 2 a row below row 1.
+  const row = (y, n) => [
+    { file: `B${n}.dc.html`, x: 0, y, w: 1440, h: 2000, title: `Rung ${n}` },
+    { file: `I${n}.dc.html`, x: 2320, y, w: 1440, h: 1800, title: "inner" },
+    { file: `M${n}.dc.html`, x: 3840, y, w: 390, h: 1900, title: "mobile" },
+    { file: `S${n}.dc.html`, x: 4310, y, w: 1440, h: 1600, title: "sheet" },
+  ];
+  const artboards = [...row(0, 1), ...row(2120, 2)];
+  writeFileSync(join(dir, ".palate/explore/seed/canvas.json"),
+    JSON.stringify({ artboards, annotations: [], launch: { view: "canvas" } }));
+
+  const extract = join(dir, "extract");
+  mkdirSync(extract, { recursive: true });
+  for (const f of ["B1", "I1", "M1", "S1", "B2", "I2", "M2", "S2"]) {
+    writeFileSync(join(extract, `${f}.dc.html`), readFileSync(join(dir, ".palate/explore/seed", `${f}.dc.html`), "utf8"));
+  }
+  writeFileSync(join(extract, "canvas.json"), JSON.stringify({
+    artboards,
+    annotations: [
+      // Written inside direction 2's sheet frame. By x span alone this is nobody's; by x span
+      // against the B frames alone it was direction 1's, which is the bug.
+      { id: "client-1", x: 4400, y: 2400, w: 420, text: "The form error should name the field." },
+      // And one inside direction 2's home board, where x alone said direction 1.
+      { id: "client-2", x: 200, y: 2300, w: 420, text: "Warmer photography here." },
+    ],
+    launch: { view: "canvas" },
+  }, null, 2));
+
+  const r = await run([dir, "--canvas", extract]);
+  assert.equal(r.status, 0, r.stderr);
+  const fb = JSON.parse(readFileSync(join(dir, ".palate/explore/feedback.json"), "utf8"));
+  const notes = fb.filter((f) => f.kind === "note");
+  assert.equal(notes.length, 2, JSON.stringify(fb));
+  const sheetNote = notes.find((n) => n.path === "client-1");
+  assert.equal(sheetNote.board, "b2", "the note beside direction 2's sheet was filed against another direction");
+  assert.equal(sheetNote.surface, "sheet", "the note does not say which surface it was written beside");
+  const homeNote = notes.find((n) => n.path === "client-2");
+  assert.equal(homeNote.board, "b2");
+  assert.equal(homeNote.surface, "home");
   rmSync(dir, { recursive: true, force: true });
 });
 

@@ -69,9 +69,9 @@ never held to the bold bar.
    block, and never a pass. Read that line before reporting anything. Report its findings verbatim: they name the entry, and the fix is
    always in `src/lib/variants.ts`.
 
-2c. **The board judge** (every board is compared with the library reference it was drawn
-   from, at EVERY intensity - the visual rubric a board already clears measures hygiene, and
-   a board can clear it and still be bland):
+2c. **The board judge** (every direction is compared with the library reference it was drawn
+   from, on THREE surfaces, at EVERY intensity - the visual rubric a board already clears
+   measures hygiene, and a board can clear it and still be bland):
 
    **YOU STATE THE COMPARISONS; YOU DO NOT JUDGE THEM AND YOU DO NOT RUN THEM.** You have no
    Agent tool, and the judging has to happen in subagents that know nothing about this build,
@@ -81,20 +81,28 @@ never held to the bold bar.
    1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir>`. It writes
       `<projectDir>/.palate/explore/judge-request.json` and prints its path. A first stderr line
       reading `gate-board-judge: skipped (<reason>)` with exit 2 is a SKIP, never a block and
-      never a pass: report the reason. The commonest is a board with no `hero.png` or no
-      `donor.jpg` on disk, which means `node "${CLAUDE_PLUGIN_ROOT}/scripts/boards-render.mjs"
+      never a pass: report the reason. The commonest is a direction with no `hero.png`,
+      `inner.png` or `donor.jpg` on disk, which means
+      `node "${CLAUDE_PLUGIN_ROOT}/scripts/boards-render.mjs"
       <projectDir>` has not run with `<projectDir>/.palate/explore/donor-heroes.json` present,
-      and the skip names that.
+      and the skip names that. `sharp not installed` is the other, and it is also a skip and
+      not a two-surface pass: the fix is `scripts/reference-capture/setup.sh`.
    2. **Hand the request path back in your report, and say what is owed on it.** The request
-      carries `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`, `comparable`,
-      `better`) and, per board, TWO `comparisons`, the same pair with the images swapped, so the
+      carries the four `rungs` (`clearly_worse`, `somewhat_worse`, `comparable`,
+      `better`) and **THREE pairs per direction, six comparisons**: the entrance, the page ending
+      and the inner page, each pair holding TWO `comparisons`, the same images swapped. There is
+      no top-level question: **each pair carries its own `question`**, and the entrance's question
+      asked over a page ending comes back a valid answer to a question nobody meant. So the
       main agent owes two judgements per pair, one fresh general-purpose subagent each, collected
       into `<projectDir>/.palate/explore/judgements.json` as `[{ id, candidate_is, verdict }]`
       (`candidate_is` is the letter, `A` or `B`, the comparison named as the candidate, echoed back
       by the subagent; the gate refuses a pair without it) and scored by
       `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir> --judgements
-      <projectDir>/.palate/explore/judgements.json` before the canvas is published. The
-      procedure is `references/explore-stage.md`; do not run it here.
+      <projectDir>/.palate/explore/judgements.json` before the canvas is published, which takes
+      the lower of each pair's two readings and then the LOWEST of the surfaces. Say in your
+      report when a direction owes four rather than six: the library holds no whole-page capture
+      for some references, the ending is dropped, and a dropped surface must not read as a
+      passing one. The procedure is `references/explore-stage.md`; do not run it here.
    3. **On your NEXT round, the judgements are already a fact and you read them as one.**
       `node scripts/gate-explore.mjs <projectDir>` (step 2b) blocks a shown build whose
       registered boards have no entry in `manifest.explore.board_judgements` or carry

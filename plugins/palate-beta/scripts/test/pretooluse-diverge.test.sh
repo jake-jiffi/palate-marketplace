@@ -52,7 +52,7 @@ write_valid_manifest() { # <dir>
     {"id":"c6","mechanic":"timeline","lens":"worst-moment","analogical_seed":"relay baton","conventionality":0.7,"colourway":"cobalt + chalk + amber","type":"humanist serif + mono caption"},
     {"id":"c7","mechanic":"press","lens":"founder-obsession","analogical_seed":"instrument","conventionality":0.8,"colourway":"ink + bone + signal-red","type":"grotesk display + serif body"},
     {"id":"c8","mechanic":"crowd","lens":"physical-object","analogical_seed":"games","conventionality":0.55,"colourway":"forest + cream","type":"slab display + grotesk body"} ] },
-  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 }, "intake": { "calibration": { "position":2, "why":"the second one, the first is too quiet for us" }, "admired":["https://northwind.example"], "disliked":["https://cheapquotes.example"], "primary_action":"call", "wow":"a postcode answers on the spot", "avoid":["no purple","no stock people photos","no sliders"] } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1","c2"] } }
 JSON
 }
@@ -113,7 +113,7 @@ cat > "$B10/build-manifest.json" <<'JSON'
     {"id":"c1","lens":"a","analogical_seed":"x","conventionality":0.1},
     {"id":"c2","lens":"b","analogical_seed":"y","conventionality":0.5},
     {"id":"c3","lens":"c","analogical_seed":"z","conventionality":0.9} ] },
-  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 }, "intake": { "calibration": { "position":2, "why":"the second one, the first is too quiet for us" }, "admired":["https://northwind.example"], "disliked":["https://cheapquotes.example"], "primary_action":"call", "wow":"a postcode answers on the spot", "avoid":["no purple","no stock people photos","no sliders"] } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "build site, thin diverge (<8) -> deny" DENY \
@@ -133,7 +133,7 @@ cat > "$B11/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"same","analogical_seed":"same","conventionality":0.7},
     {"id":"c7","lens":"same","analogical_seed":"same","conventionality":0.7},
     {"id":"c8","lens":"same","analogical_seed":"same","conventionality":0.7} ] },
-  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 }, "intake": { "calibration": { "position":2, "why":"the second one, the first is too quiet for us" }, "admired":["https://northwind.example"], "disliked":["https://cheapquotes.example"], "primary_action":"call", "wow":"a postcode answers on the spot", "avoid":["no purple","no stock people photos","no sliders"] } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "build site, 8 cloned concepts (no spread) -> deny" DENY \
@@ -159,7 +159,7 @@ cat > "$B12/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"f","analogical_seed":"u","conventionality":0.6,"colourway":"ink + bone","type":"grotesk + serif","layout":"index"},
     {"id":"c7","lens":"g","analogical_seed":"v","conventionality":0.7,"colourway":"ink + bone","type":"grotesk + serif","layout":"poster"},
     {"id":"c8","lens":"h","analogical_seed":"w","conventionality":0.8,"colourway":"ink + bone","type":"grotesk + serif","layout":"feed"} ] },
-  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 }, "intake": { "calibration": { "position":2, "why":"the second one, the first is too quiet for us" }, "admired":["https://northwind.example"], "disliked":["https://cheapquotes.example"], "primary_action":"call", "wow":"a postcode answers on the spot", "avoid":["no purple","no stock people photos","no sliders"] } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "brand-creation, varies only layout (no colour/type) -> deny" DENY \
@@ -188,7 +188,7 @@ cat > "$B14/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"f","analogical_seed":"u","conventionality":0.6,"colourway":"gold","layout":"index","motion":"tilt"},
     {"id":"c7","lens":"g","analogical_seed":"v","conventionality":0.7,"colourway":"navy","layout":"poster","motion":"wipe"},
     {"id":"c8","lens":"h","analogical_seed":"w","conventionality":0.8,"colourway":"gold","layout":"feed","motion":"snap"} ] },
-  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 }, "intake": { "calibration": { "position":2, "why":"the second one, the first is too quiet for us" }, "admired":["https://northwind.example"], "disliked":["https://cheapquotes.example"], "primary_action":"call", "wow":"a postcode answers on the spot", "avoid":["no purple","no stock people photos","no sliders"] } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "brand-provided, colour in axes_varied (brand drift) -> deny" DENY \
@@ -210,7 +210,7 @@ cat > "$B15/build-manifest.json" <<'JSON'
     {"id":"c6","lens":"f","analogical_seed":"u","conventionality":0.6,"colourway":"brand","type":"brand","layout":"index","motion":"tilt"},
     {"id":"c7","lens":"g","analogical_seed":"v","conventionality":0.7,"colourway":"brand","type":"brand","layout":"poster","motion":"wipe"},
     {"id":"c8","lens":"h","analogical_seed":"w","conventionality":0.8,"colourway":"brand","type":"brand","layout":"feed","motion":"snap"} ] },
-  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
+  "plan_checkpoint": { "shown_at":"2026-09-11T04:00:00Z", "shown": { "pages":["/","/services","/contact"], "brand_source":"vendored", "references":["a","b"], "industry":"trades", "host":"vercel", "stage":"preview", "cms":false, "explore": { "mode":"ladder", "count":5 }, "intake": { "calibration": { "position":2, "why":"the second one, the first is too quiet for us" }, "admired":["https://northwind.example"], "disliked":["https://cheapquotes.example"], "primary_action":"call", "wow":"a postcode answers on the spot", "avoid":["no purple","no stock people photos","no sliders"] } }, "go": { "given":true, "how":"asked", "quote":"go ahead" } },
   "converge": { "ran":true, "advanced":["c1"] } }
 JSON
 want "brand-provided, locked colour/type + >=6 skins -> allow" ALLOW \
@@ -468,6 +468,77 @@ C14="$(mk_cp cp14)"; set_cp "$C14" '{"shown":{"host":"vercel","stage":"preview",
 want "a ladder Explore pre-authorised by the brief alone -> deny (the host and CMS are always asked)" DENY "$(run "$C14" Write "$C14/src/pages/index.astro")"
 C15="$(mk_cp cp15)"; set_cp "$C15" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"supplied-example","source":"mock.html"}},"go":{"given":true,"how":"brief","quote":"rebuild this mock as is"}}'
 want "a supplied example pre-authorised by the brief -> allow" ALLOW "$(run "$C15" Write "$C15/src/pages/index.astro")"
+
+# === THE INTAKE ============================================================================
+# On the real v3 run the calibration question was answered AFTER the boards existed, and the
+# checkpoint was satisfied by the brief: nothing about the direction came from the person. A
+# ladder Explore now has to record the six answers BEFORE the deep survey runs, because they
+# are what steers it (the intensity facet, the admired sites, the donors ruled out, the
+# conversion spine). The other two Explore modes are untouched: neither draws a ladder.
+INTAKE_OK='{"calibration":{"position":2,"why":"the second one, the first is too quiet for us"},"admired":["https://northwind.example","https://harbourglass.example"],"disliked":["https://cheapquotes.example"],"primary_action":"call","wow":"a postcode answers on the spot","avoid":["no purple","no stock people photos","no sliders"]}'
+cp_ladder() { # <intake json> -> a plan_checkpoint carrying it
+  printf '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"ladder","count":5},"intake":%s},"go":{"given":true,"how":"asked","quote":"go"}}' "$1"
+}
+drop_key() { # <intake json> <key> -> the same intake without that key
+  node -e 'const o=JSON.parse(process.argv[1]);delete o[process.argv[2]];console.log(JSON.stringify(o))' "$1" "$2"
+}
+set_key() { # <intake json> <key> <json value> -> the same intake with that key replaced
+  node -e 'const o=JSON.parse(process.argv[1]);o[process.argv[2]]=JSON.parse(process.argv[3]);console.log(JSON.stringify(o))' "$1" "$2" "$3"
+}
+
+I1="$(mk_cp in1)"; set_cp "$I1" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"ladder","count":5}},"go":{"given":true,"how":"asked","quote":"go"}}'
+want "a ladder asked for but nothing asked OF the person -> deny" DENY "$(run "$I1" Write "$I1/src/pages/index.astro")"
+want "  ...and the deny names the intake" "yes" \
+  "$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"%s"}}' "$I1" "$I1/src/pages/index.astro" | node "$HOOK" 2>/dev/null | grep -q "intake" && echo yes || echo no)"
+
+I2="$(mk_cp in2)"; set_cp "$I2" "$(cp_ladder "$INTAKE_OK")"
+want "a ladder with the six answers recorded -> allow" ALLOW "$(run "$I2" Write "$I2/src/pages/index.astro")"
+
+n=0
+for k in calibration admired disliked primary_action wow avoid; do
+  n=$((n+1)); d="$(mk_cp "in-miss$n")"; set_cp "$d" "$(cp_ladder "$(drop_key "$INTAKE_OK" "$k")")"
+  want "intake missing $k -> deny" DENY "$(run "$d" Write "$d/src/pages/index.astro")"
+done
+
+I3="$(mk_cp in3)"; set_cp "$I3" "$(cp_ladder "$(set_key "$INTAKE_OK" avoid '["no purple","no sliders"]')")"
+want "an avoid list of 2 (too thin to steer a donor choice) -> deny" DENY "$(run "$I3" Write "$I3/src/pages/index.astro")"
+I4="$(mk_cp in4)"; set_cp "$I4" "$(cp_ladder "$(set_key "$INTAKE_OK" avoid '["a","b","c","d","e","f"]')")"
+want "an avoid list of 6 (past the 3 to 5 the doctrine asks for) -> deny" DENY "$(run "$I4" Write "$I4/src/pages/index.astro")"
+I5="$(mk_cp in5)"; set_cp "$I5" "$(cp_ladder "$(set_key "$INTAKE_OK" calibration '{"position":5,"why":"off the end of the row"}')")"
+want "a calibration position off the row -> deny" DENY "$(run "$I5" Write "$I5/src/pages/index.astro")"
+I6="$(mk_cp in6)"; set_cp "$I6" "$(cp_ladder "$(set_key "$INTAKE_OK" calibration '{"position":2}')")"
+want "a calibration answer with no why -> deny" DENY "$(run "$I6" Write "$I6/src/pages/index.astro")"
+I7="$(mk_cp in7)"; set_cp "$I7" "$(cp_ladder "$(set_key "$INTAKE_OK" admired '[]')")"
+want "an empty admired list -> deny" DENY "$(run "$I7" Write "$I7/src/pages/index.astro")"
+I8="$(mk_cp in8)"; set_cp "$I8" "$(cp_ladder "$(set_key "$INTAKE_OK" primary_action '"   "')")"
+want "a blank primary action -> deny" DENY "$(run "$I8" Write "$I8/src/pages/index.astro")"
+
+I12="$(mk_cp in12)"; set_cp "$I12" "$(cp_ladder "$(set_key "$INTAKE_OK" admired '"northwind"')")"
+want "admired given as one string rather than a list -> deny" DENY "$(run "$I12" Write "$I12/src/pages/index.astro")"
+I13="$(mk_cp in13)"; set_cp "$I13" "$(cp_ladder "$(set_key "$INTAKE_OK" avoid '[1,2,3]')")"
+want "an avoid list of things that are not words -> deny" DENY "$(run "$I13" Write "$I13/src/pages/index.astro")"
+
+# THE BOARDS ARE THE THING THE INTAKE EXISTS TO STEER, so the wall has to hold the artboard
+# path too: a ladder drawn before the six answers is the exact run that prompted this.
+I14="$TMP/art-no-intake"; mkdir -p "$I14"; echo "$MARKER" > "$I14/.palate-skill-state.json"; write_valid_manifest "$I14"
+node -e 'const fs=require("fs");const f=process.argv[1];const m=JSON.parse(fs.readFileSync(f,"utf8"));delete m.plan_checkpoint.shown.intake;fs.writeFileSync(f,JSON.stringify(m));' "$I14/build-manifest.json"
+want "an artboard drawn before the intake was asked -> deny" DENY "$(run "$I14" Write "$I14/.palate/explore/seed/B1.dc.html")"
+
+I15="$(mk_cp in15)"; set_cp "$I15" "$(cp_ladder "$(set_key "$INTAKE_OK" calibration '{"position":0,"why":"before the first one"}')")"
+want "a calibration position of 0 (the row starts at 1) -> deny" DENY "$(run "$I15" Write "$I15/src/pages/index.astro")"
+I16="$(mk_cp in16)"; set_cp "$I16" "$(cp_ladder "$(set_key "$INTAKE_OK" calibration '{"position":"2","why":"typed, not counted"}')")"
+want "a calibration position written as a string -> deny" DENY "$(run "$I16" Write "$I16/src/pages/index.astro")"
+I17="$(mk_cp in17)"; set_cp "$I17" "$(cp_ladder "$(set_key "$INTAKE_OK" admired '[""]')")"
+want "an admired list holding one empty answer -> deny" DENY "$(run "$I17" Write "$I17/src/pages/index.astro")"
+I18="$(mk_cp in18)"; set_cp "$I18" "$(cp_ladder "$(set_key "$INTAKE_OK" admired "$(node -e 'console.log(JSON.stringify(Array.from({length:21},(_,i)=>"site"+i)))')")")"
+want "an admired list of 21 (past the cap the deny message states) -> deny" DENY "$(run "$I18" Write "$I18/src/pages/index.astro")"
+
+I9="$(mk_cp in9)"; set_cp "$I9" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"supplied-example","source":"mock.html"}},"go":{"given":true,"how":"asked","quote":"rebuild that"}}'
+want "a supplied example needs no intake (no ladder is drawn) -> allow" ALLOW "$(run "$I9" Write "$I9/src/pages/index.astro")"
+I10="$(mk_cp in10)"; set_cp "$I10" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"named-direction","source":"https://northwind.example"}},"go":{"given":true,"how":"brief","quote":"build it like Northwind"}}'
+want "a named direction needs no intake -> allow" ALLOW "$(run "$I10" Write "$I10/src/pages/index.astro")"
+I11="$(mk_cp in11)"; set_cp "$I11" '{"exempt":"tiny-work","reason":"one copy fix"}'
+want "a recorded exemption needs no intake -> allow" ALLOW "$(run "$I11" Write "$I11/src/pages/index.astro")"
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

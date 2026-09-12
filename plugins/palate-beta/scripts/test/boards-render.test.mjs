@@ -25,7 +25,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 import { createServer } from "node:http";
-import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard, validateArtboard, stampKeys, loadDonors } from "../boards-render.mjs";
+import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard, validateArtboard, validateSheet, validateSheetCaptions, parseKitVariations, stampKeys, loadDonors } from "../boards-render.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
@@ -45,6 +45,15 @@ const BOARDS = [
     feeling: "unhurried, private, adult",
     motion: "Nothing moves on load; a single slow fade carries the photograph in.",
     ctas: ["Book a first visit", "Ask a question"],
+    pieces: {
+      navigation: { variation: "NavSimple", donor: "aesop" },
+      hero: { variation: "HeroTextImage", donor: "anthropic" },
+      trust: { variation: "TrustRatings", donor: "lava-dental" },
+      cta: { variation: "CtaClosing", donor: "parsley-health" },
+      forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
+      footer: { variation: "FooterSimple", donor: "loom" },
+      services: { variation: "BenefitCards", donor: "linear" },
+    },
   },
   {
     id: "b2", name: "The Long Table", ambition: 2, section: "proof", donor: "the-modern-house",
@@ -53,15 +62,32 @@ const BOARDS = [
     feeling: "candid, unhurried",
     motion: "Rows settle into place as the table is scrolled, one after another.",
     ctas: ["See the work", "Start a project", "Ask about a fit"],
+    pieces: {
+      navigation: { variation: "NavDropdown", donor: "stripe" },
+      hero: { variation: "HeroCentredPreview", donor: "linear" },
+      trust: { variation: "TrustLogos", donor: "mercury" },
+      cta: { variation: "CtaWithProof", donor: "vercel" },
+      forms: { variation: "FormContact", donor: "basecamp" },
+      footer: { variation: "FooterGrouped", donor: "glossier" },
+      proof: { variation: "TestimonialGrid", donor: "aesop" },
+    },
   },
 ];
 
-/** The registry as Task 2 left it: `artboard` required, no `href`, because no route exists. */
+/**
+ * The registry: `artboard` required, no `href` (no route exists), and `presentation` naming the
+ * other three artboards of the direction, because a direction is four boards now.
+ */
 function registryFor(boards) {
   const entries = boards.map((b) => `  {
     id: ${JSON.stringify(b.id)},
     name: ${JSON.stringify(b.name)},
     artboard: ${JSON.stringify(`B${b.ambition}.dc.html`)},
+    presentation: {
+      inner: ${JSON.stringify(`I${b.ambition}.dc.html`)},
+      mobile: ${JSON.stringify(`M${b.ambition}.dc.html`)},
+      sheet: ${JSON.stringify(`S${b.ambition}.dc.html`)},
+    },
     ambition: ${b.ambition},
     what: ${JSON.stringify(b.what)},
     why: ${JSON.stringify(b.why)},
@@ -70,10 +96,15 @@ function registryFor(boards) {
     section: ${JSON.stringify(b.section)},
     motion: ${JSON.stringify(b.motion)},
     ctas: ${JSON.stringify(b.ctas)},
+    pieces: {
+${Object.entries(b.pieces || {}).map(([k, v]) => `      ${k}: { variation: ${JSON.stringify(v.variation)}, donor: ${JSON.stringify(v.donor)} },`).join("\n")}
+    },
   },`).join("\n");
   return `export interface Variant {
   id: string; name: string; artboard: string; href?: string; ambition: number; what: string;
   why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[];
+  presentation: { inner: string; mobile: string; sheet: string };
+  pieces: Record<string, { variation: string; donor: string }>;
   clip?: string; lookAt?: string;
 }
 export const variants: Variant[] = [
@@ -113,10 +144,101 @@ function artboardFor(b) {
     `</x-dc></body></html>`;
 }
 
+/**
+ * The other three artboards of a direction. A direction is not one board any more: the client
+ * signs off a home page, the inner page the primary action lands on, the same home at 390, and
+ * the sheet of the kit pieces AS USED, with their states.
+ *
+ * All three are tall on purpose, for the same reason the home board is: the frame height is
+ * MEASURED, and a board that renders 150px tall could not tell a measurement from a default.
+ */
+function innerFor(b) {
+  return `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body>` +
+    `<x-dc><helmet><style>` +
+    `x-dc{display:block;width:1440px;overflow:hidden}body{margin:0;font-family:Georgia,serif}` +
+    `a{color:#2f5d50;text-decoration:underline}a:hover{color:#1b382f}` +
+    `.hero{min-height:520px;padding:80px}.band{padding:64px 80px}` +
+    `</style></helmet>` +
+    `<header class="nav band" data-section-id="${b.id}-inner-navigation">` +
+    `<a class="nav-logo" href="#">${b.name}</a><a class="nav-cta" href="#">${b.ctas[0]}</a></header>` +
+    `<section class="hero" data-section-id="${b.id}-inner-hero">` +
+    `<h1 class="hero-title">The service page</h1><p class="hero-lede">${b.what}</p></section>` +
+    `<section class="detail band" data-section-id="${b.id}-inner-detail">` +
+    `<h2 class="section-title">What is included</h2><ul class="list"><li class="row">One</li><li class="row">Two</li></ul></section>` +
+    `<section class="cta band" data-section-id="${b.id}-inner-cta"><a class="cta-btn" href="#">${b.ctas[1]}</a></section>` +
+    `<footer class="footer band" data-section-id="${b.id}-inner-footer"><p class="footer-line">Ballina, New South Wales</p></footer>` +
+    `</x-dc></body></html>`;
+}
+
+function mobileFor(b) {
+  return `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body>` +
+    `<x-dc><helmet><style>` +
+    `x-dc{display:block;width:390px;overflow:hidden}body{margin:0;font-family:Georgia,serif}` +
+    `a{color:#2f5d50;text-decoration:underline}a:hover{color:#1b382f}` +
+    `.hero{min-height:480px;padding:24px}.band{padding:32px 24px}` +
+    `</style></helmet>` +
+    `<header class="nav band" data-section-id="${b.id}-navigation">` +
+    `<a class="nav-logo" href="#">${b.name}</a><a class="nav-burger" href="#">Menu</a></header>` +
+    `<section class="hero" data-section-id="${b.id}-hero">` +
+    `<h1 class="hero-title">${b.name}</h1><p class="hero-lede">${b.what}</p></section>` +
+    `<section class="${b.section} band" data-section-id="${b.id}-${b.section}">` +
+    `<h2 class="section-title">${b.section}</h2><ul class="list"><li class="row">One</li></ul></section>` +
+    `<section class="cta band" data-section-id="${b.id}-cta"><a class="cta-btn" href="#">${b.ctas[0]}</a></section>` +
+    `<footer class="footer band" data-section-id="${b.id}-footer"><p class="footer-line">Ballina, New South Wales</p></footer>` +
+    `</x-dc></body></html>`;
+}
+
+/** The eight blocks the sheet owes, each a real kit piece and variation, each with real copy. */
+const SHEET_BLOCKS = [
+  ["navigation:NavSimple:default", "The bar at rest: the name on the left, five destinations, and the one action pinned right."],
+  ["navigation:NavMobileSheet:open", "The drawer open on a phone, with the same destinations and the quote action held at the bottom."],
+  ["trust:TrustRatings:default", "Four and nine tenths from three hundred and twelve reviews, said plainly under the entrance."],
+  ["benefits:BenefitCards:default", "One card: what the work is, what it costs to start, and how long a fitting takes."],
+  ["forms:FormEnquiry:default", "The enquiry form filled in: name, suburb, phone, and what needs doing."],
+  ["forms:FormEnquiry:error", "The same form with its errors shown: a phone number that is not a phone number, named on the field."],
+  ["cta:CtaClosing:default", "The closing band: one line, one action, and the number to ring if a form is not wanted."],
+  ["footer:FooterSimple:default", "The footer: the address, the hours, the licence number and the three legal links."],
+];
+
+/**
+ * The provenance caption a real sheet carries under each block: the piece, the kit variation it
+ * is, and the reference that variation's craft came from. It is the only place the DONOR of a
+ * piece is ever written down where a client can read it, which is why boards-render checks it.
+ */
+function captionFor(b, mark) {
+  const [piece, variation] = mark.split(":");
+  // BY THE VARIATION FIRST, then by the piece id, exactly as the check resolves it: the card is
+  // registered under the direction's own section key ("services"), and the drawer on a phone is
+  // a second navigation variation the registry does not name.
+  const prov = Object.values(b.pieces || {}).find((x) => x.variation === variation) || b.pieces?.[piece];
+  if (!prov) return "";
+  const name = piece[0].toUpperCase() + piece.slice(1);
+  return `<p class="piece-from">${name}: ${variation}, drawn from ${prov.donor}.</p>`;
+}
+
+function sheetFor(b, blocks = SHEET_BLOCKS) {
+  const body = blocks.map(([mark, copy]) =>
+    `<section class="piece band" data-kit-piece="${mark}"><h2 class="piece-title">${mark}</h2>` +
+    captionFor(b, mark) +
+    `<p class="piece-copy">${copy}</p></section>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body>` +
+    `<x-dc><helmet><style>` +
+    `x-dc{display:block;width:1440px;overflow:hidden}body{margin:0;font-family:Georgia,serif}` +
+    `a{color:#2f5d50;text-decoration:underline}a:hover{color:#1b382f}` +
+    `.band{padding:48px 80px}` +
+    `</style></helmet>` +
+    `<header class="sheet-head band"><h1 class="sheet-title">${b.name}: the pieces as used</h1></header>` +
+    body +
+    `</x-dc></body></html>`;
+}
+
 function drawSeed(boards) {
   mkdirSync(SEED, { recursive: true });
   for (const b of boards) {
     writeFileSync(join(SEED, `B${b.ambition}.dc.html`), artboardFor(b));
+    writeFileSync(join(SEED, `I${b.ambition}.dc.html`), innerFor(b));
+    writeFileSync(join(SEED, `M${b.ambition}.dc.html`), mobileFor(b));
+    writeFileSync(join(SEED, `S${b.ambition}.dc.html`), sheetFor(b));
     writeFileSync(join(SEED, `${b.id}-img1.png`), pngFixture(80, 60));
   }
 }
@@ -215,6 +337,53 @@ test("the registry parser returns each board's artboard file", () => {
   assert.deepEqual(parsed.map((v) => v.artboard), ["B1.dc.html", "B2.dc.html"]);
 });
 
+test("the registry parser returns the direction's other three artboards", () => {
+  // A direction is FOUR boards. Without this the run can only guess the other three from the
+  // rung, and a registry naming anything else is obeyed by the picker and ignored here.
+  const [v] = parseRegistry(registryFor(BOARDS));
+  assert.deepEqual(v.presentation, { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" });
+  assert.equal(parseRegistry(registryFor(BOARDS))[1].presentation.sheet, "S2.dc.html");
+});
+
+test("the registry parser returns each direction's per-piece provenance", () => {
+  // The per-piece provenance is what the detail sheet's captions print and what gate-explore
+  // holds against the kit, so a parser that drops it leaves both checking nothing.
+  const [v] = parseRegistry(registryFor(BOARDS));
+  assert.deepEqual(v.pieces.navigation, { variation: "NavSimple", donor: "aesop" });
+  assert.deepEqual(v.pieces.services, { variation: "BenefitCards", donor: "linear" });
+  assert.equal(Object.keys(v.pieces).length, 7);
+  // AND THE NESTED DONORS ARE NOT THE BOARD'S OWN. `pieces` carries a `donor:` per entry, so a
+  // parser reading the first `donor:` in the object reports the navigation's reference as the
+  // direction's, and every downstream check about donors is then about the wrong slug.
+  assert.equal(v.donor, "therapy-in-london");
+  // Written with `pieces` ABOVE the board's own donor, which is the order that exposes it.
+  const above = `export const variants = [
+  { id: "b9", name: "The Ledger", artboard: "B9.dc.html",
+    pieces: { navigation: { variation: "NavSimple", donor: "aesop" } },
+    ambition: 9, donor: "the-modern-house", section: "proof" },
+];`;
+  const [w] = parseRegistry(above);
+  assert.equal(w.donor, "the-modern-house", "the navigation's reference was read as the direction's");
+  assert.equal(w.pieces.navigation.donor, "aesop");
+});
+
+test("parseKitVariations reads the shipped kit: 17 pieces, 50 variations", () => {
+  // The sheet's `data-kit-piece` marks are checked against THIS, so a parser that reads the kit
+  // wrongly either refuses a correct sheet or accepts a variation that does not exist.
+  const kit = parseKitVariations(readFileSync(join(ROOT, "templates/astro-project/src/lib/kit.ts"), "utf8"));
+  assert.equal(kit.size, 17, `the kit parsed as ${kit.size} pieces`);
+  let total = 0;
+  for (const set of kit.values()) total += set.size;
+  assert.equal(total, 50, `the kit parsed as ${total} variations`);
+  assert.ok(kit.get("navigation").has("NavSimple"));
+  assert.ok(kit.get("navigation").has("NavMobileSheet"));
+  assert.ok(kit.get("forms").has("FormEnquiry"));
+  assert.ok(kit.get("footer").has("FooterSimple"));
+  // The piece ids are the pieces, not the variations: a parser that flattened them would find
+  // "NavSimple" as a piece and every mark would validate against the wrong set.
+  assert.ok(!kit.has("NavSimple"), "a variation id was read as a piece id");
+});
+
 test("an artboard carries the skeleton the editor replaces, verbatim", () => {
   const a = toArtboard({ html: "<p>hi</p>", css: "p{color:red}", name: "b1 Test" });
   assert.ok(a.startsWith("<!doctype html>"));
@@ -223,7 +392,16 @@ test("an artboard carries the skeleton the editor replaces, verbatim", () => {
   assert.ok(a.includes("</x-dc></body></html>"));
 });
 
-test("canvas.json puts the references on row 0 and the boards 120px below", () => {
+/**
+ * ONE ROW PER DIRECTION, and that is the change a client feels.
+ *
+ * Boards used to run left to right along a single row, so the canvas read as a strip of home
+ * pages. A direction is four boards now (the home, the inner page, the phone, the sheet of the
+ * pieces) beside the reference it is drawn from, and a row that carries all five reads as an
+ * agency's sign-off spread. So a second direction starts a NEW row rather than sitting 80px to
+ * the right of the first one's footer.
+ */
+test("canvas.json puts the references on row 0 and gives each direction its own row", () => {
   const doc = writeCanvasJson({
     boards: [
       { file: "B1.dc.html", id: "b1", ambition: 1, name: "One", h: 2000, feeling: "quiet", what: "A" },
@@ -237,11 +415,74 @@ test("canvas.json puts the references on row 0 and the boards 120px below", () =
   const b2 = doc.artboards.find((a) => a.file === "B2.dc.html");
   assert.equal(refFrame.y, 0);
   assert.equal(b1.y, refFrame.h + 120, "120px between rows");
-  assert.equal(b2.x - (b1.x + b1.w), 80, "80px between frames in a row");
+  assert.equal(b1.x, 0, "the home board leads its row");
+  assert.equal(b2.x, 0, "the second direction starts its own row, rather than beside the first");
+  assert.equal(b2.y, b1.y + b1.h + 120, "120px between direction rows, measured on the tallest frame");
   assert.equal(b1.h, 2000, "the frame height is the measured height, never a guess");
   assert.equal(doc.launch.view, "canvas");
   assert.ok(doc.annotations.some((a) => a.id === "cal-q"), "the calibration question is annotated");
   for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/);
+});
+
+test("a direction's row is B, its donor, the inner page, the phone and the sheet", () => {
+  const doc = writeCanvasJson({
+    boards: [
+      { file: "B1.dc.html", id: "b1", ambition: 1, name: "One", h: 2000, feeling: "quiet", what: "A",
+        presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
+        innerH: 1800, mobileH: 3200, sheetH: 2600 },
+      { file: "B2.dc.html", id: "b2", ambition: 2, name: "Two", h: 2400, feeling: "loud", what: "B",
+        presentation: { inner: "I2.dc.html", mobile: "M2.dc.html", sheet: "S2.dc.html" },
+        innerH: 1500, mobileH: 2900, sheetH: 2200 },
+    ],
+    donors: [donorFor(1)],
+    out: null,
+  });
+  const at = (f) => doc.artboards.find((a) => a.file === f);
+  // The x positions are the contract: every direction's row reads down the same columns, so a
+  // client scanning two rows compares home with home and phone with phone.
+  assert.equal(at("B1.dc.html").x, 0);
+  assert.equal(at("D1.dc.html").x, 1520, "the donor does not sit beside its home board");
+  assert.equal(at("I1.dc.html").x, 2320, "the inner page is not in the third column");
+  assert.equal(at("M1.dc.html").x, 3840, "the phone is not in the fourth column");
+  assert.equal(at("M1.dc.html").w, 390, "the phone frame is not 390 wide, so the canvas crops or gutters it");
+  assert.equal(at("S1.dc.html").x, 4310, "the sheet is not in the last column");
+  for (const f of ["D1.dc.html", "I1.dc.html", "M1.dc.html", "S1.dc.html"]) {
+    assert.equal(at(f).y, at("B1.dc.html").y, `${f} is not on its direction's own row`);
+  }
+  assert.equal(at("I1.dc.html").h, 1800, "the inner frame declares something other than its measured height");
+  assert.equal(at("M1.dc.html").h, 3200);
+  assert.equal(at("S1.dc.html").h, 2600);
+  // The row is as tall as its TALLEST frame, which here is the phone at 3200, not the home board.
+  assert.equal(at("B2.dc.html").y, at("B1.dc.html").y + 3200 + 120,
+    "the next row was not stepped past the tallest frame in this one, so two rows overlap");
+
+  for (const id of ["inner-b1", "mobile-b1", "sheet-b1", "donor-b1", "board-b1"]) {
+    assert.ok(doc.annotations.some((a) => a.id === id), `no ${id} annotation, so the frame is unlabelled`);
+  }
+  assert.match(doc.annotations.find((a) => a.id === "inner-b1").text, /primary service page/i);
+  assert.match(doc.annotations.find((a) => a.id === "mobile-b1").text, /390/);
+  assert.match(doc.annotations.find((a) => a.id === "sheet-b1").text, /navigation/i);
+  // Client-facing again: the note under the home board says "direction", not "rung".
+  assert.match(doc.annotations.find((a) => a.id === "board-b1").text, /direction 1 of 2/i);
+  assert.doesNotMatch(doc.annotations.find((a) => a.id === "board-b1").text, /rung/i);
+  for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/);
+});
+
+test("with no donor the other frames keep their columns", () => {
+  // A missing donor must not shuffle the inner page into the donor's column: the row would then
+  // read differently from the row above it, which is the one thing a comparison spread cannot do.
+  const doc = writeCanvasJson({
+    boards: [{ file: "B1.dc.html", id: "b1", ambition: 1, name: "One", h: 900, feeling: "quiet", what: "A",
+      presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
+      innerH: 900, mobileH: 900, sheetH: 900 }],
+    donors: [],
+    out: null,
+  });
+  const at = (f) => doc.artboards.find((a) => a.file === f);
+  assert.equal(doc.artboards.some((a) => a.file.startsWith("D")), false, "a donor card was drawn with no donor");
+  assert.equal(at("I1.dc.html").x, 2320);
+  assert.equal(at("M1.dc.html").x, 3840);
+  assert.equal(at("S1.dc.html").x, 4310);
 });
 
 // ------------------------------------------------------- the artboard contract
@@ -551,6 +792,239 @@ test("a stamped artboard still validates, so the seed can be rewritten in place"
   assert.equal(r.ok, true, r.problems.join("; "));
 });
 
+// ------------------------------------------------------ the other three kinds
+/**
+ * A DIRECTION IS FOUR BOARDS, and each kind is held to its own contract.
+ *
+ * The shared rules (skeleton, one script, images, links, class ratio, a:hover) are the same for
+ * all four, because they are about what a canvas can render. What differs is the frame width,
+ * which marks a board of that kind owes, and whether the motion has to be written on it: the
+ * motion belongs to the home board, and repeating it on the mobile and the sheet would be three
+ * copies of one plan drifting apart.
+ */
+const KIT = parseKitVariations(readFileSync(join(ROOT, "templates/astro-project/src/lib/kit.ts"), "utf8"));
+const B = BOARDS[0];
+const asInner = () => innerFor(B);
+const asMobile = () => mobileFor(B);
+const asSheet = (blocks) => sheetFor(B, blocks);
+const val = (html, over = {}) => validateArtboard(html, { id: "b1", dir: fixtureDirWith({}), kit: KIT, ...over });
+
+test("the inner page validates, and its four marks are each named when missing", () => {
+  assert.equal(val(asInner(), { kind: "inner" }).ok, true, val(asInner(), { kind: "inner" }).problems.join("; "));
+  for (const piece of ["navigation", "hero", "cta", "footer"]) {
+    const r = val(asInner().replace(` data-section-id="b1-inner-${piece}"`, ""), { kind: "inner" });
+    assert.equal(r.ok, false, piece);
+    assert.match(r.problems.join("\n"), new RegExp(`b1-inner-${piece}`));
+  }
+});
+
+test("the inner page is 1440 wide and needs no motion note of its own", () => {
+  const narrow = val(asInner().replace("width:1440px", "width:390px"), { kind: "inner" });
+  assert.equal(narrow.ok, false);
+  assert.match(narrow.problems.join("\n"), /1440/);
+  // The fixture carries no motion block at all, and it validated above. Stated here so a future
+  // change that makes the motion note universal has to change a test that says why it is not.
+  assert.ok(!/data-palate-motion/.test(asInner()), "the inner fixture carries a motion note, so this proves nothing");
+});
+
+test("the mobile board must be 390 wide, and 1440 is refused", () => {
+  assert.equal(val(asMobile(), { kind: "mobile" }).ok, true, val(asMobile(), { kind: "mobile" }).problems.join("; "));
+  // THE WHOLE POINT OF THE MOBILE BOARD IS ITS WIDTH. A frame neither scales nor crops, so a
+  // "mobile" board drawn at 1440 is a second desktop board that the client signs off as a phone.
+  const wide = val(asMobile().replace("width:390px", "width:1440px"), { kind: "mobile" });
+  assert.equal(wide.ok, false, "a 1440-wide mobile board was accepted as the phone");
+  assert.match(wide.problems.join("\n"), /390/);
+});
+
+test("the mobile board is the whole page too, and each missing mark is named", () => {
+  for (const piece of ["navigation", "hero", "cta", "footer"]) {
+    const r = val(asMobile().replace(` data-section-id="b1-${piece}"`, ""), { kind: "mobile" });
+    assert.equal(r.ok, false, piece);
+    assert.match(r.problems.join("\n"), new RegExp(`b1-${piece}`));
+  }
+});
+
+test("the detail sheet validates when every piece it uses is a real kit variation", () => {
+  const r = val(asSheet(), { kind: "sheet" });
+  assert.equal(r.ok, true, r.problems.join("; "));
+  assert.equal(validateSheet(asSheet(), { id: "b1", kit: KIT }).ok, true);
+});
+
+test("a sheet missing any required block is refused, naming the block", () => {
+  // The eight are the minimum because they are what a client signs off: how the navigation looks
+  // closed AND open, what the footer carries, how the closing band asks, how the enquiry form
+  // looks filled AND wrong, one card, one trust strip. A sheet of heroes proves none of it.
+  const required = [
+    ["navigation:NavSimple:default", /navigation.*default/],
+    ["navigation:NavMobileSheet:open", /navigation.*open/],
+    ["footer:FooterSimple:default", /footer/],
+    ["cta:CtaClosing:default", /cta/],
+    ["forms:FormEnquiry:default", /forms.*default/],
+    ["forms:FormEnquiry:error", /forms.*error/],
+    ["benefits:BenefitCards:default", /benefits|usecases|casestudies/],
+    ["trust:TrustRatings:default", /trust/],
+  ];
+  for (const [mark, said] of required) {
+    const r = val(asSheet(SHEET_BLOCKS.filter(([m]) => m !== mark)), { kind: "sheet" });
+    assert.equal(r.ok, false, `a sheet with no ${mark} was accepted`);
+    assert.match(r.problems.join("\n"), said, `the refusal does not name what is missing (${mark})`);
+  }
+});
+
+test("a card from usecases or casestudies satisfies the card requirement", () => {
+  for (const mark of ["usecases:UseCasesAudience:default", "casestudies:CaseCards:default"]) {
+    const blocks = SHEET_BLOCKS.filter(([m]) => m !== "benefits:BenefitCards:default")
+      .concat([[mark, "One story: the job, the constraint, the price and how long it took."]]);
+    const r = val(asSheet(blocks), { kind: "sheet" });
+    assert.equal(r.ok, true, `${mark} did not satisfy the card requirement: ${r.problems.join("; ")}`);
+  }
+});
+
+test("a sheet naming a piece or a variation the kit does not have is refused, naming it", () => {
+  const bogusPiece = SHEET_BLOCKS.concat([["carousel:SpinnyThing:default", "A carousel nobody asked for and no kit piece carries."]]);
+  const p = val(asSheet(bogusPiece), { kind: "sheet" });
+  assert.equal(p.ok, false, "a sheet showing a piece the kit does not have was accepted");
+  assert.match(p.problems.join("\n"), /carousel/);
+
+  const bogusVariation = SHEET_BLOCKS.map(([m, c]) => (m === "footer:FooterSimple:default" ? ["footer:FooterFancy:default", c] : [m, c]));
+  const v = val(asSheet(bogusVariation), { kind: "sheet" });
+  assert.equal(v.ok, false, "a sheet naming a variation that does not exist was accepted");
+  assert.match(v.problems.join("\n"), /FooterFancy/);
+
+  const malformed = SHEET_BLOCKS.concat([["justapiece", "A mark with no variation and no state."]]);
+  const m = val(asSheet(malformed), { kind: "sheet" });
+  assert.equal(m.ok, false, "a mark that is not piece:variation:state was accepted");
+  assert.match(m.problems.join("\n"), /justapiece/);
+});
+
+test("a type specimen is refused as a sheet, and the rule is named", () => {
+  // THE SHEET JAKE REJECTED ON 9 SEPTEMBER. Half of every board was an Ag ramp, swatches and a
+  // button pair: the type DISPLAYED rather than USED, identical in layout across every direction.
+  // A sheet with real blocks and no copy in them is that sheet with different markup.
+  const specimen = asSheet(SHEET_BLOCKS.map(([m]) => [m, ""]))
+    .replace(/<h2 class="piece-title">[^<]*<\/h2>/g, '<h2 class="piece-title">Ag</h2>')
+    .replace(/<p class="piece-from">[^<]*<\/p>/g, "")
+    .replace(/<h1 class="sheet-title">[^<]*<\/h1>/, '<h1 class="sheet-title">Aa</h1>');
+  const r = val(specimen, { kind: "sheet" });
+  assert.equal(r.ok, false, "a type specimen with no copy on it was accepted as the detail sheet");
+  assert.match(r.problems.join("\n"), /120 characters|specimen/i);
+});
+
+test("a state the piece does not implement is refused, and default is implicit", () => {
+  // A sheet claiming a state the kit does not build is the same promise as a variation that
+  // does not exist: the client signs off a form error the build has no way to render.
+  const bogus = SHEET_BLOCKS.map(([m, c]) => (m === "trust:TrustRatings:default" ? ["trust:TrustRatings:nonsense", c] : [m, c]));
+  const r = val(asSheet(bogus), { kind: "sheet" });
+  assert.equal(r.ok, false, "a state the kit does not declare was accepted");
+  assert.match(r.problems.join("\n"), /nonsense/);
+  // `default` is the resting state and no piece declares it, so it must never be refused: the
+  // fixture is six blocks of :default and it validates.
+  const kitStates = KIT.get("trust").get("TrustRatings");
+  assert.ok(!kitStates.has("default"), "the kit declares default, so this proves nothing");
+  assert.equal(val(asSheet(), { kind: "sheet" }).ok, true);
+});
+
+test("two data-kit-piece attributes on one tag are refused", () => {
+  // The second one is invisible: a parser reading attributes takes the first and the block is
+  // filed as one piece while its markup claims two, which is how a required block goes missing
+  // on a sheet that says it is there.
+  const doubled = asSheet().replace('data-kit-piece="cta:CtaClosing:default"',
+    'data-kit-piece="cta:CtaClosing:default" data-kit-piece="footer:FooterSimple:default"');
+  const r = val(doubled, { kind: "sheet" });
+  assert.equal(r.ok, false, "a tag carrying two data-kit-piece attributes was accepted");
+  assert.match(r.problems.join("\n"), /two data-kit-piece|more than one/i);
+});
+
+test("an annotation id stays inside the 40 characters a canvas id allows", () => {
+  // `mobile-` is the longest prefix, so the id is what bounds the slice. A board id at the
+  // limit produced a 41-character annotation id, which the canvas rejects and nothing said so.
+  const longId = "b".repeat(60);
+  const doc = writeCanvasJson({
+    boards: [{ file: "B1.dc.html", id: longId, ambition: 1, name: "One", h: 900, feeling: "quiet", what: "A",
+      presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
+      innerH: 900, mobileH: 900, sheetH: 900 }],
+    out: null,
+  });
+  assert.ok(doc.annotations.some((a) => a.id.startsWith("mobile-")), "no mobile annotation to measure");
+  for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/, `${a.id} is ${a.id.length} characters`);
+});
+
+test("every required block's caption names its variation and the reference it came from", () => {
+  // THE ONLY PLACE A PIECE'S DONOR IS EVER WRITTEN WHERE A CLIENT CAN READ IT. The sheet is what
+  // gets signed off; a block with no provenance under it is a piece whose craft came from
+  // wherever the author happened to be looking, and nobody can tell afterwards.
+  const ok = validateSheetCaptions(asSheet(), { id: "b1", pieces: B.pieces });
+  assert.equal(ok.ok, true, ok.problems.join("; "));
+
+  const noDonor = asSheet().replace(", drawn from aesop.", ".");
+  const r = validateSheetCaptions(noDonor, { id: "b1", pieces: B.pieces });
+  assert.equal(r.ok, false, "a navigation block whose caption names no donor was accepted");
+  assert.match(r.problems.join("\n"), /navigation/);
+  assert.match(r.problems.join("\n"), /aesop/);
+
+  // The variation half: a caption that says "the footer" and nothing else leaves the client
+  // approving a footer whose kit variation is decided after the sign-off.
+  const noVariation = asSheet()
+    .replace('<h2 class="piece-title">footer:FooterSimple:default</h2>', '<h2 class="piece-title">The footer</h2>')
+    .replace("Footer: FooterSimple, drawn from loom.", "Drawn from loom.");
+  const f = validateSheetCaptions(noVariation, { id: "b1", pieces: B.pieces });
+  assert.equal(f.ok, false, "a footer block whose caption names no variation was accepted");
+  assert.match(f.problems.join("\n"), /FooterSimple/);
+});
+
+test("the card and the trust strip are checked too, not just the pieces named by their own id", () => {
+  // THE TWO BLOCKS MOST LIKELY TO CARRY INVENTED COPY. The card is registered under the
+  // direction's own section key ("services"), not under "benefits", so a lookup by piece id
+  // found nothing for either of them and they were the two nobody checked.
+  const noTrustDonor = asSheet().replace("Trust: TrustRatings, drawn from lava-dental.", "Trust: TrustRatings.");
+  const t = validateSheetCaptions(noTrustDonor, { id: "b1", pieces: B.pieces });
+  assert.equal(t.ok, false, "a trust strip whose caption names no donor was accepted");
+  assert.match(t.problems.join("\n"), /trust:TrustRatings:default/);
+  assert.match(t.problems.join("\n"), /lava-dental/);
+
+  const noCardVariation = asSheet()
+    .replace('<h2 class="piece-title">benefits:BenefitCards:default</h2>', '<h2 class="piece-title">One card</h2>')
+    .replace("Benefits: BenefitCards, drawn from linear.", "Drawn from linear.");
+  const c = validateSheetCaptions(noCardVariation, { id: "b1", pieces: B.pieces });
+  assert.equal(c.ok, false, "a card whose caption names no kit variation was accepted");
+  assert.match(c.problems.join("\n"), /benefits:BenefitCards:default/);
+  assert.match(c.problems.join("\n"), /BenefitCards/);
+
+  // AND ALL EIGHT REQUIRED BLOCKS ARE REACHED. A sheet with no provenance anywhere must produce
+  // one finding per required block; a lookup that quietly resolves to nothing shows up here as a
+  // smaller number rather than as a passing sheet.
+  const bare = asSheet().replace(/<p class="piece-from">[^<]*<\/p>/g, '<p class="piece-from">NO PROVENANCE AT ALL HERE.</p>');
+  const r = validateSheetCaptions(bare, { id: "b1", pieces: B.pieces });
+  assert.equal(r.ok, false);
+  assert.equal(r.problems.length, 8, `only ${r.problems.length} of the eight required blocks were checked`);
+});
+
+test("the caption check reads the block it is under, not the sheet as a whole", () => {
+  // A donor named once in a heading at the top would otherwise satisfy every block below it,
+  // which is exactly the sheet that carries no provenance at all.
+  const topOnly = asSheet().replace(", drawn from aesop.", ".")
+    .replace('<h1 class="sheet-title">', '<h1 class="sheet-title">aesop NavSimple ');
+  const r = validateSheetCaptions(topOnly, { id: "b1", pieces: B.pieces });
+  assert.equal(r.ok, false, "a donor named in the sheet's heading stood in for the block's own caption");
+});
+
+test("a direction that declared no pieces is not refused by the caption check", () => {
+  // gate-explore owns "this direction declared no provenance". Reporting the same absence here,
+  // in different words, would make one fault read as two on every board.
+  const r = validateSheetCaptions(asSheet(), { id: "b1", pieces: null });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("the shared rules hold on every kind, so a broken image is refused on the sheet too", () => {
+  const withImg = asSheet().replace("<header class=\"sheet-head", '<img src="https://example.com/x.jpg" alt=""><header class="sheet-head');
+  const r = val(withImg, { kind: "sheet" });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /is remote or inline/i);
+  const noHover = val(asMobile().replace("a:hover{color:#1b382f}", ""), { kind: "mobile" });
+  assert.equal(noHover.ok, false);
+  assert.match(noHover.problems.join("\n"), /a:hover/);
+});
+
 // ---------------------------------------------------------------- the real run
 test("the artboards are validated, keyed, measured and archived", async (t) => {
   if (!ready) return t.skip(skipReason);
@@ -559,6 +1033,29 @@ test("the artboards are validated, keyed, measured and archived", async (t) => {
 
   for (const f of ["B1.dc.html", "B2.dc.html", "canvas.json", "README.md"]) {
     assert.ok(existsSync(join(SEED, f)), `${f} is missing from the seed`);
+  }
+
+  // THE OTHER THREE BOARDS OF EACH DIRECTION, keyed, archived and shot like the home board.
+  for (const b of BOARDS) {
+    const shots = join(SITE, ".palate/explore/shots", b.id);
+    for (const [kind, file] of [["inner", `I${b.ambition}.dc.html`], ["mobile", `M${b.ambition}.dc.html`], ["sheet", `S${b.ambition}.dc.html`]]) {
+      const seedFile = readFileSync(join(SEED, file), "utf8");
+      assert.match(seedFile, /data-palate-k=/, `${file} was never keyed, so the canvas read-back can only align by position`);
+      const archived = readFileSync(join(shots, `${kind}.html`), "utf8");
+      assert.equal(archived, seedFile, `${b.id}'s archived ${kind} is not the artboard the client sees`);
+      for (const p of [join(shots, `${kind}.png`), join(SITE, "public/_explore", `${b.id}-${kind}.png`)]) {
+        assert.ok(existsSync(p), `${p} is missing`);
+        assert.ok(statSync(p).size > 1024, `${p} is ${statSync(p).size} bytes, which is not a rendered board`);
+      }
+    }
+    // The phone still is 390 wide, or the client signs off a desktop board captioned "mobile".
+    assert.equal((await pngSize(join(shots, "mobile.png"))).w, 390,
+      `${b.id}'s mobile.png is not 390 wide, so it is the desktop board again`);
+    // The inner still is the fold, like the home board's hero: it is what the judge compares.
+    assert.equal((await pngSize(join(shots, "inner.png"))).h, 900, `${b.id}'s inner.png is not the 1440x900 entrance`);
+    assert.equal((await pngSize(join(shots, "inner.png"))).w, 1440);
+    // The sheet is the WHOLE sheet: a fold of it proves nothing about the states below it.
+    assert.ok((await pngSize(join(shots, "sheet.png"))).h > 900, `${b.id}'s sheet.png is a fold, not the sheet`);
   }
 
   for (const b of BOARDS) {
@@ -602,16 +1099,25 @@ test("the artboards are validated, keyed, measured and archived", async (t) => {
   }
 
   const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));
-  assert.deepEqual(canvas.artboards.map((a) => a.file), ["B1.dc.html", "B2.dc.html"]);
-  const [f1, f2] = canvas.artboards;
+  assert.deepEqual(canvas.artboards.map((a) => a.file),
+    ["B1.dc.html", "I1.dc.html", "M1.dc.html", "S1.dc.html", "B2.dc.html", "I2.dc.html", "M2.dc.html", "S2.dc.html"]);
+  const f1 = canvas.artboards.find((a) => a.file === "B1.dc.html");
+  const f2 = canvas.artboards.find((a) => a.file === "B2.dc.html");
   assert.equal(f1.w, 1440);
-  assert.equal(f2.x - (f1.x + f1.w), 80, "80px between frames");
-  assert.equal(f1.y, 0, "with no calibration row the boards are row 0");
+  assert.equal(f2.x, 0, "the second direction starts its own row");
+  assert.ok(f2.y >= f1.y + f1.h + 120, "the second direction's row overlaps the first");
+  assert.equal(f1.y, 0, "with no calibration row the first direction is row 0");
   // A frame neither scales nor crops, so a height that is not the measured one clips the board.
   for (const f of canvas.artboards) assert.ok(f.h >= 200, `${f.file} declares ${f.h}px, which is not a measured board`);
-  assert.equal(canvas.annotations.length, 2, "one annotation per board");
+  assert.equal(canvas.annotations.length, 8, "each direction's four frames are each annotated");
   assert.equal(canvas.launch.view, "canvas");
   assert.match(r.stdout, /artboard\(s\) validated, keyed, measured and archived/);
+
+  // THE SEED README IS THE ONE DOCUMENT THAT EXPLAINS THE SET TO WHOEVER SEEDS THE CANVAS, and
+  // "direction" is the client's word for an Explore option, not "rung" or "ladder".
+  const readme = readFileSync(join(SEED, "README.md"), "utf8");
+  assert.match(readme, /direction 1 of 2, The Quiet Room/i, "the README does not name each board by its direction number");
+  assert.doesNotMatch(readme, /rung|ladder/i, "the seed README says rung or ladder, which the client never reads");
 });
 
 test("the declared frame height is the height the artboard actually renders", async (t) => {
@@ -775,6 +1281,60 @@ test("a registered artboard that does not exist is refused, naming the path, and
   writeFileSync(join(SITE, "src/lib/variants.ts"), registryFor(BOARDS));
 });
 
+test("a direction whose detail sheet was never drawn is refused, naming the file and the kind", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // HALF A DIRECTION READS AS THE WHOLE ONE. A client handed a home page, an inner page and a
+  // phone signs off a direction whose pieces and states nobody ever drew, and the sheet is the
+  // half that says what the navigation does when it is open and what the form says when it is
+  // wrong. So a missing one stops the run rather than shipping three boards out of four.
+  const sheet = join(SEED, "S1.dc.html");
+  const original = readFileSync(sheet, "utf8");
+  rmSync(sheet, { force: true });
+  try {
+    const r = await run([SITE]);
+    assert.equal(r.status, 2, "a direction with no detail sheet was drawn as though it were whole");
+    assert.match(r.stderr, /S1\.dc\.html/, "the refusal does not name the file the registry asked for");
+    assert.match(r.stderr, /sheet/, "the refusal does not name which of the four boards is missing");
+    assert.ok(existsSync(join(SEED, "B1.dc.html")), "the refusal deleted the hand-drawn artboards");
+  } finally {
+    writeFileSync(sheet, original);
+  }
+});
+
+test("a sheet whose caption drops the donor is refused, naming the piece and the reference", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // The registry knows each piece's donor and the sheet is where a client reads it. A caption
+  // that says which variation it is and not where it came from looks complete and proves
+  // nothing, so the run refuses it rather than shooting a sheet that cannot be traced.
+  const sheet = join(SEED, "S1.dc.html");
+  const original = readFileSync(sheet, "utf8");
+  writeFileSync(sheet, original.replace(", drawn from pilot-accounting.", "."));
+  try {
+    const r = await run([SITE]);
+    assert.equal(r.status, 2, "a sheet whose form block names no donor was drawn as though it were traceable");
+    assert.match(r.stderr, /forms/, "the refusal does not name the piece");
+    assert.match(r.stderr, /pilot-accounting/, "the refusal does not name the reference the caption owes");
+    assert.ok(existsSync(join(SEED, "B1.dc.html")), "the refusal deleted the hand-drawn artboards");
+  } finally {
+    writeFileSync(sheet, original);
+  }
+});
+
+test("a registry entry with no presentation is refused rather than guessed at", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // The other three boards could be derived from the rung, and deriving them would mean a
+  // registry that never declared them passes while the client is shown one board out of four.
+  const before = readFileSync(join(SITE, "src/lib/variants.ts"), "utf8");
+  writeFileSync(join(SITE, "src/lib/variants.ts"), before.replace(/    presentation: \{[\s\S]*?\},\n/, ""));
+  try {
+    const r = await run([SITE]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /presentation/, "the refusal does not name the field that is missing");
+  } finally {
+    writeFileSync(join(SITE, "src/lib/variants.ts"), before);
+  }
+});
+
 test("no registry at all is refused rather than passed over", async (t) => {
   if (!ready) return t.skip(skipReason);
   const empty = join(TMP, "not-an-explore-build");
@@ -885,8 +1445,13 @@ test("canvas.json lays each donor beside its own board, and steps the next board
   assert.equal(d1.y, b1.y, "the donor is not on the board's own row");
   assert.equal(d1.w, 720);
   assert.equal(d1.h, 580);
-  assert.match(d1.title, /Donor for rung 1: Donor 1/);
-  assert.equal(b2.x, 1440 + 80 + 720 + 80, "the next board was not stepped past the donor, so it sits under it");
+  assert.match(d1.title, /Donor for direction 1: Donor 1/);
+  // "Direction" is the client's word for an Explore option; "rung" is internal (the ledger,
+  // the ladder module, gate-board-judge.mjs). The canvas title is what the client reads.
+  assert.match(b1.title, /Direction 1 of 2: One/);
+  assert.doesNotMatch(b1.title, /rung/i, "the board's canvas title says rung, which the client never reads");
+  assert.equal(b2.x, 0, "the second direction starts its own row");
+  assert.equal(b2.y, b1.y + b1.h + 120, "the second direction is not a row below the first");
   const note = doc.annotations.find((a) => a.id === "donor-b1");
   assert.ok(note, "the donor card carries no annotation saying what was drawn from it");
   assert.match(note.text, /Drawn from donor-1: The entrance holds one photograph/);
@@ -954,6 +1519,13 @@ test("the donor hero is fetched, re-encoded and laid beside its board", async (t
     }
     assert.match(readFileSync(join(SEED, "D2.dc.html"), "utf8"), /the-modern-house/,
       "the donor card does not name the reference it is");
+    // The donor card's own text is drawn on the canvas the client works on, so it says
+    // "Direction N", never "Rung N".
+    const d1Html = readFileSync(join(SEED, "D1.dc.html"), "utf8");
+    const d1Title = /<p[^>]*>([^<]*is drawn from[^<]*)<\/p>/.exec(d1Html);
+    assert.ok(d1Title, "the donor card has no title line to check");
+    assert.match(d1Title[1], /^Direction 1 is drawn from Therapy in London/);
+    assert.doesNotMatch(d1Title[1], /Rung/i, "the donor card's title says Rung, which the client never reads");
 
     const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));
     const b1 = canvas.artboards.find((a) => a.file === "B1.dc.html");
@@ -962,7 +1534,8 @@ test("the donor hero is fetched, re-encoded and laid beside its board", async (t
     assert.ok(d1, "the donor card never reached canvas.json");
     assert.equal(d1.x, 1440 + 80);
     assert.equal(d1.y, b1.y, "the donor is not on its board's row");
-    assert.equal(b2.x, 1440 + 80 + 720 + 80, "the second board sits under the first board's donor");
+    assert.equal(b2.x, 0, "the second direction did not start its own row");
+    assert.ok(b2.y > b1.y, "the second direction sits on the first one's row");
 
     // THE LINEAGE SEAM: the stop hook reads explore.shown[].donor_slug and nothing wrote it.
     const manifest = JSON.parse(readFileSync(join(SITE, "build-manifest.json"), "utf8"));
@@ -1026,4 +1599,188 @@ test("--no-donors runs without the file and says so in the manifest", async (t) 
   assert.equal(manifest.explore.donor_row.skipped, true,
     "a run with no donor row is byte-identical to one with it, which is the fault this records");
   rmSync(join(SITE, "build-manifest.json"), { force: true });
+});
+
+// ------------------------------------------------- the donor's whole-page capture
+/**
+ * THE JUDGE READS THE PAGE ENDING TOO, and the donor's half of that comparison is the reference's
+ * own full-page capture, which sits beside its desktop hero as a public object. It is fetched
+ * here rather than in the gate because this is the one place that already knows the donor's URL,
+ * and it is NEVER put on the canvas: it is judge evidence, so the 70 KB canvas ceiling does not
+ * apply to it and it keeps whatever the library served.
+ *
+ * A donor with no full capture is NOT a refusal. Some references have none, which is nobody's
+ * fault and no reason to stop an Explore; it is recorded as a sidecar so the gate can leave that
+ * surface out and say why, instead of a silence the next reader takes for a clean bill.
+ */
+async function serveCaptures({ full = null, fullStatus = 200, slowFullFor = null, slowMs = 0 } = {}) {
+  const hero = pngFixture(1440, 900);
+  const server = createServer((req, res) => {
+    if (req.url.endsWith("/full.png")) {
+      if (fullStatus !== 200) { res.writeHead(fullStatus); res.end("gone"); return; }
+      const send = () => {
+        res.writeHead(200, { "Content-Type": "image/png" });
+        res.end(full ?? pngFixture(1440, 4000));
+      };
+      if (slowFullFor && req.url.includes(slowFullFor)) setTimeout(send, slowMs);
+      else send();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "image/png" });
+    res.end(hero);
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  return { server, port: server.address().port };
+}
+
+/**
+ * EACH OF THESE TESTS OWNS ITS PRECONDITION. They used to inherit `shots/b1` and `shots/b2` from
+ * tests that happened to run earlier in the file, which is exactly how the first-run ENOENT in
+ * `writeDonorFull` hid: run alone they failed, run in order they passed, and the defect class
+ * they exist to catch is a FIRST run.
+ */
+const freshShots = () => {
+  for (const id of ["b1", "b2"]) rmSync(join(SITE, ".palate/explore/shots", id), { recursive: true, force: true });
+};
+
+const donorsWith = (port) => JSON.stringify([
+  donorFor(1, { slug: "therapy-in-london", hero_url: `http://127.0.0.1:${port}/screenshots/therapy-in-london/desktop.png` }),
+  donorFor(2, { slug: "the-modern-house", hero_url: `http://127.0.0.1:${port}/screenshots/the-modern-house/desktop.png` }),
+], null, 2);
+
+test("the donor's full-page capture is fetched beside its hero, for the page-ending comparison", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  const { server, port } = await serveCaptures();
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `boards-render failed:\n${r.stderr}`);
+    for (const id of ["b1", "b2"]) {
+      const full = join(SITE, ".palate/explore/shots", id, "donor-full.png");
+      assert.ok(existsSync(full), `${id} has no donor full capture, so its page ending can be judged against nothing`);
+      assert.ok(statSync(full).size > 0);
+      assert.ok(!existsSync(join(SITE, ".palate/explore/shots", id, "donor-full.missing")),
+        `${id} recorded the capture as missing and fetched it anyway`);
+      // NEVER ON THE CANVAS. It is judge evidence, so it is not copied into the seed or /explore.
+      assert.ok(!existsSync(join(SEED, `d${id === "b1" ? 1 : 2}-full.png`)), "the full capture was written into the canvas seed");
+    }
+    assert.match(r.stdout, /donor-full\.png/, "the run does not say it fetched the whole-page captures");
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+test("a donor with no full capture is recorded, not refused, and the run finishes", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  const { server, port } = await serveCaptures({ fullStatus: 404 });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `a reference with no full.png stopped the whole Explore:\n${r.stderr}`);
+    for (const id of ["b1", "b2"]) {
+      const dir = join(SITE, ".palate/explore/shots", id);
+      assert.ok(!existsSync(join(dir, "donor-full.png")));
+      const sidecar = join(dir, "donor-full.missing");
+      assert.ok(existsSync(sidecar), `${id} recorded nothing about its missing capture, so the gate cannot say why`);
+      assert.match(readFileSync(sidecar, "utf8"), /404/, "the sidecar does not say what went wrong");
+    }
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+test("a full capture over the ceiling is left behind with its reason, never written", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  // The magic bytes are real and the body is enormous, which is the shape that matters: the cap
+  // is checked on what came back, before anything decodes it.
+  const huge = Buffer.concat([pngFixture(8, 8), Buffer.alloc(17 * 1024 * 1024, 7)]);
+  const { server, port } = await serveCaptures({ full: huge });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `an oversized donor capture stopped the Explore:\n${r.stderr}`);
+    const dir = join(SITE, ".palate/explore/shots", "b1");
+    assert.ok(!existsSync(join(dir, "donor-full.png")), "a 17 MB capture was kept");
+    assert.match(readFileSync(join(dir, "donor-full.missing"), "utf8"), /16 MB|too large|over/i);
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+test("a stale missing-capture note is cleared when the capture is there next time", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  const dir = join(SITE, ".palate/explore/shots", "b1");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "donor-full.missing"), "from a run when the library had none");
+  const { server, port } = await serveCaptures();
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    assert.equal((await run([SITE])).status, 0);
+    assert.ok(existsSync(join(dir, "donor-full.png")));
+    assert.ok(!existsSync(join(dir, "donor-full.missing")),
+      "the note survived the fetch, so the gate skips a surface it has the evidence for");
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+/**
+ * THE CEILING HAD TO BE MEASURED, NOT REASONED ABOUT. The first version capped the donor's
+ * whole-page capture at 1.5 MB, and a sample of twelve live references put eight of them over
+ * it (stripe 6.6 MB, aesop 3.8 MB, loom 2.9 MB), so on a real ladder most directions would have
+ * lost the page ending, which is the surface the task exists to add.
+ */
+test("a multi-megabyte capture, which is what the library actually serves, is kept", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  const big = Buffer.concat([pngFixture(1440, 900), Buffer.alloc(4 * 1024 * 1024, 3)]);
+  const { server, port } = await serveCaptures({ full: big });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `a 4 MB donor capture stopped the Explore:\n${r.stderr}`);
+    const full = join(SITE, ".palate/explore/shots", "b1", "donor-full.png");
+    assert.ok(existsSync(full), "a 4 MB capture was refused, so most real references lose their page ending");
+    assert.ok(statSync(full).size > 4 * 1024 * 1024);
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+/**
+ * The hero's ten seconds is right for a frame an operator is waiting on. A whole-page capture is
+ * megabytes, so the same clock turns an ordinary slow link into a recorded "did not answer" and
+ * the page ending is dropped for a reason that has nothing to do with the library.
+ */
+test("the whole-page capture gets its own budget, past the hero's ten seconds", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  const { server, port } = await serveCaptures({ slowFullFor: "therapy-in-london", slowMs: 11500 });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, r.stderr);
+    const dir = join(SITE, ".palate/explore/shots", "b1");
+    assert.ok(existsSync(join(dir, "donor-full.png")),
+      "a capture that took over ten seconds was recorded as missing, on the hero's clock");
+    assert.ok(!existsSync(join(dir, "donor-full.missing")));
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
 });
