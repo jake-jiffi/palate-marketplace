@@ -1,6 +1,6 @@
 ---
 description: Record which direction the client picked, what they said, and anything they changed on the canvas.
-argument-hint: "--hero b3 [--section b5] [--intensity 3] [--answer motion=... --answer mix=... --answer cms=...] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--canvas-url <url>] [--canvas-skipped \"<reason>\"] [--proof <url> [--proof-unmeasured \"<reason>\"]] [--second-pass]"
+argument-hint: "--hero b3 [--section b5] [--intensity 3] [--answer motion=... --answer mix=... --answer cms=...] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--canvas-url <url>] [--canvas-skipped \"<reason>\"] [--proof <url> [--proof-unmeasured \"<reason>\"]] [--second-pass] [--looked <route> --shot <path> --verdict \"...\" [--primary]] [--override <route> --section <band> --what \"...\" --reason \"...\"]"
 ---
 
 Record the client's pick from the Explore boards, on the canvas or from `/explore`. This is the
@@ -117,6 +117,39 @@ from this machine, record the reason instead of skipping:
 That stamp is what `gate-done.sh` reads to decide there is a composed home page to measure
 against the picked board. Without it the fidelity gate skips on every build after Compose, and
 the one check on whether the client got the direction they chose never runs.
+
+## 5b. At Compose, record the look at each page type, and any departure from the board
+
+Compose is a design act, so the two things it produces besides pages are a reading of each page
+type and a reason for anything that left the board. Both are recorded here, because a build that
+records neither passes every mechanical gate while quietly becoming a different site.
+
+```bash
+node "$PALATE/scripts/palate-pick.mjs" "$SITE" \
+  --looked /security-windows --shot .palate-shots/security-windows.png \
+  --verdict "<three things you can actually see in the shot>" --primary
+node "$PALATE/scripts/palate-pick.mjs" "$SITE" \
+  --override / --section hero --what "photo inset instead of bleed" \
+  --reason "the only photograph over 900px is soft at full bleed"
+```
+
+- `--looked` takes ONE look per page type (home, service, about, contact, reviews, landing), and
+  a second look at the same route replaces the first. The shot has to sit under `.palate-shots/`
+  and be NEWER than the built page, and the verdict has to run past 40 characters and must not be
+  "looks good", "matches the board", "no issues", "as designed" or "fine", which is the sentence
+  somebody writes who did not open anything. `scripts/gate-look.mjs` refuses a picked build with
+  a page type nobody looked at.
+- `--primary` marks the route the DRAWN INNER PAGE (`I<rung>`) became, at most one per build and
+  never the home page. With it, the page judge holds that route against `inner.png`, which is the
+  picture the client was shown; without it, it falls back to the donor's home page and says so.
+- `--override` records a deliberate departure from the board with the reason attached. The reason
+  IS the record: `gate-fidelity.mjs` suppresses exactly the framing measurement the override names
+  and prints the reason beside the report, and a departure with no reason is indistinguishable
+  from the drift the gate exists to catch. Overrides append, because two decisions taken at two
+  moments are two decisions.
+
+One record per call: `--looked` and `--proof` in the same command is refused, the way
+`--canvas-url` and `--canvas-skipped` already are.
 
 ## 6. Say what happens next
 

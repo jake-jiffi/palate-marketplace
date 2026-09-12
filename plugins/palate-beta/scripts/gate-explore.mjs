@@ -72,6 +72,9 @@ import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 // check passes on one surface and fails on the other. Importing runs nothing: that module only
 // calls main() when it is the entry point.
 import { parseKitVariations, splitPieces, presentationOf } from "./boards-render.mjs";
+// The bar, the wording and the surface names come from the judge itself: stated twice, they
+// drift, and a done gate that refuses a different set from the judge is worse than neither.
+import { refusedRung, WORSE_PHRASE, SURFACES } from "./gate-board-judge.mjs";
 
 const dir = process.argv[2] || ".";
 
@@ -456,12 +459,13 @@ const judgeApplies = process.env.PALATE_GATE_JUDGE !== "0" && !donorRowSkipped;
 const judgedById = new Map(
   (Array.isArray(manifest?.explore?.board_judgements) ? manifest.explore.board_judgements : []).map((j) => [j?.id, j]),
 );
-// Owed = never judged, OR judged and refused. A board read `clearly_worse` is judged and is not
-// shippable, so a canvas is no more owed on it than on a board nobody has looked at.
+// Owed = never judged, OR judged and refused. A board that does not read comparable or better
+// is judged and is not shippable, so a canvas is no more owed on it than on a board nobody has
+// looked at.
 const boardsOwingJudgement =
   !judgeApplies || !manifest?.explore?.shown_at
     ? []
-    : parsed.filter((v) => (judgedById.get(v.id)?.rung ?? null) !== null ? judgedById.get(v.id).rung === "clearly_worse" : true).map((v) => v.id);
+    : parsed.filter((v) => (judgedById.get(v.id)?.rung ?? null) !== null ? refusedRung(judgedById.get(v.id).rung) : true).map((v) => v.id);
 const unjudgedBoards = !judgeApplies || !manifest?.explore?.shown_at ? [] : parsed.filter((v) => !judgedById.has(v.id)).map((v) => v.id);
 
 // ------------------------------------------------ 7. shown boards were put somewhere
@@ -486,10 +490,11 @@ const unjudgedBoards = !judgeApplies || !manifest?.explore?.shown_at ? [] : pars
 
 // --------------------------------------------- 8. every shown board was judged against its donor
 // The board judge (scripts/gate-board-judge.mjs) compares each board with the library reference
-// it was drawn from, both orders, at every intensity. This is the half that makes it bind: once
-// the boards are in front of a client, a board with no judgement, and a board judged clearly
-// worse than its own donor, are both things a person finds out by looking rather than by being
-// told. PALATE_GATE_JUDGE=0 releases the whole check, the same variable the judge itself reads.
+// it was drawn from, both orders, at every intensity, and the bar is comparable or better on
+// every surface it was judged on. This is the half that makes it bind: once the boards are in
+// front of a client, a board with no judgement, and a board that read worse than its own donor,
+// are both things a person finds out by looking rather than by being told. PALATE_GATE_JUDGE=0
+// releases the whole check, the same variable the judge itself reads.
 if (judgeApplies) {
   const ex = manifest?.explore || {};
   if (ex.shown_at) {
@@ -502,10 +507,18 @@ if (judgeApplies) {
     }
     for (const v of parsed) {
       const j = judged.get(v.id);
-      if (j && j.rung === "clearly_worse") {
+      if (j && refusedRung(j.rung)) {
+        // NAMING THE SURFACES IT WAS READ WORSE ON, where the record carries them. An older
+        // record holds only the direction's own rung, so the surfaces are said when known and
+        // the finding still stands when they are not.
+        const worseOn = Object.entries(j.rungs && typeof j.rungs === "object" ? j.rungs : {})
+          .filter(([, r]) => refusedRung(r))
+          .map(([sf]) => SURFACES[sf]?.label ?? sf);
         add(
-          `${v.id} was judged clearly worse than its donor`,
-          `the board judge read ${v.id}${j.donor ? ` against ${j.donor}` : ""} at the bottom rung. Redraw it from the donor's hero, re-render the boards and run scripts/gate-board-judge.mjs again before the canvas is published.`,
+          `${v.id} was judged ${WORSE_PHRASE[j.rung]} than its donor`,
+          `the board judge read ${v.id}${j.donor ? ` against ${j.donor}` : ""} as ${WORSE_PHRASE[j.rung]} than its donor` +
+            (worseOn.length ? ` at the ${worseOn.join(", the ")}` : "") +
+            `. A board is shown only when it reads comparable or better on every surface it is judged on. Redraw it from the donor's hero, re-render the boards and run scripts/gate-board-judge.mjs again before the canvas is published.`,
         );
       }
     }

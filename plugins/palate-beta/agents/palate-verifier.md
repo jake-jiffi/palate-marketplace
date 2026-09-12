@@ -105,9 +105,10 @@ never held to the bold bar.
       passing one. The procedure is `references/explore-stage.md`; do not run it here.
    3. **On your NEXT round, the judgements are already a fact and you read them as one.**
       `node scripts/gate-explore.mjs <projectDir>` (step 2b) blocks a shown build whose
-      registered boards have no entry in `manifest.explore.board_judgements` or carry
-      `clearly_worse`, which is where a board that was never compared, or was compared and
-      lost, becomes a refusal. Report those findings verbatim: the fix is a redraw from the
+      registered boards have no entry in `manifest.explore.board_judgements` or read below the
+      bar, which is comparable or better on every surface the direction was judged on, so both
+      `somewhat_worse` and `clearly_worse` refuse. That is where a board that was never
+      compared, or was compared and lost, becomes a refusal. Report those findings verbatim: the fix is a redraw from the
       donor's hero, not an argument.
 
    `PALATE_GATE_JUDGE=0` releases the judge and that half of the Explore gate, and a build that
@@ -191,6 +192,14 @@ never held to the bold bar.
       name it). **The bar: every axis >=4, no axis below 3, no defect, no floor
       violation, no placeholder/empty/fabricated imagery, two or fewer Quick QA ticks,
       zero console errors.**
+      **The six axes are WORKING NOTES, not the gate.** You are scoring your own build's
+      render, and on the build this step was rewritten for all six came back 4 of 4 at both
+      viewports with `defects: []` while the observations beside them named the section
+      duplication and marked it accepted. Nothing downstream reads
+      `visual.iterations[].axes`. Score them anyway, because that is how a defect gets
+      LOCATED and a located defect is what the loop acts on, but the thing that decides
+      whether a page still carries the picked direction is the pairwise page judge in
+      step 5b, which compares pixels with pixels.
    5. Apply the loop guardrails from `references/visual-rubric.md` verbatim:
       - **A revision is accepted only if the rubric score improves** (the axis sum is
         strictly greater, or a named defect is resolved with no new defect introduced).
@@ -219,6 +228,48 @@ never held to the bold bar.
       predates it returns no `voiceFingerprint`), score the axes + floor and skip the pairwise.
       The bar: every copy axis >=4, no banlist hit. (Calibrate against `evals/copy-verifier-calibration.mjs` once
       labelled.)
+
+5b. **The page judge** (the built pages, held against the picture they were composed from,
+   by the same instrument that judged the boards; the visual rubric above is self-scored and
+   cannot see bland). **IT RUNS LAST, ON THE SETTLED BUILD**: the visual loop at step 5 rebuilds,
+   and a page rebuilt after it was judged makes its comparison stale, so the judgements are
+   stated once the fixes are in rather than before them:
+
+   **YOU STATE THE COMPARISONS AND YOU DO NOT RUN THEM**, exactly as at step 2c: you have no
+   Agent tool, so the page comparisons are the main build agent's to run, in its own session,
+   in subagents that know nothing about this build.
+
+   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-page-judge.mjs" <projectDir>`. It reads
+      `manifest.compose.pages` (one looked route per page type, written by
+      `palate-pick.mjs --looked`), shoots each route's entrance at 1440x900 and its ending
+      (the bottom 900 px), and writes `<projectDir>/.palate/compose/judge-request.json`. A
+      first stderr line reading `gate-page-judge: skipped (<reason>)` with exit 2 is a SKIP,
+      never a block and never a pass: report the reason. The commonest are no pick recorded,
+      no page with a recorded look yet (the fix is `--looked`, and `gate-look.mjs` is the gate
+      that asks for it), and `sharp` not installed (`scripts/reference-capture/setup.sh`).
+   2. **Hand the request path back and say what is owed on it.** TWO comparisons per surface,
+      the same images swapped, each pair carrying its own `question`: the home page answers to
+      the picked board's `hero.png` and `foot.png`, the route marked `--primary` answers to the
+      drawn inner page `inner.png` at its entrance, and every other page type answers to the
+      direction's donor (`donor.jpg`, `donor-foot.png`), because nothing ever drew a third
+      service page. A surface whose picture is not on disk (the library holds no whole-page
+      capture for some references, so `donor-foot.png` may not exist) is DROPPED for that route
+      and named on stderr, and the route is then judged on its entrance alone: report the
+      dropped surface rather than reading a two-surface pass into it. The main agent owes one fresh general-purpose subagent per comparison, collected as `[{ id, candidate_is, verdict }]` and scored by the same script with
+      `--judgements <file>`, which takes the lower of each pair and then the LOWEST surface.
+      The bar is the board judge's own: comparable or better, so both `somewhat_worse` and
+      `clearly_worse` refuse, at every intensity. Any `compose.overrides` recorded for a
+      refused route are printed beside the refusal, because a departure with a reason is the
+      one thing the judge is being asked to answer.
+   3. **On your NEXT round the judgements are a fact and you read them as one.**
+      `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-page-judge.mjs" <projectDir> --check` reads the
+      record alone, with no browser and no subagents, and blocks a page type that carries no
+      verdict, one below the bar, or one whose `html_sha` no longer matches the page on disk (a
+      page refused, patched and rebuilt would otherwise sail on the verdict its old pixels
+      earned). Report its findings verbatim: the fix is a recompose, not an argument.
+
+   `PALATE_GATE_JUDGE=0` releases the page judge and the board judge together, and a build that
+   set it is reported as RELEASED, never as passed.
 
 6. **The commission check** (judge the built result AGAINST the build commission -
    this AUGMENTS the 6 axes + defect checklist in step 5, it does not replace them).

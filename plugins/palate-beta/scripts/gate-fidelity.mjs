@@ -63,6 +63,24 @@ const ACCENT_MAX_DELTA_E = 6;
 const TYPE_SCALE_TOLERANCE = 0.10;
 const SIMILARITY_FLOOR = 0.85;
 const SIGNATURE_FLOOR = 0.6;
+/**
+ * FRAMING, WHICH IS THE THING A SIMILARITY SCORE CANNOT SEE.
+ *
+ * The eastcoast v3 home shipped with its hero photograph inset where the picked board bled it
+ * edge to edge, and the h1 demoted from 64px over the photograph to a 28px kicker above it.
+ * Every check above passed: same faces, same accent, same scale, the section present and
+ * structurally the same. The appearance head read 0.928 against a 0.85 floor, because it
+ * measures whether the parts look alike and framing is the arrangement of the parts.
+ *
+ * So framing is measured rather than judged. A media box within 8px of the viewport is a
+ * bleed and anything narrower is an inset, which is the same call a person makes at a glance.
+ * The h1 is its computed size and whether it sits above or below that media. A carried section
+ * is its height. The tolerances are wide on purpose: a design is allowed to breathe, and 15%
+ * on type or 25% on a section's height is past breathing and into a different page.
+ */
+const BLEED_TOLERANCE_PX = 8;
+const H1_TOLERANCE = 0.15;
+const SECTION_HEIGHT_TOLERANCE = 0.25;
 
 const args = process.argv.slice(2);
 const VALUE_FLAGS = new Set(["--serve", "--port"]);
@@ -120,6 +138,31 @@ if (!picks.length) cannotCheck("no picks recorded (manifest.explore.picks is emp
 const heroPick = picks.find((p) => p.surface === "hero");
 if (!heroPick) cannotCheck("no picks recorded for the hero surface, so the entrance cannot be compared.");
 const sectionPick = picks.find((p) => p.surface === "section") || heroPick;
+
+/**
+ * THE ONLY EXCUSE A FRAMING DIFFERENCE HAS IS A RECORDED ONE.
+ *
+ * `compose.overrides[]` is written by `palate-pick.mjs --override`, which means somebody typed
+ * the reason and it is in the manifest where a reviewer can read it. A departure from the
+ * picked board is allowed, often rightly (the only usable photograph is soft at full bleed);
+ * what is not allowed is the departure being invisible. So an override suppresses the finding
+ * and prints itself, and a build with no override and a changed frame fails.
+ *
+ * The home's route is `/`. The section is matched on the board's own id (`b3-hero`) or on the
+ * bare piece name (`hero`), because a person recording an override says "hero" and the id is
+ * the board's internal name for the same thing.
+ */
+const overrides = Array.isArray(manifest?.compose?.overrides) ? manifest.compose.overrides : [];
+function overrideFor(sectionId) {
+  if (!sectionId) return null;
+  return overrides.find((o) => {
+    if (!o || typeof o !== "object") return false;
+    if (String(o.route || "").trim() !== "/") return false;
+    const s = String(o.section || "").trim();
+    if (!s) return false;
+    return s === sectionId || sectionId.endsWith(`-${s}`);
+  }) || null;
+}
 
 if (!existsSync(join(dir, "src/pages/index.astro"))) {
   cannotCheck(`no ${join("src/pages/index.astro")}, so Compose has not written the home page yet.`);
@@ -272,6 +315,17 @@ function sectionMarkup(html, marker) {
 const findings = [];
 const add = (what, detail) => findings.push({ what, detail });
 const notes = [];
+/**
+ * A framing finding, unless somebody recorded why the frame changed.
+ *
+ * The override is printed whether or not anything else fails, so a build that departed from
+ * the board on purpose still says so on the way past.
+ */
+const addFramed = (sectionId, what, detail) => {
+  const o = overrideFor(sectionId);
+  if (o) { notes.push(`override on /, ${String(o.section).trim()}: ${o.reason || "no reason recorded"}`); return; }
+  add(what, detail);
+};
 
 let playwright;
 try { playwright = engineRequire("playwright"); }
@@ -380,6 +434,69 @@ async function measureHeroScope(page, selector) {
 }
 
 /**
+ * How the hero is FRAMED, plus the height of every marked section, read the same way on both
+ * sides.
+ *
+ * One evaluate, run against the board and against the built home with nothing but the selector
+ * changing, so the classification is symmetric by construction. An asymmetric measurement is
+ * the fault this file already learned once, when a 900px window contained the board's system
+ * strip on one side and the home's next real section on the other and reported an 11% drift on
+ * a page composed from the board's own component.
+ *
+ * Run BEFORE the scoping sweep. `visibility: hidden` does not move a layout, so the heights
+ * would survive it, but a measurement that does not depend on the order it is called in is one
+ * fewer thing to be wrong about later.
+ *
+ * Nothing here is a judgement. It returns what it saw and returns nulls for what it could not
+ * see, and the caller says out loud which comparisons it therefore could not make.
+ */
+async function measureFraming(page, heroSelector, sectionSelector) {
+  return page.evaluate(({ heroSel, sectionSel, bleedTol }) => {
+    const marked = document.querySelector(heroSel);
+    const hero = marked ? (marked.matches("section") ? marked : (marked.closest("section") || marked)) : null;
+    const out = { found: Boolean(hero), media: null, framing: null, h1: null, sections: {} };
+
+    // Every marked section's rendered height, tallest wins if an id is somehow marked twice.
+    for (const el of document.querySelectorAll(sectionSel)) {
+      const id = el.getAttribute("data-palate-section") || el.getAttribute("data-section-id");
+      if (!id) continue;
+      const h = Math.round(el.getBoundingClientRect().height);
+      if (h <= 0) continue;
+      if (!(id in out.sections) || h > out.sections[id]) out.sections[id] = h;
+    }
+    if (!hero) return out;
+
+    // The hero's media is its LARGEST picture-shaped box. Largest by area rather than first in
+    // document order, because a logo in the corner is an img too and it is not the framing.
+    let best = null;
+    for (const el of hero.querySelectorAll('img, video, picture, [style*="background-image"]')) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      if (!best || r.width * r.height > best.width * best.height) {
+        best = { width: Math.round(r.width), height: Math.round(r.height), top: Math.round(r.top) };
+      }
+    }
+    if (best) {
+      out.media = best;
+      out.framing = Math.abs(best.width - window.innerWidth) <= bleedTol ? "bleed" : "inset";
+    }
+
+    const h1 = hero.querySelector("h1");
+    if (h1) {
+      const size = Number.parseFloat(window.getComputedStyle(h1).fontSize);
+      out.h1 = {
+        size: Number.isFinite(size) ? Math.round(size) : null,
+        top: Math.round(h1.getBoundingClientRect().top),
+      };
+    }
+    return out;
+  }, { heroSel: heroSelector, sectionSel: sectionSelector, bleedTol: BLEED_TOLERANCE_PX });
+}
+
+/** Where the h1 sits relative to the hero's media, in the words the finding uses. */
+const h1Place = (h1, media) => (h1 && media ? (h1.top < media.top ? "above the media" : "below the media") : null);
+
+/**
  * The dominant accent: the heaviest colour that is not a neutral.
  *
  * design-measure.mjs has its own `isNeutral` and does not export it, and that module is
@@ -424,6 +541,7 @@ try {
   const boardPage = await ctx.newPage();
   await boardPage.goto(`http://127.0.0.1:${boardServed.port}${BOARD_ROUTE}`, { waitUntil: "load", timeout: 30000 });
   await boardPage.waitForTimeout(300);
+  const boardFraming = await measureFraming(boardPage, `[data-section-id="${heroSectionId}"]`, "[data-section-id]");
   const boardFacts = await measureHeroScope(boardPage, `[data-section-id="${heroSectionId}"]`);
   if (!boardFacts) {
     cannotCheckMidRun(`the archived render of ${heroPick.variant_id} has no element marked ${heroSectionId}, so its hero could not be scoped.`);
@@ -446,6 +564,11 @@ try {
   const heroShot = join(shotsRoot, "_built-hero.png");
   mkdirSync(shotsRoot, { recursive: true });
   await homePage.screenshot({ path: heroShot, fullPage: false });
+  const homeFraming = await measureFraming(
+    homePage,
+    `[data-palate-section="${heroSectionId}"], [data-section-id="${heroSectionId}"]`,
+    "[data-palate-section], [data-section-id]",
+  );
   const homeFacts = await measureHeroScope(homePage, `[data-palate-section="${heroSectionId}"], [data-section-id="${heroSectionId}"]`);
 
   // --- 0. could the home's hero be found at all? --------------------------------------
@@ -552,7 +675,76 @@ try {
     notes.push("the picked board registers no inner section, so only the hero was compared.");
   }
 
-  // --- 6. the appearance similarity, always attempted -----------------------------------
+  // --- 6. the hero's framing ------------------------------------------------------------
+  // Bleed against inset is the single loudest thing about an entrance, and it is exactly what
+  // the similarity head cannot see: same photograph, same type, same accent, rearranged.
+  if (!boardFraming.media || !homeFraming.media) {
+    notes.push(
+      `the hero's framing could not be compared (${!boardFraming.media ? "the board" : "the built home"} shows no picture-shaped box in its hero).`,
+    );
+  } else if (boardFraming.framing !== homeFraming.framing) {
+    addFramed(
+      heroSectionId,
+      "the hero's framing is not the picked board's",
+      `board: ${boardFraming.framing}, built: ${homeFraming.framing}. The board's hero media is ${boardFraming.media.width}px wide and the built home's is ${homeFraming.media.width}px at the same 1440 viewport. ` +
+      "Whether the entrance opens edge to edge or sits in a column is the arrangement the client chose, and every other measure here can agree while that one changes the page. " +
+      `If the change is deliberate, record it: palate-pick.mjs --override / --section ${heroSectionId} --what "..." --reason "...".`,
+    );
+  } else {
+    notes.push(`the hero's framing is ${homeFraming.framing} on both sides.`);
+  }
+
+  // --- 7. the h1 -------------------------------------------------------------------------
+  // Its size and where it sits relative to the media. A headline demoted from over the
+  // photograph to a small line above it is a different entrance in the same components.
+  if (!boardFraming.h1 || !homeFraming.h1 || !boardFraming.h1.size || !homeFraming.h1.size) {
+    notes.push(`the h1 could not be compared (${!boardFraming.h1 || !boardFraming.h1.size ? "the board" : "the built home"} sets no measurable h1 in its hero).`);
+  } else {
+    const boardPlace = h1Place(boardFraming.h1, boardFraming.media);
+    const homePlace = h1Place(homeFraming.h1, homeFraming.media);
+    const sizeDrift = Math.abs(homeFraming.h1.size - boardFraming.h1.size) / boardFraming.h1.size;
+    const moved = Boolean(boardPlace && homePlace && boardPlace !== homePlace);
+    const where = (place) => (place ? ` ${place}` : "");
+    if (sizeDrift > H1_TOLERANCE || moved) {
+      addFramed(
+        heroSectionId,
+        "the h1 is not the picked board's",
+        `board ${boardFraming.h1.size}px${where(boardPlace)}, built ${homeFraming.h1.size}px${where(homePlace)}` +
+        `${sizeDrift > H1_TOLERANCE ? `, ${Math.round(sizeDrift * 100)}% apart against a ${Math.round(H1_TOLERANCE * 100)}% tolerance` : ""}` +
+        `${moved ? ", and it changed sides of the media" : ""}. ` +
+        "The headline is the first thing read and the board decided how loudly it is said.",
+      );
+    } else {
+      notes.push(`the h1 is ${homeFraming.h1.size}px against the board's ${boardFraming.h1.size}px${where(homePlace)}.`);
+    }
+  }
+
+  // --- 8. the carried sections keep their room --------------------------------------------
+  // Only SHORTER is a finding. A built page legitimately carries more copy than a board does,
+  // so a taller section is the page doing its job; a section compressed to a fraction of the
+  // room the board gave it is the board's composition quietly undone.
+  const carried = Object.keys(boardFraming.sections).filter((id) => id in homeFraming.sections);
+  if (!carried.length) {
+    notes.push("no marked section appears on both the board and the built home, so no section height was compared.");
+  }
+  for (const id of carried) {
+    const boardH = boardFraming.sections[id];
+    const homeH = homeFraming.sections[id];
+    if (!boardH) continue;
+    const shorterBy = (boardH - homeH) / boardH;
+    if (shorterBy > SECTION_HEIGHT_TOLERANCE) {
+      addFramed(
+        id,
+        `section ${id} is ${Math.round(shorterBy * 100)}% shorter than on the board`,
+        `the board gives it ${boardH}px and the built home gives it ${homeH}px at the same 1440 viewport, past a ${Math.round(SECTION_HEIGHT_TOLERANCE * 100)}% tolerance. ` +
+        "Room is a design decision: the same elements in two thirds of the height is a denser page than the one the client chose.",
+      );
+    } else {
+      notes.push(`section ${id} runs ${homeH}px against the board's ${boardH}px.`);
+    }
+  }
+
+  // --- 9. the appearance similarity, always attempted -----------------------------------
   let similarity = null;
   try {
     const { embedHero, disposeTaste } = await import("./reference-capture/taste-local.mjs");

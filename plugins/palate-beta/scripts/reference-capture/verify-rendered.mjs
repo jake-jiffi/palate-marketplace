@@ -983,6 +983,119 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     }
 
     /**
+     * REPEATED SILHOUETTES. Two consecutive sections drawn as the same shape.
+     *
+     * WHY THIS IS A GATE. A real client build shipped service pages carrying two identical
+     * five-card grids back to back, one for the products and one for the reasons to choose
+     * them. Every gate passed: the markup was correct, the copy was correct, the contrast was
+     * correct. What was wrong was the rhythm, and rhythm is the one thing nothing measured, so
+     * it reached the client as a page that reads as one long grid with a heading in the middle.
+     *
+     * ALL FOUR CRITERIA MUST HOLD, and that is what keeps it quiet. Two sections match only
+     * when the main repeating container has the SAME NUMBER of children, laid out over the SAME
+     * NUMBER of columns, in a section of the SAME ASPECT within ten per cent, on the SAME
+     * GROUND. A card grid followed by a three-column grid does not fire; the same grid twice
+     * does. Only CONSECUTIVE sections compare, because a shape repeated with a different band
+     * between them is a returning motif rather than a stutter.
+     *
+     * THE REPEATING CONTAINER NEEDS AT LEAST THREE CHILDREN. Below that the four criteria are
+     * too weak to tell a repeated shape from two ordinary bands that happen to sit on the same
+     * ground, and a check that fires on those gets switched off, which is worse than not having
+     * it. Desktop only, for the same reason the dead-space check is: at 390px every grid
+     * collapses to one column and every section is the same silhouette by definition.
+     *
+     * `data-palate-repeat="deliberate"` is the escape hatch, and it is reported rather than
+     * silent: a repeat somebody chose is a design decision, and the note says who claimed it.
+     */
+    if (vpName === 'desktop') {
+      const sil = await page.evaluate(() => {
+        const marked = [...document.querySelectorAll('[data-section-id]')]
+          .filter((el) => !(el.parentElement && el.parentElement.closest('[data-section-id]')));
+        let sections = marked;
+        if (!sections.length) {
+          const root = document.querySelector('main') || document.body;
+          sections = root ? [...root.children].filter((el) => /^(SECTION|HEADER|FOOTER)$/.test(el.tagName)) : [];
+        }
+        const name = (el, i) => el.getAttribute('data-section-id')
+          || (el.id ? el.tagName.toLowerCase() + '#' + el.id : el.tagName.toLowerCase() + '[' + i + ']');
+
+        const shapes = sections.map((el, i) => {
+          const r = el.getBoundingClientRect();
+          const label = name(el, i);
+          const deliberate = el.getAttribute('data-palate-repeat') === 'deliberate';
+          if (r.width < 300 || r.height < 80) return { label, deliberate, shape: null };
+          // The main repeating container: the element inside the section with the most direct
+          // children of ONE tag. That is the card grid, the list, the column set - whatever the
+          // section actually repeats - without needing to know a class name.
+          let best = null;
+          const all = [el, ...el.querySelectorAll('*')];
+          for (const node of all) {
+            const byTag = new Map();
+            for (const kid of node.children) byTag.set(kid.tagName, (byTag.get(kid.tagName) || 0) + 1);
+            for (const [tag, n] of byTag) {
+              if (n >= 3 && (!best || n > best.n)) best = { node, tag, n };
+            }
+          }
+          if (!best) return { label, deliberate, shape: null };
+          const kids = [...best.node.children].filter((k) => k.tagName === best.tag);
+          const track = getComputedStyle(best.node).gridTemplateColumns;
+          let columns;
+          if (track && track !== 'none' && track.trim()) {
+            columns = track.trim().split(/\s+/).length;
+          } else {
+            // Not a grid: the first visual row IS the column count.
+            const top = kids[0].getBoundingClientRect().top;
+            columns = kids.filter((k) => Math.abs(k.getBoundingClientRect().top - top) <= 4).length;
+          }
+          return {
+            label, deliberate,
+            shape: {
+              children: best.n,
+              columns,
+              aspect: r.width / r.height,
+              ground: getComputedStyle(el).backgroundColor,
+            },
+          };
+        });
+
+        const hits = [], notes = [];
+        for (let i = 0; i + 1 < shapes.length; i++) {
+          const a = shapes[i], b = shapes[i + 1];
+          if (!a.shape || !b.shape) continue;
+          if (a.shape.children !== b.shape.children) continue;
+          if (a.shape.columns !== b.shape.columns) continue;
+          const hi = Math.max(a.shape.aspect, b.shape.aspect);
+          if (!(hi > 0) || Math.abs(a.shape.aspect - b.shape.aspect) / hi > 0.10) continue;
+          if (a.shape.ground !== b.shape.ground) continue;
+          const claimed = a.deliberate ? a.label : (b.deliberate ? b.label : null);
+          if (claimed) notes.push({ a: a.label, b: b.label, claimed });
+          else hits.push({ a: a.label, b: b.label, children: a.shape.children, columns: a.shape.columns });
+        }
+        return { hits, notes };
+      });
+      for (const h of sil.hits) {
+        const why = 'same child count (' + h.children + '), same columns (' + h.columns +
+          '), aspect within 10%, same ground';
+        const msg = 'repeated silhouette: sections ' + h.a + ' and ' + h.b +
+          ' are drawn as the same shape (' + why + '). Two consecutive sections with one ' +
+          'silhouette read as one long grid with a heading in the middle. Change the second: ' +
+          'a different column count, a list or a single wide statement, media on one side, or ' +
+          'another ground. If the repeat is the point, mark the section data-palate-repeat="deliberate".';
+        add('High', route, vpName, msg);
+        interactionFailures.push({
+          msg: route + ' @' + vpName + ': ' + msg,
+          route, viewport: vpName, rule: 'repeated-silhouette',
+          page: route, sections: [h.a, h.b], why,
+        });
+      }
+      for (const n of sil.notes) {
+        add('Cosmetic', route, vpName,
+          'repeated silhouette: sections ' + n.a + ' and ' + n.b + ' share a silhouette, and ' +
+          n.claimed + ' is marked data-palate-repeat="deliberate", so it is not a finding.');
+      }
+    }
+
+    /**
      * THE FIRST SCREEN. Does this page show anything it is FOR, before you scroll?
      *
      * A collection page shipped with a 653px masthead that pushed the first product image to

@@ -302,6 +302,20 @@ JSON
 want "shown with a board judged clearly worse -> block" BLOCK "$(run "$T")"
 has "and it says which board is worse than its donor" "$T" "clearly worse"
 
+# THE BAR IS COMPARABLE OR BETTER, not "anything but the bottom rung". A direction read somewhat
+# worse than the work it was drawn from is the bland one the visual rubric cannot see, which is
+# the whole reason the donor comparison exists.
+cat > "$T/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},
+                     {"id":"b2","donor":"the-modern-house","rung":"somewhat_worse","consistent":true,
+                      "rungs":{"entrance":"comparable","foot":"somewhat_worse","inner":"comparable"}}]}}
+JSON
+want "shown with a board judged somewhat worse -> block" BLOCK "$(run "$T")"
+has "and it says the reading in the client's language" "$T" "somewhat worse"
+has "and it names the surface it was read worse on" "$T" "at the page ending"
+has "and it states the bar" "$T" "comparable or better on every surface"
+
 cat > "$T/build-manifest.json" <<'JSON'
 {"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
  "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},

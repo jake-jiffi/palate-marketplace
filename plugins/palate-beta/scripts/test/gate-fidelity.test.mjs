@@ -78,18 +78,18 @@ export function byAmbition(list: Variant[]): Variant[] {
  * control for excluding scaffolding from the comparison: the board carries it and the composed
  * home never does, so a gate that measures it reports "missing ui-monospace" on an honest build.
  */
-const HERO = (mark, badge = "", img = "") => `
+const HERO = (mark, badge = "", img = "", h1Size = "64px") => `
 <section class="relative px-6 py-24" style="background:#f7f5ee" ${mark}>${badge}
   <div class="mx-auto max-w-3xl">
-    <h1 style="font-family:Georgia,serif;font-size:64px;line-height:1.08;color:#1c1b19">Quiet confidence, in a room that holds it</h1>
+    <h1 style="font-family:Georgia,serif;font-size:${h1Size};line-height:1.08;color:#1c1b19">Quiet confidence, in a room that holds it</h1>
     <p style="font-family:Helvetica,Arial,sans-serif;font-size:18px;line-height:1.6;color:#1c1b19">We look after the whole thing, slowly, and we tell you what we found. Nothing here asks anything of you before you have read a sentence, which is the point of the room.</p>
     <a href="/contact" style="display:inline-flex;min-height:44px;align-items:center;padding:12px 24px;background:ACCENT;color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:16px">Book a first visit</a>
     ${img}
   </div>
 </section>`;
 
-const SERVICES = (mark) => `
-<section class="relative px-6 py-20" style="background:#f7f5ee" ${mark}>
+const SERVICES = (mark, extraStyle = "") => `
+<section class="relative px-6 py-20" style="background:#f7f5ee;${extraStyle}" ${mark}>
   <div class="mx-auto max-w-5xl">
     <h2 style="font-family:Georgia,serif;font-size:32px;line-height:1.2;color:#1c1b19">What we look after</h2>
     <p style="font-family:Helvetica,Arial,sans-serif;font-size:18px;line-height:1.6;color:#1c1b19">Three things, done properly, and we will say so when a fourth is not worth your money at all. That is the whole of the offer and it does not change.</p>
@@ -115,13 +115,34 @@ const BADGE = '<span data-palate-mark data-section-id="b1-hero" style="font-fami
  */
 const asDiv = (markup) => markup.replace("<section ", "<div ").replace("</section>", "</div>");
 
-function boardArtboard(heroWrap = (x) => x) {
+/**
+ * THE FRAMING FIXTURES: the same photograph, arranged two ways.
+ *
+ * A bleed is a media box the width of the viewport; an inset is the same box in a column. The
+ * width is written in CSS rather than left to the file, because `b1-img1.jpg` is a byte-filled
+ * placeholder that never decodes, and an undecodable image with no CSS size renders 0x0. What
+ * is under test is the arrangement, not the picture, so the box is given its size directly and
+ * both sides are measured the same way.
+ *
+ * `calc(50% - 50vw)` is the real bleed idiom and resolves to 0 on the board (whose artboard
+ * loads no Tailwind, so its hero column is the full 1440) and to a negative pull on the built
+ * home (whose column is capped at max-w-3xl). Both land at 1440 wide, which is the point.
+ *
+ * `max-width: none` is load-bearing and was found by measuring rather than by reading: Tailwind's
+ * preflight sets `img { max-width: 100% }`, so on the BUILT side a bleed written as `width: 100vw`
+ * rendered at its column's 768px and the fixture quietly tested nothing it meant to.
+ */
+const BLEED_MEDIA = '<img src="b1-img1.jpg" alt="" style="display:block;max-width:none;width:100vw;margin-left:calc(50% - 50vw);height:320px;background:#2f5d50">';
+const INSET_MEDIA = '<img src="b1-img1.jpg" alt="" style="display:block;max-width:none;width:1200px;margin-left:calc(50% - 600px);height:320px;background:#2f5d50">';
+
+function boardArtboard(heroWrap = (x) => x, opts = {}) {
+  const { media = '<img src="b1-img1.jpg" alt="">', h1Size = "64px", servicesStyle = "" } = opts;
   return "<!doctype html><html><head><meta charset=\"utf-8\">" +
     "<script src=\"./support.js\"></script></head><body><x-dc>" +
     "<helmet><style>a{color:#000}a:hover{color:#333}</style></helmet>" +
     "<header class=\"nav\" data-section-id=\"b1-navigation\"><a class=\"nav-logo\" href=\"#\">Eastcoast</a><a class=\"nav-cta\" href=\"#\">Ring</a></header>" +
-    heroWrap(HERO('data-section-id="b1-hero"', BADGE, '<img src="b1-img1.jpg" alt="">')).replace("ACCENT", "#2f5d50") +
-    SERVICES('data-section-id="b1-services"') +
+    heroWrap(HERO('data-section-id="b1-hero"', BADGE, media, h1Size)).replace("ACCENT", "#2f5d50") +
+    SERVICES('data-section-id="b1-services"', servicesStyle) +
     '<aside class="motion-note" data-palate-motion="">On load the column rules draw down over 800ms on one curve, then hold; nothing loops.</aside>' +
     '<section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section>' +
     '<footer class="footer" data-section-id="b1-footer"><p class="footer-line">Ballina</p></footer>' +
@@ -138,11 +159,11 @@ function boardArtboard(heroWrap = (x) => x) {
  * an honest build lands, so a fixture that is not visually related to that would fail the
  * gate's own 0.85 floor on every honest build and the drift tests would prove nothing.
  */
-async function writeBoardFixture(heroWrap = (x) => x) {
+async function writeBoardFixture(heroWrap = (x) => x, opts = {}) {
   const shotsDir = join(SITE, ".palate/explore/shots/b1");
   mkdirSync(shotsDir, { recursive: true });
   const renderedPath = join(shotsDir, "rendered.html");
-  writeFileSync(renderedPath, boardArtboard(heroWrap));
+  writeFileSync(renderedPath, boardArtboard(heroWrap, opts));
   writeFileSync(join(shotsDir, "b1-img1.jpg"), Buffer.alloc(1024, 0xaa));
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
@@ -196,16 +217,19 @@ const BELOW = `
   <p style="font-family:'Courier New',monospace;font-size:15px;line-height:1.6;color:#1c1b19">A band the board never had, in a face the board never set, close enough to the top of the page to sit inside any fold-shaped window somebody might reach for.</p>
 </section>`;
 
-const homePage = (accent, heroWrap = (x) => x) => `---
+const homePage = (accent, heroWrap = (x) => x, opts = {}) => {
+  const { media = "", h1Size = "64px", servicesStyle = "" } = opts;
+  return `---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { business } from "../lib/business";
 ---
 <BaseLayout title={business.name}>
-  <Fragment set:html={${JSON.stringify(heroWrap(HERO('data-palate-section="b1-hero"')))}.replace("ACCENT", ${JSON.stringify(accent)})} />
+  <Fragment set:html={${JSON.stringify(heroWrap(HERO('data-palate-section="b1-hero"', "", media, h1Size)))}.replace("ACCENT", ${JSON.stringify(accent)})} />
   <Fragment set:html={${JSON.stringify(BELOW)}} />
-  <Fragment set:html={${JSON.stringify(SERVICES('data-palate-section="b1-services"'))}} />
+  <Fragment set:html={${JSON.stringify(SERVICES('data-palate-section="b1-services"', servicesStyle))}} />
 </BaseLayout>
 `;
+};
 
 const run = async (args, env = {}, execOpts = {}) => {
   try {
@@ -234,11 +258,22 @@ const build = () => execFileSync(join(SITE, "node_modules/.bin/astro"), ["build"
   cwd: SITE, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PUBLIC_EXPLORE_MODE: "true" },
 });
 
-function writeManifest(picks) {
+function writeManifest(picks, overrides = []) {
   writeFileSync(join(SITE, "build-manifest.json"), JSON.stringify({
     schema: 3, project: SITE, mcp_calls: [],
     explore: { ran: true, shown_at: new Date(Date.now() - 90_000).toISOString(), picks },
+    compose: { pages: [], overrides, page_judgements: [] },
   }, null, 2));
+}
+
+/** The one pick every framing case uses, minted fresh so `picked_at` is never stale. */
+const heroPicked = () => [{ surface: "hero", variant_id: "b1", rung: 1, position: 1, picked_at: new Date().toISOString() }];
+
+/** Put the fixture back the way `before()` left it, so case order never matters. */
+async function restoreFixture() {
+  await writeBoardFixture();
+  writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
+  build();
 }
 
 before(async () => {
@@ -503,4 +538,137 @@ test("no built home is a refusal with the reason, never a pass", async (t) => {
   const r = await run([join(TMP, "not-a-site"), "--port", String(PORT)]);
   assert.equal(r.status, 2);
   assert.match(r.stderr, /NOT a pass/);
+});
+
+/**
+ * ======================= FRAMING: THE THING A SIMILARITY SCORE MISSES =======================
+ *
+ * The eastcoast v3 home shipped with its hero photograph inset where the picked board bled it
+ * edge to edge and the h1 demoted from 64px over the photograph to a small line above it, and
+ * this gate passed it: same faces, same accent, same scale, the section present and
+ * structurally the same, appearance similarity 0.928 against a 0.85 floor. Similarity measures
+ * whether the parts look alike. Framing is how the parts are arranged, and the four cases below
+ * are the arrangement measured rather than judged.
+ *
+ * Each case builds once and runs the gate twice, with and without a recorded override, because
+ * the override is half the contract: a departure from the board is allowed and an invisible one
+ * is not.
+ */
+
+test("a bleed hero built inset fails, and a recorded override suppresses it with the reason", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  await writeBoardFixture((x) => x, { media: BLEED_MEDIA });
+  writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50", (x) => x, { media: INSET_MEDIA }));
+  build();
+
+  writeManifest(heroPicked());
+  const drift = await run([SITE, "--port", String(PORT)]);
+  const said = `${drift.stdout}\n${drift.stderr}`;
+  assert.equal(drift.status, 1, `a hero that bleeds on the board and is inset on the page should fail:\n${said}`);
+  assert.match(drift.stderr, /the hero's framing is not the picked board's/,
+    `the framing change was not reported:\n${said}`);
+  assert.match(drift.stderr, /board: bleed, built: inset/,
+    `the finding does not name both framings:\n${drift.stderr}`);
+
+  // THE ONLY EXCUSE IS A RECORDED ONE. Same build, same drift, an override in the manifest.
+  writeManifest(heroPicked(), [{
+    route: "/", section: "hero", what: "photo inset instead of bleed",
+    reason: "the only photo of the workshop is 900px wide and goes soft at full bleed",
+    recorded_at: new Date().toISOString(),
+  }]);
+  const excused = await run([SITE, "--port", String(PORT)]);
+  const excusedSaid = `${excused.stdout}\n${excused.stderr}`;
+  assert.doesNotMatch(excusedSaid, /the hero's framing is not the picked board's/,
+    `a recorded override did not suppress the framing finding:\n${excusedSaid}`);
+  assert.match(excusedSaid, /override on \/, hero: the only photo of the workshop is 900px wide and goes soft at full bleed/,
+    `the suppressed measurement did not print the recorded reason:\n${excusedSaid}`);
+
+  await restoreFixture();
+});
+
+test("an h1 shrunk to 40% of the board's fails, and a recorded override suppresses it", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // Both sides bleed, so the framing agrees and the h1 is the only thing under test.
+  await writeBoardFixture((x) => x, { media: BLEED_MEDIA, h1Size: "64px" });
+  writeFileSync(join(SITE, "src/pages/index.astro"),
+    homePage("#2f5d50", (x) => x, { media: BLEED_MEDIA, h1Size: "26px" }));
+  build();
+
+  writeManifest(heroPicked());
+  const drift = await run([SITE, "--port", String(PORT)]);
+  const said = `${drift.stdout}\n${drift.stderr}`;
+  assert.equal(drift.status, 1, `an h1 at 40% of the board's size should fail:\n${said}`);
+  assert.match(drift.stderr, /the h1 is not the picked board's/, `the h1 change was not reported:\n${said}`);
+  assert.match(drift.stderr, /board 64px/, `the finding does not name the board's h1 size:\n${drift.stderr}`);
+  assert.match(drift.stderr, /built 26px/, `the finding does not name the built h1 size:\n${drift.stderr}`);
+  assert.doesNotMatch(drift.stderr, /the hero's framing is not the picked board's/,
+    `the framing was reported as changed when both sides bleed:\n${drift.stderr}`);
+
+  writeManifest(heroPicked(), [{
+    route: "/", section: "b1-hero", what: "smaller h1",
+    reason: "the client's own headline is forty words and will not set at 64px",
+    recorded_at: new Date().toISOString(),
+  }]);
+  const excused = await run([SITE, "--port", String(PORT)]);
+  const excusedSaid = `${excused.stdout}\n${excused.stderr}`;
+  assert.doesNotMatch(excusedSaid, /the h1 is not the picked board's/,
+    `a recorded override did not suppress the h1 finding:\n${excusedSaid}`);
+  assert.match(excusedSaid, /override on \/, b1-hero: the client's own headline is forty words/,
+    `the suppressed measurement did not print the recorded reason:\n${excusedSaid}`);
+
+  await restoreFixture();
+});
+
+test("a carried section built 50% shorter fails by name, and a recorded override suppresses it", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  await writeBoardFixture((x) => x, { servicesStyle: "min-height:600px" });
+  writeFileSync(join(SITE, "src/pages/index.astro"),
+    homePage("#2f5d50", (x) => x, { servicesStyle: "min-height:300px;padding:0" }));
+  build();
+
+  writeManifest(heroPicked());
+  const drift = await run([SITE, "--port", String(PORT)]);
+  const said = `${drift.stdout}\n${drift.stderr}`;
+  assert.equal(drift.status, 1, `a section compressed to half the board's height should fail:\n${said}`);
+  assert.match(drift.stderr, /section b1-services is \d+% shorter than on the board/,
+    `the compressed section was not reported by name:\n${said}`);
+
+  writeManifest(heroPicked(), [{
+    route: "/", section: "services", what: "a tighter services band",
+    reason: "the client has three services rather than the six the board was drawn with",
+    recorded_at: new Date().toISOString(),
+  }]);
+  const excused = await run([SITE, "--port", String(PORT)]);
+  const excusedSaid = `${excused.stdout}\n${excused.stderr}`;
+  assert.doesNotMatch(excusedSaid, /shorter than on the board/,
+    `a recorded override did not suppress the section-height finding:\n${excusedSaid}`);
+  assert.match(excusedSaid, /override on \/, services: the client has three services/,
+    `the suppressed measurement did not print the recorded reason:\n${excusedSaid}`);
+
+  await restoreFixture();
+});
+
+test("a page that kept the board's framing reports none of the three", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  await writeBoardFixture((x) => x, { media: BLEED_MEDIA, servicesStyle: "min-height:200px" });
+  writeFileSync(join(SITE, "src/pages/index.astro"),
+    homePage("#2f5d50", (x) => x, { media: BLEED_MEDIA, servicesStyle: "min-height:200px" }));
+  build();
+  writeManifest(heroPicked());
+  const r = await run([SITE, "--port", String(PORT)]);
+  const said = `${r.stdout}\n${r.stderr}`;
+  // The three are asserted absent one at a time, so a failure names which one fired. The exit
+  // code is deliberately NOT asserted here: the appearance head is a separate check with its
+  // own floor, and this case is about the framing measures alone.
+  assert.doesNotMatch(said, /the hero's framing is not the picked board's/,
+    `an unchanged framing was reported as drifted:\n${said}`);
+  assert.doesNotMatch(said, /the h1 is not the picked board's/,
+    `an unchanged h1 was reported as drifted:\n${said}`);
+  assert.doesNotMatch(said, /shorter than on the board/,
+    `an unchanged section height was reported as drifted:\n${said}`);
+  // And the positive: it measured the framing rather than passing over it in silence.
+  assert.match(said, /the hero's framing is bleed on both sides/,
+    `the gate never said it had compared the framing at all:\n${said}`);
+
+  await restoreFixture();
 });

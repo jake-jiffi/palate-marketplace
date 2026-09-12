@@ -31,13 +31,22 @@
  *        [--proof <preview-url> [--proof-unmeasured "<reason>"]]
  *        [--answer motion=... --answer mix=... --answer cms=...]
  *        [--canvas-url <published-url> | --canvas-skipped "<reason>"]
+ *        [--looked <route> --shot .palate-shots/<file>.png --verdict "<what you can see>" [--primary]]
+ *        [--override <route> --section <band> --what "<instead>" --reason "<why>"]
  * Exit: 0 recorded, 1 refused (with the reason), 2 bad arguments.
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import { join, resolve, dirname, sep } from "node:path";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseRegistry } from "./boards-render.mjs";
+import { normaliseRoute, pageTypeOf, routeSlug } from "./lib/route-kind.mjs";
+
+// THE GATE AND THE RECORD MUST AGREE ABOUT WHAT KIND OF PAGE A ROUTE IS, so there is one
+// definition and `gate-look.mjs` reads the same module. Re-exported here because this file is
+// where the Compose record is written and where a reader looks for its shape.
+export { pageTypeOf, routeSlug };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -46,8 +55,25 @@ const VALUE_FLAGS = new Set([
   "--hero", "--section", "--cta", "--intensity", "--note", "--canvas", "--proof", "--answer",
   "--proof-unmeasured",
   "--canvas-url", "--canvas-skipped",
+  "--looked", "--shot", "--verdict",
+  "--override", "--what", "--reason",
 ]);
-const opt = (k) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : null; };
+/**
+ * A VALUE FLAG WITH NO VALUE IS A REFUSAL, never the next flag read as its value.
+ *
+ * `opt()` returned whatever token followed, so `--looked --shot x.png --verdict "..."` recorded
+ * a look on a route called `/--shot`, classified it as a service page, and satisfied
+ * `gate-look.mjs` for a page nobody built. The board judge and the page judge both refuse this
+ * shape; the record that feeds them has to refuse it too.
+ */
+const opt = (k) => {
+  const i = args.indexOf(k);
+  if (i < 0) return null;
+  const v = args[i + 1];
+  if (VALUE_FLAGS.has(k) && (v === undefined || v.startsWith("--")))
+    badArgs(`${k} was given with no value. Name it: ${k} <value>. NOT a record.`);
+  return v !== undefined ? v : null;
+};
 const flag = (k) => args.includes(k);
 const positional = [];
 for (let i = 0; i < args.length; i++) {
@@ -121,8 +147,15 @@ const N = boards.length;
 // --------------------------------------------------------------------------- the picks
 // ONLY THESE READ THE LADDER. Everything else on this command line writes a manifest field and
 // has no opinion about which boards exist.
+//
+// `--section` NAMES A BOARD, EXCEPT BESIDE `--override`, WHERE IT NAMES A SECTION. The override
+// records a departure from the board on one band of one page, so the band has to be named, and
+// the word for it is the word the doctrine already uses. The two readings cannot collide in one
+// call: an override is about a built page and a section pick is about the ladder.
+const overrideRoute = flag("--override") ? (opt("--override") ?? "") : null;
 const wanted = [];
 for (const surface of ["hero", "section"]) {
+  if (surface === "section" && overrideRoute !== null) continue;
   const id = opt(`--${surface}`);
   if (id) wanted.push({ surface, id });
 }
@@ -304,6 +337,143 @@ if (canvasSkipped !== null) {
 }
 
 /**
+ * THE COMPOSE RECORD: somebody opened the page, and said what they saw.
+ *
+ * A real build shot 101 screenshots and finished with no record that anyone had held one of
+ * them against the board it was composed from. Screenshots prove a page RENDERED. They say
+ * nothing about whether the hero still bleeds the way the direction did, and a build can pass
+ * every mechanical gate it has while quietly becoming a different site from the one the client
+ * signed off.
+ *
+ * So the look is recorded the way the pick is: by command, with the evidence attached.
+ *
+ *   the SHOT   has to be a screenshot of this build (under .palate-shots/) and NEWER than the
+ *              built page, because a sentence about pixels that were replaced afterwards is a
+ *              sentence about a page nobody has seen. It is fingerprinted, so the record names
+ *              the exact image the reading is about.
+ *   the VERDICT has to be a reading rather than a verdict-shaped noise. "Looks good" is the
+ *              shape a model reaches for when it did not open anything, so the empty phrases
+ *              are named and refused, and a sentence under 40 characters cannot carry three
+ *              observations however it is worded.
+ *
+ * The OVERRIDE is the other half, and it is what makes the fidelity gate usable. A build
+ * sometimes SHOULD depart from the board (the only photograph is too soft to bleed), and
+ * without a way of saying so the only options are a permanent finding or a weaker gate. An
+ * override is a departure with a reason attached, recorded once, and a later task suppresses
+ * exactly the finding it names and prints the reason beside it.
+ */
+const compose = manifest.compose && typeof manifest.compose === "object" ? manifest.compose : {};
+const existingPages = Array.isArray(compose.pages) ? compose.pages.slice() : [];
+const existingOverrides = Array.isArray(compose.overrides) ? compose.overrides.slice() : [];
+
+// Phrases that read as a look and are not one. Matched on WORD BOUNDARIES: "fine" inside
+// "refined" is a real word in a real reading, and a checker that cannot tell them apart
+// teaches people to write around it rather than to look.
+// "fine" is gone from this list: "the hairline rule is fine at 1px, the kicker is gone" is a
+// real reading of a real page, and refusing it told the author they had not opened anything.
+const EMPTY_VERDICTS = ["looks good", "matches the board", "no issues", "as designed"];
+const MIN_VERDICT = 40;
+
+const lookedRoute = flag("--looked") ? (opt("--looked") ?? "") : null;
+if (lookedRoute !== null && proofUrl) {
+  refuse("--looked and --proof are two different records and this command writes one at a time. Record the motion proof, then record the look.");
+}
+if (lookedRoute !== null) {
+  const route = normaliseRoute(lookedRoute);
+  const shotArg = opt("--shot");
+  const verdict = (opt("--verdict") ?? "").trim();
+  if (!shotArg) refuse("--looked needs the screenshot it was taken from: --shot .palate-shots/<file>.png. A look with no image is a claim.");
+  if (!verdict) refuse("--looked needs --verdict \"<what you saw>\": three things you can see in the shot, in your own words.");
+
+  const shotsRoot = resolve(dir, ".palate-shots");
+  const shotPath = resolve(dir, shotArg);
+  if (shotPath !== shotsRoot && !shotPath.startsWith(shotsRoot + sep)) {
+    refuse(`the look must be a screenshot under .palate-shots/ (got ${shotArg}). That directory is what the capture driver writes, so a file outside it is an image nothing in this build produced.`);
+  }
+  if (!existsSync(shotPath)) refuse(`--shot ${shotArg} does not exist (${shotPath}). Take the screenshot before recording the look.`);
+
+  /**
+   * THE PAGE THE SHOT IS OF, in the order the adapters produce it. A route with no built page
+   * is not refused here: a look can honestly be recorded against a preview, and refusing would
+   * make this command unusable on the exact builds that serve rather than build. What IS
+   * refused is a shot that predates a page we CAN see, because that is measurable.
+   */
+  const slug = route === "/" ? "" : route.replace(/^\//, "");
+  const builtPage = [
+    slug ? join(dir, "dist/client", slug, "index.html") : join(dir, "dist/client/index.html"),
+    slug ? join(dir, "dist", slug, "index.html") : join(dir, "dist/index.html"),
+  ].find((p) => existsSync(p));
+  if (builtPage && statSync(shotPath).mtimeMs < statSync(builtPage).mtimeMs) {
+    refuse(`the shot is older than the built page it claims to be of (${shotArg} predates ${builtPage.slice(dir.length + 1)}). Re-shoot the page and look at what it is now.`);
+  }
+
+  if (verdict.length < MIN_VERDICT) {
+    refuse(`--verdict is ${verdict.length} characters and the floor is ${MIN_VERDICT}. Name three things you can see in the shot: what the hero does, where the eye goes second, and one thing that is wrong or deliberately different.`);
+  }
+  const empty = EMPTY_VERDICTS.find((p) => new RegExp(`\\b${p.replace(/ /g, "\\s+")}\\b`, "i").test(verdict));
+  if (empty) {
+    refuse(`--verdict says "${empty}", which is the phrase somebody writes when they did not open the page. Say what is on it instead: the hero, the second thing the eye lands on, and one thing that is wrong or deliberately different.`);
+  }
+
+  /**
+   * `--primary` NAMES THE ROUTE THE DRAWN INNER PAGE BECAME.
+   *
+   * Every direction is drawn with one inner page (`I<N>`) beside its home, and it is the only
+   * picture of what this direction's inner pages were supposed to be. Nothing on the manifest
+   * said which route it was lifted into, so the page judge had no choice but to hold every
+   * inner page against the donor's HOME page, which is the weaker of the two comparisons
+   * available and is not the promise the client was shown. One mark closes that.
+   *
+   * AT MOST ONE PER BUILD, and the home can never be it: the home has its own board, and a
+   * build claiming two primary inner pages is a build saying the drawing became two things.
+   */
+  const primary = flag("--primary");
+  if (primary && route === "/") {
+    refuse("--primary marks the route the drawn INNER page became, so it cannot be the home page: the home answers to the direction's own board. Mark the inner page the client will spend their time on.");
+  }
+
+  const entry = {
+    route,
+    page_type: pageTypeOf(route),
+    shot: shotArg,
+    shot_sha256: createHash("sha256").update(readFileSync(shotPath)).digest("hex"),
+    looked_at: new Date().toISOString(),
+    verdict,
+    ...(primary ? { primary: true } : {}),
+  };
+  // ONE ENTRY PER ROUTE. A second look at the same page is a newer reading of it, not a second
+  // page, and a list that grew would let one look at the home page stand in for five.
+  patch.compose = patch.compose || {};
+  const others = existingPages.filter((p) => normaliseRoute(p?.route) !== route);
+  patch.compose.pages = [
+    // A SECOND `--primary` MOVES THE MARK rather than adding one. Two routes claiming the drawn
+    // inner page would have the judge comparing one drawing with two pages and reporting both.
+    ...(primary ? others.map(({ primary: _drop, ...p }) => p) : others),
+    entry,
+  ];
+}
+
+if (flag("--primary") && lookedRoute === null) {
+  refuse("--primary marks a route that is being looked at, so it goes with --looked: --looked /security-windows --shot ... --verdict \"...\" --primary.");
+}
+
+if (overrideRoute !== null) {
+  const route = normaliseRoute(overrideRoute);
+  const section = (opt("--section") ?? "").trim();
+  const what = (opt("--what") ?? "").trim();
+  const reason = (opt("--reason") ?? "").trim();
+  if (!section) refuse("--override needs the band it is about: --section hero. An override with no section suppresses nothing, because the gate matches on the section it names.");
+  if (!what) refuse("--override needs --what \"<what was done instead>\", in the words somebody comparing the page with the board would use.");
+  if (!reason) {
+    refuse("--override needs --reason \"<why>\". The reason IS the record: a departure from the board with no reason attached is indistinguishable from the drift this gate exists to catch.");
+  }
+  patch.compose = patch.compose || {};
+  // APPENDED, never replaced. Two overrides on one section of one page are two decisions taken
+  // at two moments, and the later one does not unmake the earlier one's reason.
+  patch.compose.overrides = [...(patch.compose.overrides ?? existingOverrides), { route, section, what, reason, recorded_at: new Date().toISOString() }];
+}
+
+/**
  * THE QUESTION ROUND: the three things Compose needs from the person before any Astro is
  * built for the picked rung. `--answer` is repeatable (one flag per question, or several
  * calls over a session) so every occurrence on this command line is collected, not just the
@@ -353,8 +523,8 @@ if (canvasDir) {
 // ------------------------------------------------------------------------------- record
 if (!made.length && !patch.commission && !patch.explore.cta && !patch.explore.notes
     && !patch.explore.proof && !patch.explore.question_round && !patch.explore.canvas
-    && patch.explore.second_passes === undefined && canvasDir === null) {
-  badArgs("nothing to record. Pass at least one of --hero, --section, --intensity, --cta, --note, --proof, --answer, --canvas-url, --canvas-skipped, --second-pass or --canvas.");
+    && patch.explore.second_passes === undefined && canvasDir === null && !patch.compose) {
+  badArgs("nothing to record. Pass at least one of --hero, --section, --intensity, --cta, --note, --proof, --answer, --canvas-url, --canvas-skipped, --second-pass, --canvas, --looked or --override.");
 }
 
 if (existsSync(manifestPath)) {
@@ -392,6 +562,14 @@ if (patch.explore.canvas) {
       ? `palate-pick: canvas published at ${patch.explore.canvas.url}. /explore links to it first.\n`
       : `palate-pick: canvas declined, recorded as "${patch.explore.canvas.reason}". Hand over /explore instead.\n`,
   );
+}
+if (patch.compose?.pages) {
+  const e = patch.compose.pages[patch.compose.pages.length - 1];
+  process.stdout.write(`palate-pick: look recorded on ${e.route} (${e.page_type}), from ${e.shot}. The done gate asks for one look per page type.\n`);
+}
+if (patch.compose?.overrides) {
+  const o = patch.compose.overrides[patch.compose.overrides.length - 1];
+  process.stdout.write(`palate-pick: override on ${o.route}, ${o.section}: ${o.what}, because ${o.reason}.\n`);
 }
 if (patch.explore.question_round) {
   process.stdout.write(`palate-pick: question round recorded (${Object.keys(answers).sort().join(", ")}).\n`);

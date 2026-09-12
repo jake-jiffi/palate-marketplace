@@ -664,6 +664,252 @@ else
   echo "FAIL - and the tool-written manifest outranks the agent-written report (got: $both_summary)"; fail=$((fail+1))
 fi
 
+# --- THE LOOK: SOMEBODY HAS TO HAVE OPENED THE PAGES ------------------------------------
+# A real client build took 101 screenshots and finished with no record that one of them had
+# been held against the board it was composed from. The shots prove a page RENDERED; they say
+# nothing about whether it still carries the picked direction. So once a pick exists, the done
+# gate asks for one recorded look per PAGE TYPE the build shipped.
+#
+# The fixture carries picks AND a complete question round, because the question-round check
+# sits downstream of this one and a build missing it would block for the wrong reason.
+mk_look_project() { # <dir> <compose-json|"">
+  local proj="$1" composed="$2"
+  mkdir -p "$proj/dist/client/security-windows"
+  printf '<!doctype html><html><body><h1>home</h1></body></html>' > "$proj/dist/client/index.html"
+  printf '<!doctype html><html><body><h1>security windows</h1></body></html>' > "$proj/dist/client/security-windows/index.html"
+  # The picked direction's own stills. Without them the page judge cannot compare anything and
+  # SKIPS as unjudgeable rather than refusing, which is the right answer to a different question
+  # from the one these cases ask.
+  mkdir -p "$proj/.palate/explore/shots/b1"
+  for f in hero.png foot.png inner.png donor.jpg donor-foot.png; do
+    printf 'not a real image' > "$proj/.palate/explore/shots/b1/$f"
+  done
+  COMPOSE="$composed" node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-11T00:00:00Z" }],
+  question_round: { motion: "the rules draw down", mix: "nothing", cms: "false", answered_at: "2026-09-11T00:01:00Z" },
+};
+if (process.env.COMPOSE) m.compose = JSON.parse(process.env.COMPOSE);
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$proj/build-manifest.json"
+  make_shots "$proj" 0
+  cp "$PASS/verify-report.json" "$proj/verify-report.json"
+}
+
+# One look per page type, which is what the look gate asks for and what the page judge then
+# owes a verdict on.
+LOOKS_BOTH='{"pages":[{"route":"/","page_type":"home","shot":".palate-shots/desktop-full.png","shot_sha256":"abc","looked_at":"2026-09-11T00:10:00Z","verdict":"The hero bleeds like the board, the wordmark sits on the photo, the columns share a baseline"},{"route":"/security-windows","page_type":"service","shot":".palate-shots/mobile-full.png","shot_sha256":"def","looked_at":"2026-09-11T00:12:00Z","verdict":"The photo is inset rather than bled, the spec table reads down, the enquiry band closes it"}]}'
+
+# Write a verdict per page type, fingerprinted against the built HTML the way the page judge
+# writes it. `stale` swaps the fingerprint for one nothing on disk matches, which is what a
+# rebuild between the judgement and the done gate looks like.
+add_judgements() { # <proj> <rung-for-service> <fresh|stale>
+  node -e '
+const fs = require("node:fs"), c = require("node:crypto"), p = require("node:path");
+const [proj, svcRung, freshness] = process.argv.slice(1);
+const sha = (f) => c.createHash("sha256").update(fs.readFileSync(f)).digest("hex").slice(0, 16);
+const one = (route, type, rung, file) => ({
+  route, page_type: type, surfaces: ["entrance", "foot"],
+  rungs: { entrance: rung, foot: rung }, rung,
+  against: { entrance: "hero.png", foot: "donor-foot.png" },
+  fingerprints: { entrance_sha: "aaaa", foot_sha: "bbbb", html_sha: freshness === "stale" ? "0".repeat(16) : sha(p.join(proj, file)) },
+  judged_at: "2026-09-12T00:30:00Z", run_token: "deadbeef",
+});
+const mf = p.join(proj, "build-manifest.json");
+const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+m.compose = m.compose || {};
+m.compose.page_judgements = [
+  one("/", "home", "comparable", "dist/client/index.html"),
+  one("/security-windows", "service", svcRung, "dist/client/security-windows/index.html"),
+];
+fs.writeFileSync(mf, JSON.stringify(m, null, 2));
+' "$1" "$2" "$3"
+}
+
+LOOKNONE="$TMP/look-none"; mkdir -p "$LOOKNONE"
+mk_look_project "$LOOKNONE" ""
+looknone_out="$(bash "$GATE" "$LOOKNONE/build-manifest.json" 2>&1)"
+looknone_ec=$?
+if [ "$looknone_ec" -eq 2 ] && printf '%s' "$looknone_out" | grep -qF 'look: no page has a recorded look'; then
+  echo "ok   - a picked, built site with no recorded look blocks and says so"; pass=$((pass+1))
+else
+  echo "FAIL - a picked, built site with no recorded look must block (exit $looknone_ec: $looknone_out)"; fail=$((fail+1))
+fi
+
+# ONE LOOK IS NOT EVERY LOOK. The home page is the one that always gets opened, so a gate that
+# stopped at "is there a look" would pass a build whose every inner page went unread. The page
+# types come from the build output, so the finding can NAME the route nobody opened.
+LOOKHOME="$TMP/look-home-only"; mkdir -p "$LOOKHOME"
+mk_look_project "$LOOKHOME" '{"pages":[{"route":"/","page_type":"home","shot":".palate-shots/desktop-full.png","shot_sha256":"abc","looked_at":"2026-09-11T00:10:00Z","verdict":"The hero bleeds like the board, the wordmark sits on the photo, the columns share a baseline"}]}'
+lookhome_out="$(bash "$GATE" "$LOOKHOME/build-manifest.json" 2>&1)"
+lookhome_ec=$?
+if [ "$lookhome_ec" -eq 2 ] && printf '%s' "$lookhome_out" | grep -qF 'look: 1 page type never looked at: service (/security-windows)'; then
+  echo "ok   - a look at the home page alone names the page type nobody opened"; pass=$((pass+1))
+else
+  echo "FAIL - a look at the home page alone must name the unopened type (exit $lookhome_ec: $lookhome_out)"; fail=$((fail+1))
+fi
+
+# AND WITH ONE LOOK PER PAGE TYPE IT PASSES. Without this the two assertions above are equally
+# satisfied by a gate that can never pass, which protects nothing and blocks every build.
+LOOKALL="$TMP/look-all"; mkdir -p "$LOOKALL"
+mk_look_project "$LOOKALL" "$LOOKS_BOTH"
+# The page judge sits immediately after the look and refuses a build whose looked pages were
+# never compared with anything, so this fixture owes a verdict per page type before the whole
+# gate can reach its summary at all.
+add_judgements "$LOOKALL" comparable fresh
+lookall_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$lookall_out" | grep -qF 'look=pass'; then
+  echo "ok   - one look per page type passes the look gate"; pass=$((pass+1))
+else
+  echo "FAIL - one look per page type passes the look gate (got: $lookall_out)"; fail=$((fail+1))
+fi
+check "a build with a look on every page type -> pass" 0 "$LOOKALL/build-manifest.json"
+
+# --- THE JUDGE ON THE BUILT PAGES -------------------------------------------------------
+# The board judge compares a DRAWING with the reference it was drawn from, before the canvas
+# is published. Nothing asked the same question about the built site, and the eastcoast v3
+# home page was lifted with six safe-looking edits that between them inverted the pick. This
+# branch reads the record: every looked page type judged, none below the bar, and every
+# verdict still describing the HTML on disk.
+PJNONE="$TMP/page-judge-none"; mkdir -p "$PJNONE"
+mk_look_project "$PJNONE" "$LOOKS_BOTH"
+pjnone_out="$(bash "$GATE" "$PJNONE/build-manifest.json" 2>&1)"
+pjnone_ec=$?
+if [ "$pjnone_ec" -eq 2 ] && printf '%s' "$pjnone_out" | grep -qF 'was looked at and never judged'; then
+  echo "ok   - a looked page that was never judged against its direction blocks"; pass=$((pass+1))
+else
+  echo "FAIL - a looked page never judged must block (exit $pjnone_ec: $pjnone_out)"; fail=$((fail+1))
+fi
+
+# A VERDICT BELOW THE BAR IS A REFUSAL THAT STANDS. The judgement is recorded even when the
+# gate refuses, precisely so done-time can see it rather than re-arguing it.
+PJWORSE="$TMP/page-judge-worse"; mkdir -p "$PJWORSE"
+mk_look_project "$PJWORSE" "$LOOKS_BOTH"
+add_judgements "$PJWORSE" somewhat_worse fresh
+pjworse_out="$(bash "$GATE" "$PJWORSE/build-manifest.json" 2>&1)"
+pjworse_ec=$?
+if [ "$pjworse_ec" -eq 2 ] && printf '%s' "$pjworse_out" | grep -qF 'stands judged somewhat worse'; then
+  echo "ok   - a page standing judged below the bar blocks at done time"; pass=$((pass+1))
+else
+  echo "FAIL - a page judged below the bar must block (exit $pjworse_ec: $pjworse_out)"; fail=$((fail+1))
+fi
+
+# A PAGE REBUILT AFTER IT WAS JUDGED carries a verdict about pixels that are gone. Without this
+# the fix for a refusal is to rebuild and say nothing, and the old verdict sails on.
+PJSTALE="$TMP/page-judge-stale"; mkdir -p "$PJSTALE"
+mk_look_project "$PJSTALE" "$LOOKS_BOTH"
+add_judgements "$PJSTALE" comparable stale
+pjstale_out="$(bash "$GATE" "$PJSTALE/build-manifest.json" 2>&1)"
+pjstale_ec=$?
+if [ "$pjstale_ec" -eq 2 ] && printf '%s' "$pjstale_out" | grep -qF 'was rebuilt after it was judged'; then
+  echo "ok   - a page rebuilt after it was judged blocks rather than keeping its verdict"; pass=$((pass+1))
+else
+  echo "FAIL - a rebuilt page must lose its verdict (exit $pjstale_ec: $pjstale_out)"; fail=$((fail+1))
+fi
+
+# AND A COMPLETE, CURRENT SET PASSES. Without this the three assertions above are equally
+# satisfied by a gate that can never pass.
+pjok_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$pjok_out" | grep -qF 'page-judge=pass'; then
+  echo "ok   - a judged, current build passes the page judge"; pass=$((pass+1))
+else
+  echo "FAIL - a judged, current build passes the page judge (got: $pjok_out)"; fail=$((fail+1))
+fi
+
+# BEFORE THE PICK THERE IS NO PICTURE to hold a page against. $PASS has no picks.
+if printf '%s' "$summary" | grep -qF 'page-judge: no pick recorded'; then
+  echo "ok   - a build with no pick skips the page judge, naming the reason"; pass=$((pass+1))
+else
+  echo "FAIL - a build with no pick skips the page judge, naming the reason (got: $summary)"; fail=$((fail+1))
+fi
+
+# THE RELEASE IS NAMED, NEVER SILENT, and it is the SAME switch that releases the board judge.
+pjoff_out="$(PALATE_GATE_JUDGE=0 bash "$GATE" "$PJNONE/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$pjoff_out" | grep -qF 'page-judge: PALATE_GATE_JUDGE=0'; then
+  echo "ok   - PALATE_GATE_JUDGE=0 releases the page judge and says it did"; pass=$((pass+1))
+else
+  echo "FAIL - PALATE_GATE_JUDGE=0 releases the page judge and says it did (got: $pjoff_out)"; fail=$((fail+1))
+fi
+
+# BEFORE THE PICK THERE IS NO BOARD TO HOLD A PAGE AGAINST, so the gate owes nothing and says
+# which reason it skipped for. $PASS has no picks.
+if printf '%s' "$summary" | grep -qF 'look: no pick recorded'; then
+  echo "ok   - a build with no pick skips the look gate, naming the reason"; pass=$((pass+1))
+else
+  echo "FAIL - a build with no pick skips the look gate, naming the reason (got: $summary)"; fail=$((fail+1))
+fi
+
+# THE RELEASE IS NAMED, NEVER SILENT. A gate switched off that reads like a gate that passed is
+# the fault this whole file exists to close.
+lookoff_out="$(PALATE_GATE_LOOK=0 bash "$GATE" "$LOOKNONE/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$lookoff_out" | grep -qF 'look: PALATE_GATE_LOOK=0'; then
+  echo "ok   - PALATE_GATE_LOOK=0 releases the gate and says it did"; pass=$((pass+1))
+else
+  echo "FAIL - PALATE_GATE_LOOK=0 releases the gate and says it did (got: $lookoff_out)"; fail=$((fail+1))
+fi
+
+# --- THE LOCAL GRADE'S OWN LADDER --------------------------------------------------------
+# On the eastcoast v3 build grade-local.mjs had already judged the built home `somewhat_worse`
+# than both exemplars, at the 12.9th taste percentile, with flattery.risk true, and nothing read
+# the file. $LOOKALL already clears the look and page-judge gates, so it is the base for testing
+# this one in isolation.
+write_taste_result() { # <proj> <rung> <flattery-json|"null">
+  local proj="$1" rung="$2" flattery="$3"
+  mkdir -p "$proj/.palate-shots"
+  cat > "$proj/.palate-shots/local-grade.json" <<JSON
+{ "overall": 71, "taste": { "applicable": true, "percentile": 12.9 },
+  "flattery": $flattery,
+  "ladder": { "applicable": true, "rung": "$rung", "meanRaw": 0.4, "results": [] },
+  "findings": [ { "id": "some_check", "detail": "The accent colour is a framework default.", "fix": "Swap it for the client's own accent." } ] }
+JSON
+}
+
+write_taste_result "$LOOKALL" "comparable" "null"
+tasteok_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$tasteok_out" | grep -qF 'taste=pass'; then
+  echo "ok   - a comparable rung with no flattery risk passes the taste gate"; pass=$((pass+1))
+else
+  echo "FAIL - a comparable rung with no flattery risk passes the taste gate (got: $tasteok_out)"; fail=$((fail+1))
+fi
+
+write_taste_result "$LOOKALL" "somewhat_worse" "null"
+tasteworse_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>&1)"
+tasteworse_ec=$?
+if [ "$tasteworse_ec" -eq 2 ] && printf '%s' "$tasteworse_out" | grep -qF 'somewhat worse'; then
+  echo "ok   - a build the local grade reads as somewhat worse than its exemplar blocks at done"; pass=$((pass+1))
+else
+  echo "FAIL - a build the local grade reads as somewhat worse must block (exit $tasteworse_ec: $tasteworse_out)"; fail=$((fail+1))
+fi
+
+write_taste_result "$LOOKALL" "comparable" '{ "risk": true, "tastePercentile": 12.9, "honestRange": [45, 54] }'
+tasteflatter_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>&1)"
+tasteflatter_ec=$?
+if [ "$tasteflatter_ec" -eq 2 ] && printf '%s' "$tasteflatter_out" | grep -qF 'flattery.risk is true'; then
+  echo "ok   - a comparable rung under flattery risk still blocks (both must hold)"; pass=$((pass+1))
+else
+  echo "FAIL - a comparable rung under flattery risk must still block (exit $tasteflatter_ec: $tasteflatter_out)"; fail=$((fail+1))
+fi
+
+rm -f "$LOOKALL/.palate-shots/local-grade.json"
+tasteskip_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$tasteskip_out" | grep -qF 'taste=skipped'; then
+  echo "ok   - no recorded local grade skips the taste gate rather than blocking"; pass=$((pass+1))
+else
+  echo "FAIL - no recorded local grade should skip the taste gate (got: $tasteskip_out)"; fail=$((fail+1))
+fi
+
+write_taste_result "$LOOKALL" "clearly_worse" "null"
+tasteoff_out="$(PALATE_GATE_TASTE=0 bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$tasteoff_out" | grep -qF 'taste: PALATE_GATE_TASTE=0'; then
+  echo "ok   - PALATE_GATE_TASTE=0 releases the taste gate and says it did"; pass=$((pass+1))
+else
+  echo "FAIL - PALATE_GATE_TASTE=0 releases the taste gate and says it did (got: $tasteoff_out)"; fail=$((fail+1))
+fi
+rm -f "$LOOKALL/.palate-shots/local-grade.json"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

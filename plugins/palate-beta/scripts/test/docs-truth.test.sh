@@ -535,6 +535,23 @@ present "explore-stage.md names the gate that judges a board against its donor" 
   "references/explore-stage.md" "gate-board-judge.mjs"
 present "explore-stage.md names the rung a board is refused at" \
   "references/explore-stage.md" "clearly_worse"
+# THE BAR ITSELF, in every place that states it. It moved on 2026-09-12 from "not clearly worse"
+# to "comparable or better on every judged surface", and a doctrine still telling an agent that
+# somewhat worse is shippable is a doctrine the gate will contradict at done-time.
+present "explore-stage.md states the bar the judge refuses at" \
+  "references/explore-stage.md" "THE BAR IS \`comparable\` OR \`better\`"
+present "explore-stage.md says somewhat_worse is refused as clearly_worse is" \
+  "references/explore-stage.md" "read \`somewhat_worse\` on any one"
+present "SKILL.md A.4 states the bar the judge refuses at" \
+  "SKILL.md" "THE BAR IS \`comparable\` OR \`better\` ON EVERY SURFACE"
+present "palate-verifier.md states the bar the Explore gate refuses at" \
+  "agents/palate-verifier.md" "comparable or better on every surface the direction was judged on"
+present "build-manifest.md says both lower rungs refuse" \
+  "references/build-manifest.md" "both somewhat_worse and clearly_worse refuse"
+# A SURFACE NOBODY COULD JUDGE IS NOT A BAD READING, and a wider bar is exactly where that would
+# be got wrong: the library holds no whole-page capture for some references.
+present "explore-stage.md says a null surface refuses nothing" \
+  "references/explore-stage.md" "reads null and refuses nothing"
 present "SKILL.md A.4 names the judge that runs before the canvas" \
   "SKILL.md" "gate-board-judge.mjs"
 # `^2c\.` and not any "2c." substring: the point is the STEP HEADING, and a mention of the step
@@ -824,6 +841,151 @@ elif printf '%s' "$handoff" | grep -qi 'rung\|ladder'; then
 else
   ok "the hand-off never says 'rung' or 'ladder'"
 fi
+
+# THE REPEATED SILHOUETTE IS A MEASUREMENT, NOT A NOTE TO THE VERIFIER. Two identical
+# five-card grids back to back shipped to a client because rhythm was the one thing no gate
+# read. The bug-class entry has to say all four criteria and say that it blocks, or the next
+# reader takes it for another line in the visual rubric that somebody is meant to eyeball.
+present "rendered-bug-classes names the repeated silhouette as its own class" \
+  "references/rendered-bug-classes.md" "## (i) REPEATED SILHOUETTE"
+present "rendered-bug-classes says the rule is about CONSECUTIVE sections" \
+  "references/rendered-bug-classes.md" "no two CONSECUTIVE sections share a silhouette"
+present "rendered-bug-classes says all four criteria have to hold" \
+  "references/rendered-bug-classes.md" "only when ALL FOUR hold"
+present "rendered-bug-classes names the deliberate escape hatch" \
+  "references/rendered-bug-classes.md" 'data-palate-repeat="deliberate"'
+# ...and the claim that it BLOCKS is a claim about a script, so it is checked against the
+# script rather than against the sentence: the finding has to reach the file the Stop hook
+# reads. `verify-rendered-silhouette.test.sh` drives the browser and proves the finding fires;
+# this asserts the entry it pushes carries the rule the doc names.
+if grep -qF "rule: 'repeated-silhouette'" "$ROOT/scripts/reference-capture/verify-rendered.mjs" \
+   && grep -qF "interactionFailures.push" "$ROOT/scripts/reference-capture/verify-rendered.mjs"; then
+  ok "the repeated-silhouette finding is written to the file the Stop hook blocks on"
+else
+  bad "rendered-bug-classes says the repeated silhouette blocks, but verify-rendered.mjs never files it as an interaction failure"
+fi
+
+# THE LOCAL GRADE'S LADDER IS A DONE SUB-GATE. On the eastcoast v3 build grade-local.mjs had
+# already judged the home `somewhat_worse` than its exemplar, at the 12.9th taste percentile,
+# with flattery.risk true, and nothing read the file. SKILL.md A.12 and local-grade.md both have
+# to say it runs before done, not after, or the same silent skip happens again.
+present "SKILL.md A.12 says the full local grade runs before done and gate-taste reads it" \
+  "SKILL.md" "Run this before the done gate, not after"
+present "local-grade.md says gate-done's taste sub-gate reads local-grade.json" \
+  "references/local-grade.md" "\`gate-done.sh\`'s \`taste\` sub-gate"
+
+# ============ COMPOSE IS A DESIGN ACT ====================================================
+# A client build was handed over with a home page that was the picked board degraded by six
+# safe-looking edits and eighteen inner pages assembled from kit pieces in one 22-minute burst
+# with no board, no library call and nobody opening a page. Every gate passed, because after the
+# pick nothing in the process was a design act. These sentences are what make it one, and every
+# one of them is now carried by a script, so a doc that loses one is a doc describing a build
+# step that still runs and is no longer written down.
+present "SKILL.md A.6 says Compose is a design act" \
+  "SKILL.md" "COMPOSE IS A DESIGN ACT"
+present "SKILL.md A.6 says the home page lifts the picked board" \
+  "SKILL.md" "LIFTS THE PICKED BOARD"
+present "SKILL.md A.6 names the command that records a departure from the board" \
+  "SKILL.md" '--override <route> --section'
+present "SKILL.md A.6 marks the route the drawn inner page became" \
+  "SKILL.md" "marked --primary when its look is recorded"
+present "SKILL.md A.6 says the kit is parts and states" \
+  "SKILL.md" "the kit is parts and states, never the page"
+absent "SKILL.md A.6 no longer tells Compose to write the rest of the site's pages" \
+  "SKILL.md" "the rest of the site's pages in the picked direction"
+present "SKILL.md A.6 composes a page template once, as a designed page type" \
+  "SKILL.md" "composed ONCE as a designed page type"
+present "SKILL.md A.6 refuses the native-size fallback for a photograph" \
+  "SKILL.md" '"inset at native size" is never a fallback'
+present "SKILL.md A.6 records the look per page type" \
+  "SKILL.md" '--looked <route> --shot'
+present "SKILL.md A.6 says the page judge's subagents are dispatched by you" \
+  "SKILL.md" "built pages are judged the way the boards were, and YOU dispatch"
+present "SKILL.md A.6 says fidelity now measures the framing" \
+  "SKILL.md" "the hero media's framing"
+
+# THE RUBRIC IS NOT THE GATE. On that build all six axes came back 4 of 4 at both viewports with
+# `defects: []` while the observations beside them named the duplication as defect 10 and marked
+# it accepted. A score somebody awards themselves cannot be the thing that decides.
+present "SKILL.md A.9 demotes the six axes to working notes" \
+  "SKILL.md" "THE SIX AXES ARE WORKING NOTES, NOT THE GATE"
+present "SKILL.md A.9 says nothing reads the self-scored axes" \
+  "SKILL.md" "Nothing reads \`visual.iterations[].axes\`"
+# ... AND A.9 NO LONGER SAYS THE OPPOSITE FOUR HUNDRED WORDS LATER. It listed the artefacts the
+# Stop hook reads and ended the list with "every rubric axis cleared the bar", which gate-done.sh
+# does not read at all: it reads `.visual.pass`, the console, the shot count and the iteration
+# count. A demotion undone inside its own item is a demotion nobody can act on.
+present "SKILL.md A.9 names what the done gate actually reads" \
+  "SKILL.md" "zero console errors, the verifier's own \`visual.pass\`)"
+absent "SKILL.md A.9 no longer claims the done gate reads the rubric axes" \
+  "SKILL.md" "every rubric axis cleared the bar"
+
+# THE JUDGE RUNS LAST, ON THE SETTLED BUILD. The visual loop rebuilds, and a page rebuilt after
+# it was judged makes its comparison stale, so judging before the loop buys every comparison
+# twice and passes none of them.
+present "SKILL.md A.6 puts the page judge after the visual loop" \
+  "SKILL.md" "THE PAGES ARE JUDGED LAST, ON THE SETTLED BUILD"
+present "explore-stage.md says the judge runs on the settled build" \
+  "references/explore-stage.md" "the judge runs on the settled build"
+present "the verifier says its page judge runs last, on the settled build" \
+  "agents/palate-verifier.md" "IT RUNS LAST, ON THE SETTLED BUILD"
+
+# A SURFACE WITH NO PICTURE IS DROPPED, NOT THE RUN. The library holds no whole-page capture for
+# some references, and requiring one switched the whole new instrument off, entrance comparisons
+# included, on a condition the board judge documents as ordinary.
+present "build-manifest.md says a missing surface is dropped rather than the run" \
+  "references/build-manifest.md" "A SURFACE WITH NO PICTURE IS DROPPED, NEVER THE RUN"
+present "the verifier says the six axes are working notes" \
+  "agents/palate-verifier.md" "The six axes are WORKING NOTES"
+
+# THE THREE NEW DONE SUB-GATES, named where the gates are listed, or a reader learns about them
+# only when one blocks.
+present "SKILL.md names the look gate" "SKILL.md" "scripts/gate-look.mjs"
+present "SKILL.md names the page judge" "SKILL.md" "scripts/gate-page-judge.mjs"
+present "SKILL.md names the taste gate" "SKILL.md" "scripts/gate-taste.mjs"
+present "SKILL.md names the repeated-silhouette finding in the rendered gate" \
+  "SKILL.md" "repeated-silhouette"
+
+# COMPOSE READS THE SAME WAY IN THE FILE A BUILDER OPENS FOR EXPLORE.
+present "explore-stage says Compose lifts the board rather than rebuilding it" \
+  "references/explore-stage.md" "LIFT THE PICKED BOARD, do not rebuild it from the kit"
+present "explore-stage names the override command" \
+  "references/explore-stage.md" "--override <route> --section"
+present "explore-stage records the look per page type" \
+  "references/explore-stage.md" "--looked <route> --shot"
+present "explore-stage composes a page template once, with photographs chosen per route" \
+  "references/explore-stage.md" "chosen per route, not just its words"
+present "explore-stage names the page judge" \
+  "references/explore-stage.md" "gate-page-judge.mjs"
+
+# THE VERIFIER STATES THE PAGE COMPARISONS AND DISPATCHES NOTHING, because its frontmatter
+# carries no Agent tool. A doctrine sentence telling an agent to do something is only true if
+# that agent has the tool for it, which is the lesson of 11 September.
+present "the verifier carries the page judge as its own step" \
+  "agents/palate-verifier.md" "5b. **The page judge**"
+present "the verifier says the page comparisons are the main agent's to run" \
+  "agents/palate-verifier.md" "the page comparisons are the main build agent's to run"
+
+# THE PICK COMMAND'S OWN PAGE HAS TO CARRY ITS FLAGS, or the only way to find them is the source.
+present "pick.md documents the recorded look" "commands/pick.md" "--looked"
+present "pick.md documents the primary inner page mark" "commands/pick.md" "--primary"
+present "pick.md documents the override" "commands/pick.md" "--override"
+
+# THE PHOTO RULES. A width rule shipped ten of twelve service pages with a 423-572px picture box
+# in a 1440px page, under the comment that it was never cropped, and the asset review was honest
+# and complete throughout: the review was of the FILES, and nothing said the crop is a decision.
+present "assets.md says the crop is decided by looking, per slot" \
+  "references/assets.md" "A photograph enters a slot with a DECIDED CROP"
+present "assets.md refuses the native-size fallback" \
+  "references/assets.md" '"inset at native size" is never a fallback'
+present "assets.md says a raw job snap never leads a page" \
+  "references/assets.md" "A raw job snap never leads a page"
+
+# RELEASING THE LOOK GATE NARROWS THE JUDGE. `gate-page-judge.mjs` takes its routes from
+# `compose.pages[]`, which `--looked` writes, so `PALATE_GATE_LOOK=0` does not only switch off the
+# look: it quietly shrinks what is judged to whatever somebody happened to look at.
+present "build-manifest says releasing the look narrows the judge's coverage" \
+  "references/build-manifest.md" "releasing the look narrows the judge's coverage"
 
 echo "---"
 echo "passed=$pass failed=$fail"

@@ -593,6 +593,88 @@ else
   gate_skipped explore "gate-explore.mjs not present"
 fi
 
+# THE LOOK: did anybody OPEN the pages this build shipped?
+#
+# A real client build took 101 screenshots and finished with no record that one of them had
+# been held against the board it was composed from. Screenshots prove a page RENDERED; they say
+# nothing about whether it still carries the direction the client picked. The look is recorded
+# by `palate-pick.mjs --looked` (never by a hook, never by hand) and this asks for one per PAGE
+# TYPE the build actually shipped, which is why nine service pages cost one look rather than
+# nine.
+#
+# It owes nothing before the pick, because there is no direction to hold a page against yet, so
+# a build with no picks skips. PALATE_GATE_LOOK=0 releases it with a named skip rather than a
+# silent one.
+LOOK_GATE="$HERE/gate-look.mjs"
+look_note="look=skipped"
+if [ ! -f "$LOOK_GATE" ]; then
+  gate_skipped look "gate-look.mjs not present"
+elif [ "${PALATE_GATE_LOOK:-1}" != "1" ]; then
+  gate_skipped look "PALATE_GATE_LOOK=0"
+else
+  if look_err="$(node "$LOOK_GATE" "$PROJ" 2>&1)"; then look_rc=0; else look_rc=$?; fi
+  gate_classify look "$look_rc" "$look_err"
+  gate_record look pass "${look_err}"
+  look_note="$GATE_NOTE"
+fi
+
+# THE JUDGE ON THE BUILT PAGES: is what the client receives as good as what they picked?
+#
+# The board judge asks whether a DRAWING is as good as the reference it was drawn from, before
+# the canvas is published. Nothing then asked the same question about the built site. On the
+# eastcoast v3 build the home page was lifted from the picked board with six safe-looking edits
+# that between them inverted the pick, and eighteen inner pages were kit assembly nobody held
+# against anything, with every mechanical gate passing: they all measure whether a page
+# RENDERED, and none of them can see bland.
+#
+# THIS BRANCH READS THE RECORD ALONE (`--check`). It cannot shoot pages and it cannot dispatch
+# subagents, so it asks the three things a record can answer: every looked page type carries a
+# verdict, none is below the bar, and each verdict still describes the HTML on disk (a page
+# refused, patched and rebuilt would otherwise sail on the verdict its old pixels earned).
+# Stating the comparisons is `node scripts/gate-page-judge.mjs <project>`, which the refusal
+# names.
+#
+# It owes nothing before the pick, for the same reason the look does. PALATE_GATE_JUDGE=0
+# releases it, the same switch that releases the board judge: one switch for one instrument.
+PAGE_JUDGE_GATE="$HERE/gate-page-judge.mjs"
+page_judge_note="page-judge=skipped"
+if [ ! -f "$PAGE_JUDGE_GATE" ]; then
+  gate_skipped page-judge "gate-page-judge.mjs not present"
+elif [ "${PALATE_GATE_JUDGE:-1}" != "1" ]; then
+  gate_skipped page-judge "PALATE_GATE_JUDGE=0"
+else
+  if pj_err="$(node "$PAGE_JUDGE_GATE" "$PROJ" --check 2>&1)"; then pj_rc=0; else pj_rc=$?; fi
+  gate_classify page-judge "$pj_rc" "$pj_err"
+  gate_record page-judge pass "${pj_err}"
+  page_judge_note="$GATE_NOTE"
+fi
+
+# THE LOCAL GRADE'S OWN LADDER: did the agent's free self-check already say this build reads
+# worse than its exemplar?
+#
+# On the eastcoast v3 build `grade-local.mjs` had already judged the built home `somewhat_worse`
+# than both exemplars, at the 12.9th taste percentile, with `flattery.risk: true` - the
+# instrument that exists to say "the honest number is likely lower than this" was already
+# tripped. Nothing read the file. It is a done-gate check because A.12 in SKILL.md runs the full
+# local grade before done, not after, so a record almost always exists by the time this asks.
+#
+# IT CAN ONLY READ A RECORD, never make one, so a build that has not run
+# `grade-local.mjs --url ...` yet, or whose ladder was never applicable (no exemplars fetched),
+# skips rather than blocking. PALATE_GATE_TASTE=0 releases it, named, the same discipline as
+# PALATE_GATE_LOOK and PALATE_GATE_JUDGE.
+TASTE_GATE="$HERE/gate-taste.mjs"
+taste_note="taste=skipped"
+if [ ! -f "$TASTE_GATE" ]; then
+  gate_skipped taste "gate-taste.mjs not present"
+elif [ "${PALATE_GATE_TASTE:-1}" != "1" ]; then
+  gate_skipped taste "PALATE_GATE_TASTE=0"
+else
+  if taste_err="$(node "$TASTE_GATE" "$PROJ" 2>&1)"; then taste_rc=0; else taste_rc=$?; fi
+  gate_classify taste "$taste_rc" "$taste_err"
+  gate_record taste pass "The local grade reads this build worse than its own exemplar. ${taste_err}"
+  taste_note="$GATE_NOTE"
+fi
+
 # FIDELITY: did the built home page carry the direction the client actually picked?
 #
 # This is the one promise Explore makes that nothing checked. The failure worth catching is not
@@ -667,5 +749,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
+  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $look_note, $page_judge_note, $taste_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0

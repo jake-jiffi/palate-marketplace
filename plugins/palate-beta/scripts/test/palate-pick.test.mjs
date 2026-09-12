@@ -791,3 +791,221 @@ test("an unreadable canvas extract is refused, not read as silence", async () =>
     "an unreadable extract wrote a feedback file, which reads as a client who changed nothing");
   rmSync(dir, { recursive: true, force: true });
 });
+
+// ===================================================================== the Compose record
+//
+// A build took 101 screenshots and no record existed of anybody holding one against the board
+// they were composed from. The shots prove a page RENDERED; nothing proved a person looked at
+// it. So the look is a command with the same shape as the pick: a shot on disk, newer than the
+// page it claims to be of, and a sentence that could only have been written by somebody who
+// opened it.
+
+const VERDICT = "The hero bleeds like the board, the wordmark sits on the photo, the band's two columns share a baseline";
+
+// THE PAGE IS BUILT BEFORE IT IS SHOT, which is the order a real build goes in and the order
+// the age check is about: a shot older than its page is the fault, not the normal case.
+function looked(dir, route = "/", { shot = ".palate-shots/desktop-full.png", html = true } = {}) {
+  if (html) {
+    const rel = route === "/" ? "dist/client/index.html" : `dist/client/${route.replace(/^\//, "")}/index.html`;
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), "<!doctype html><h1>built</h1>");
+  }
+  mkdirSync(join(dir, ".palate-shots"), { recursive: true });
+  writeFileSync(join(dir, shot), "not really a png, but bytes are bytes");
+}
+
+test("a look is recorded against the route, with the shot it was taken from", async () => {
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict", VERDICT]);
+  assert.equal(r.status, 0, r.stderr);
+  const pages = manifestOf(dir).compose.pages;
+  assert.equal(pages.length, 1);
+  assert.equal(pages[0].route, "/");
+  assert.equal(pages[0].page_type, "home");
+  assert.equal(pages[0].verdict, VERDICT);
+  assert.ok(Date.parse(pages[0].looked_at) > 0, "the look carries no timestamp");
+  // THE SHOT IS FINGERPRINTED, so a look cannot be re-used over a page that has been rebuilt
+  // since: the record names the exact pixels the sentence is about.
+  const { createHash } = await import("node:crypto");
+  const want = createHash("sha256").update(readFileSync(join(dir, ".palate-shots/desktop-full.png"))).digest("hex");
+  assert.equal(pages[0].shot_sha256, want);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a look whose shot is not a screenshot of this build is refused", async () => {
+  const dir = project();
+  looked(dir);
+  writeFileSync(join(dir, "elsewhere.png"), "bytes");
+  const r = await run([dir, "--looked", "/", "--shot", "elsewhere.png", "--verdict", VERDICT]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /the look must be a screenshot under \.palate-shots\//);
+  assert.equal(manifestOf(dir).compose, undefined, "a refused look was recorded anyway");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a look taken before the page it claims to be of is refused", async () => {
+  const dir = project();
+  looked(dir);
+  // The page rebuilt AFTER the shot. The sentence is then about pixels that no longer exist,
+  // which is the exact way a look survives the change it should have caught.
+  const { utimesSync } = await import("node:fs");
+  const now = Date.now() / 1000;
+  utimesSync(join(dir, ".palate-shots/desktop-full.png"), now - 600, now - 600);
+  utimesSync(join(dir, "dist/client/index.html"), now, now);
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict", VERDICT]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /older than the built page/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a verdict too short to be a reading is refused, and says how short", async () => {
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict", "the hero is right"]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /40/, "the refusal does not say what the floor is");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a verdict that says nothing is refused with the phrase named", async () => {
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", "I opened the home page at 1440 and it LOOKS GOOD to me, nothing to report here"]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /looks good/i, "the refusal does not name the phrase it caught");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a verdict that uses the word fine in a real reading is recorded", async () => {
+  // "fine" was on the empty-phrase list and matched on word boundaries, so a real sentence
+  // about a real page was refused with a message telling its author they had not opened it.
+  // The other four phrases stay: each of them says nothing on its own.
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", "The hairline rule is fine at 1px, the kicker is gone and the photo bleeds to both edges"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(manifestOf(dir).compose.pages[0].verdict, /fine at 1px/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a value flag given with no value is refused, never read as the next flag", async () => {
+  // `--looked --shot x.png --verdict "..."` recorded a look on a route called `/--shot`,
+  // classified it as a service page, and satisfied gate-look.mjs for a page nobody built.
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "--shot", ".palate-shots/desktop-full.png", "--verdict", VERDICT]);
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /--looked was given with no value/);
+  assert.equal(manifestOf(dir).compose, undefined, "a route named after a flag was recorded anyway");
+  // The same guard on the flag at the end of the line, where there is no next token at all.
+  const trailing = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict"]);
+  assert.equal(trailing.status, 2, trailing.stderr);
+  assert.match(trailing.stderr, /--verdict was given with no value/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a second look at the same route replaces the first, one entry per route", async () => {
+  const dir = project();
+  looked(dir);
+  const first = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict", VERDICT]);
+  assert.equal(first.status, 0, first.stderr);
+  const was = manifestOf(dir).compose.pages[0].looked_at;
+  await new Promise((ok) => setTimeout(ok, 20));
+  const second = "The hero now bleeds, the wordmark clears the photograph and the two columns sit on one baseline";
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict", second]);
+  assert.equal(r.status, 0, r.stderr);
+  const pages = manifestOf(dir).compose.pages;
+  assert.equal(pages.length, 1, "a second look at the same route was appended instead of replacing");
+  assert.equal(pages[0].verdict, second);
+  assert.notEqual(pages[0].looked_at, was, "the look was replaced without moving its timestamp");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--primary marks the route the drawn inner page became, at most one per build", async () => {
+  const dir = project();
+  looked(dir, "/security-windows");
+  looked(dir, "/gallery", { shot: ".palate-shots/gallery.png" });
+  const second = "The grid runs three wide, the captions sit under the frames, the enquiry band closes it";
+
+  // EVERY DIRECTION DRAWS ONE INNER PAGE, and until the mark existed nothing said which route
+  // it became, so the page judge held every inner page against the donor's HOME page instead.
+  const r = await run([dir, "--looked", "/security-windows", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", VERDICT, "--primary"]);
+  assert.equal(r.status, 0, r.stderr);
+  let pages = manifestOf(dir).compose.pages;
+  assert.equal(pages.filter((p) => p.primary).length, 1);
+  assert.equal(pages.find((p) => p.primary).route, "/security-windows");
+
+  // A SECOND --primary MOVES THE MARK. Two routes claiming the drawn inner page would have the
+  // judge comparing one drawing with two pages and reporting both.
+  const moved = await run([dir, "--looked", "/gallery", "--shot", ".palate-shots/gallery.png",
+    "--verdict", second, "--primary"]);
+  assert.equal(moved.status, 0, moved.stderr);
+  pages = manifestOf(dir).compose.pages;
+  assert.equal(pages.filter((p) => p.primary).length, 1, "two routes claim the drawn inner page");
+  assert.equal(pages.find((p) => p.primary).route, "/gallery");
+  assert.equal(pages.length, 2, "the mark moved by dropping a page");
+
+  // A LOOK WITHOUT THE FLAG IS NOT PRIMARY, or every page would claim the drawing.
+  const plain = await run([dir, "--looked", "/security-windows", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", VERDICT]);
+  assert.equal(plain.status, 0, plain.stderr);
+  assert.equal(manifestOf(dir).compose.pages.find((p) => p.route === "/security-windows").primary, undefined);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--primary is refused on the home page and outside a look", async () => {
+  const dir = project();
+  looked(dir);
+  // THE HOME HAS ITS OWN BOARD. Marking it the inner page would hold it against a drawing of a
+  // different page while the drawing of this one sat unused.
+  const home = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", VERDICT, "--primary"]);
+  assert.equal(home.status, 1, home.stdout);
+  assert.match(home.stderr, /cannot be the home page/);
+  assert.equal(manifestOf(dir).compose, undefined, "a refused look wrote a record anyway");
+
+  const loose = await run([dir, "--primary"]);
+  assert.notEqual(loose.status, 0, "a mark with no route to put it on cannot be recorded");
+  assert.match(loose.stderr, /--looked/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a deliberate departure from the board is recorded as an override, with its reason", async () => {
+  const dir = project();
+  const r = await run([dir, "--override", "/security-windows", "--section", "hero",
+    "--what", "photo inset instead of bleed",
+    "--reason", "the only photo under 900px wide is soft at full bleed"]);
+  assert.equal(r.status, 0, r.stderr);
+  const o = manifestOf(dir).compose.overrides;
+  assert.equal(o.length, 1);
+  assert.equal(o[0].route, "/security-windows");
+  assert.equal(o[0].section, "hero");
+  assert.equal(o[0].what, "photo inset instead of bleed");
+  assert.match(o[0].reason, /soft at full bleed/);
+  assert.ok(Date.parse(o[0].recorded_at) > 0, "the override carries no timestamp");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("an override with no reason is refused, because that is the whole record", async () => {
+  const dir = project();
+  const r = await run([dir, "--override", "/security-windows", "--section", "hero", "--what", "photo inset instead of bleed"]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /--reason/);
+  assert.equal(manifestOf(dir).compose, undefined, "a reasonless override was recorded anyway");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a look and a motion proof in one call are refused, one record per call", async () => {
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict", VERDICT,
+    "--proof", UNREACHABLE, ...NO_PROBE]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /--looked/);
+  assert.equal(manifestOf(dir).compose, undefined, "the look was recorded from a call that was refused");
+  rmSync(dir, { recursive: true, force: true });
+});

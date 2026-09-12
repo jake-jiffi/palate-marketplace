@@ -56,6 +56,24 @@ So view every image that will be used, and record in `.palate/assets.json`:
   was easier; centre is only correct when the subject is centred.
 - **`treatment`** - the slot it should get and why, including where it must NOT go.
 
+**A photograph enters a slot with a DECIDED CROP, or it does not enter it.** `object-position` (or
+an explicit crop) is chosen from the `subject` you recorded, and the decision and its reason go in
+that image's `treatment`, which is the half of the record that survives a re-measure. A default
+`50% 50%` on a subject that is not centred is a crop nobody chose.
+
+**Width is not art direction, and "inset at native size" is never a fallback.** A real build wrote
+a rule that bled any photograph 1440px or wider and inset everything else "at the size the
+photograph exists, never larger, and never cropped": one image of twelve cleared the threshold, so
+ten service pages led with a 423 to 572px picture box floating in a 1440px page, and the asset
+review was complete and honest throughout because the review was of the FILES. A photograph under
+the bleed floor is CROPPED to its subject and served at the size it has, or it is not the hero and
+the page leads with type, with a card, or with the one image that can carry it.
+
+**A raw job snap never leads a page.** A well-lit, well-composed photograph of the work is a hero;
+a phone shot taken to record that a job was finished is evidence, and it belongs in a card, a
+grid or a proof strip where its job is to be true rather than to be the first thing anybody sees.
+
+
 `palate-assets.mjs --check` **exits 1 while any image in use is unreviewed**, so "nobody looked"
 is a visible failure rather than a silent default. A recorded review survives a re-measure: the
 half that took someone looking is never discarded by re-running the tool.

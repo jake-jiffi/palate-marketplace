@@ -164,6 +164,34 @@ for f in SKILL.md references/explore-stage.md; do
     || bad "$f tells Compose to record the motion proof without naming the command that writes it"
 done
 
+# --- 11. COMPOSE IS A DESIGN ACT, ON BOTH SURFACES -----------------------------------------
+# The eastcoast v3 build composed a home page by degrading the picked board through six
+# undocumented edits and eighteen inner pages by assembling kit pieces with nothing to compare
+# them with. The four rules that make Compose a design act again have to be in BOTH files a
+# builder opens, or the one they happened to read wins in silence, which is the 18 June failure
+# in a different stage.
+for f in SKILL.md references/explore-stage.md; do
+  grep -qiE "LIFTS? THE PICKED BOARD" "$f" \
+    && ok "$f: the home page is lifted from the picked board" \
+    || bad "$f no longer says the home page is lifted from the picked board (it will be rebuilt from the kit)"
+  grep -q -- "--override" "$f" \
+    && ok "$f: a departure from the board is a recorded override" \
+    || bad "$f describes Compose without the override that records a departure from the board"
+  grep -q -- "--looked" "$f" \
+    && ok "$f: the look at each page type is recorded" \
+    || bad "$f describes Compose without the recorded look, so a page nobody opened passes"
+  grep -q "gate-page-judge.mjs" "$f" \
+    && ok "$f: the built pages are judged against the board or the donor" \
+    || bad "$f describes Compose without the page judge, which is the only check that can see bland"
+done
+# AND THE KIT IS NOT THE PAGE. "Fill the rest of the site from the kit" is what produced
+# eighteen pages nobody composed; the instruction may not come back in either file.
+if grep -qiE "fill the rest of the site (from|with) the kit" SKILL.md references/explore-stage.md; then
+  bad "the fill-the-site-from-the-kit instruction came back, and it is what Compose was rewritten to strike"
+else
+  ok "no file tells Compose to fill the rest of the site from the kit"
+fi
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

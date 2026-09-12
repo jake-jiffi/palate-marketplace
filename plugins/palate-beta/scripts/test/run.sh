@@ -17,7 +17,7 @@ FAST=0; for a in "$@"; do [ "$a" = "--fast" ] && FAST=1; done
 # is BOTH a browser suite and a 72ms unit suite, and the bare name silently took the unit one
 # out of every fast run. A missing entry is warned about below, because a list that names a
 # file nobody has skips nothing and says nothing.
-SLOW="verify-rendered-forms.test.mjs hygiene-loop.test.sh verify-rendered-a11y.test.sh verify-rendered-incremental.test.mjs template-csp-live.test.sh boards-render.test.mjs explore-page-boards.test.sh gate-fidelity.test.mjs motion-proof.test.mjs"
+SLOW="verify-rendered-forms.test.mjs hygiene-loop.test.sh verify-rendered-a11y.test.sh verify-rendered-incremental.test.mjs template-csp-live.test.sh boards-render.test.mjs explore-page-boards.test.sh gate-fidelity.test.mjs gate-page-judge.test.mjs motion-proof.test.mjs"
 for s in $SLOW; do
   [ -e "$DIR/$s" ] || echo "  WARNING: the slow list names $s, which does not exist"
 done

@@ -4,8 +4,10 @@
  * The gate exists because the one instrument that separates "impressive" from "fine" is the
  * pairwise comparison against a library reference, and until now it bound only on a
  * high-intensity build and never on a board. These cases hold the two things that make it worth
- * having: a board can only be judged against evidence that is actually on disk, and a board
- * judged clearly worse than the reference it was drawn from is REFUSED rather than noted.
+ * having: a board can only be judged against evidence that is actually on disk, and a board that
+ * does not read comparable or better than the reference it was drawn from, on EVERY surface it
+ * was judged on, is REFUSED rather than noted. The bar moved on 2026-09-12 from "not clearly
+ * worse" to "comparable or better", so somewhat worse on one surface refuses the direction.
  *
  * Run: node --test scripts/test/gate-board-judge.test.mjs
  */
@@ -381,13 +383,104 @@ test('the LOWEST of the three surfaces decides the direction, and every reading 
   run(dir);
   const req = request(dir);
   // A fine entrance, a fine inner page, and a page ending that is not up to it. The direction
-  // is read at the ending, because that is the half of the page the client asks about.
+  // is read at the ending, because that is the half of the page the client asks about, AND the
+  // bar refuses it there: comparable or better is owed on every surface.
   const r = judge(dir, answers(req, { 'b1:foot': 'somewhat_worse' }));
-  assert.equal(r.code, 0, r.err);
+  assert.equal(r.code, 2, 'a direction read somewhat worse at its page ending was shown');
+  assert.ok(!skipped(r), 'a refusal is not a skip');
   const b1 = manifest(dir).explore.board_judgements.find((j) => j.id === 'b1');
   assert.deepEqual(b1.rungs, { entrance: 'comparable', foot: 'somewhat_worse', inner: 'comparable' });
   assert.equal(b1.rung, 'somewhat_worse', 'a weak page ending was averaged away by two good surfaces');
   assert.equal(b1.consistent, true);
+  // THE READING AND THE SURFACE, in the client's language. "Redraw it" over a direction whose
+  // entrance is fine sends the operator to the wrong half of the drawing, and "somewhat worse"
+  // and "clearly worse" are different amounts of redrawing.
+  assert.match(r.err, /b1 \(aesop\) judged somewhat worse than its donor at the page ending: somewhat_worse \/ somewhat_worse/);
+  assert.match(r.err, /comparable or better on every surface it is judged on/);
+  // AND ONLY THAT SURFACE. Naming the two that passed would read as three faults.
+  assert.ok(!/at the entrance/.test(r.err), 'a surface that read comparable was named in the refusal');
+  assert.ok(!/at the inner page/.test(r.err), 'a surface that read comparable was named in the refusal');
+  // b2 read comparable everywhere and is not dragged into b1's refusal.
+  assert.ok(!/b2 \(linear\) judged/.test(r.err), 'a passing direction was refused alongside a failing one');
+});
+
+test('somewhat worse at the entrance refuses the direction too, and it is still recorded', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const r = judge(dir, answers(request(dir), { b2: 'somewhat_worse' }));
+  assert.equal(r.code, 2, 'the bar is comparable or better, not "anything but the bottom rung"');
+  assert.match(r.err, /b2 \(linear\) judged somewhat worse than its donor at the entrance/);
+  // RECORDED ANYWAY, for the same reason a clearly_worse refusal is: gate-explore reads this
+  // record to decide whether a shown board was ever compared with anything.
+  assert.equal(manifest(dir).explore.board_judgements.find((j) => j.id === 'b2').rung, 'somewhat_worse');
+});
+
+test('a direction standing at somewhat_worse is not quietly "already judged"', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  assert.equal(judge(dir, answers(request(dir), { b2: 'somewhat_worse' })).code, 2);
+  const again = run(dir);
+  assert.equal(again.code, 2, 'a standing refusal at somewhat_worse reported itself as a clean phase 1');
+  assert.match(again.err, /b2 \(linear\) stands judged somewhat worse than its donor/);
+});
+
+test('comparable on every judged surface passes, and so does better', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const r = judge(dir, answers(request(dir), { b1: 'comparable', b2: 'better' }));
+  assert.equal(r.code, 0, r.err);
+  assert.deepEqual(
+    manifest(dir).explore.board_judgements.map((j) => [j.id, j.rung]),
+    [['b1', 'comparable'], ['b2', 'better']],
+  );
+});
+
+/**
+ * A SURFACE NOBODY COULD JUDGE IS NOT A BAD READING. The library holds no whole-page capture for
+ * some references, so that direction's ending is dropped and its `rungs.foot` is null. A bar that
+ * treated null as below it would refuse every direction whose donor the library never captured
+ * whole, which is a fact about the library and not about the drawing.
+ */
+test('a surface that could not be judged reads null and refuses nothing', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
+  const dir = project({ donorFull: ['b1'] });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const r = judge(dir, answers(request(dir)));
+  assert.equal(r.code, 0, r.err);
+  const b2 = manifest(dir).explore.board_judgements.find((j) => j.id === 'b2');
+  assert.equal(b2.rungs.foot, null, 'the unjudgeable surface was given a reading');
+  assert.equal(b2.rung, 'comparable', 'a null surface dragged the direction below the bar');
+  assert.ok(!/b2 \(linear\)/.test(r.err), 'a direction was refused over a surface nobody could judge');
+  // The direction reads at the lowest surface there WAS evidence for, so a genuinely weak
+  // judged surface still refuses it even when another surface could not be read at all.
+  const worse = judge(dir, answers(request(dir), { 'b2:inner': 'somewhat_worse' }));
+  assert.equal(worse.code, 2, 'a null surface excused a judged surface that read below the bar');
+  assert.match(worse.err, /b2 \(linear\) judged somewhat worse than its donor at the inner page/);
+});
+
+/**
+ * TWO SURFACES BELOW THE BAR, READ DIFFERENTLY. The direction's own rung is the lowest of them,
+ * and printing that rung against every named surface would tell the operator the entrance and
+ * the ending are equally bad when one is clearly worse and the other is somewhat worse. Each
+ * line says what THAT surface was read at.
+ */
+test('each refused surface is named at its own reading, not at the direction\'s lowest', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const r = judge(dir, answers(request(dir), { 'b1:entrance': 'clearly_worse', 'b1:foot': 'somewhat_worse' }));
+  assert.equal(r.code, 2);
+  assert.match(r.err, /b1 \(aesop\) judged clearly worse than its donor at the entrance/);
+  assert.match(r.err, /b1 \(aesop\) judged somewhat worse than its donor at the page ending/);
+  assert.equal(manifest(dir).explore.board_judgements.find((j) => j.id === 'b1').rung, 'clearly_worse');
 });
 
 test('a page ending judged clearly worse refuses the direction, naming the surface', (t) => {
