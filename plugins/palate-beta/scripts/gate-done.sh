@@ -43,6 +43,8 @@ if command -v jq >/dev/null 2>&1 && [ -f "$MANIFEST" ]; then
     PROJ="$(cd "$recorded" && pwd)"
   fi
 fi
+source "$HERE/lib/workflow-route.sh"
+palate_route_workflow gate gate-done "$MANIFEST" "$PROJ"
 REPORT="$PROJ/verify-report.json"
 SHOTS_DIR="$PROJ/.palate-shots"
 SHOTS_MANIFEST="$SHOTS_DIR/manifest.json"

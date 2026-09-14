@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { routeOrExit } from "./lib/workflow-route.mjs";
 /**
  * gate-shipready.mjs - the checks that only matter at the seam between "built" and "delivered".
  *
@@ -31,6 +32,7 @@ import { join, relative } from "node:path";
 import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 
 const dir = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[2] : ".";
+routeOrExit("gate", "gate-shipready", [dir]);
 const findings = [];
 const add = (what, detail) => findings.push({ what, detail });
 

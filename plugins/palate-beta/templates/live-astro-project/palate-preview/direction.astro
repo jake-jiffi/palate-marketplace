@@ -1,0 +1,16 @@
+---
+import { galleryState } from './state.mjs';
+const { directions, error } = galleryState();
+const direction = directions.find(item => item.id === Astro.params.id);
+const entries = import.meta.glob('/src/directions/*/index.astro');
+const load = direction && entries[`/${direction.entry}`];
+let Component;
+let unavailable = Boolean(error || !load || direction?.status === 'failed');
+if (!unavailable && load) {
+  try { Component = (await load() as { default: any }).default; } catch { unavailable = true; }
+}
+if (unavailable) Astro.response.status = direction ? 503 : 404;
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+---
+{Component && !unavailable ? <Component /> : <html lang="en-AU"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Direction unavailable</title></head><body><main><h1>This direction is not available yet</h1><p>Your assistant can finish or repair it. Other ready directions remain available.</p><a href="/_palate/">Back to design options</a></main></body></html>}

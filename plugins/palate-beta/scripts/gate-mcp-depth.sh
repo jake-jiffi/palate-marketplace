@@ -25,6 +25,8 @@
 set -euo pipefail
 
 MANIFEST="${1:-build-manifest.json}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow reader gate-mcp-depth "$MANIFEST"
 MIN_REFS="${PALATE_MIN_REFS:-5}"
 MIN_INNER="${PALATE_MIN_INNER:-2}"
 MIN_TOOLS="${PALATE_MIN_TOOLS:-3}"

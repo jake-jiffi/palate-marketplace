@@ -1,0 +1,32 @@
+---
+import CommerceLayout from '../layouts/CommerceLayout.astro';
+import SessionStart from '../components/commerce/SessionStart.astro';
+import { shopping } from '../lib/shopify/server';
+import { money } from '../lib/shopify/storefront.mjs';
+import { cartQuote } from '../lib/shopify/commerce.mjs';
+export const prerender = false;
+let state: any, cart: any, lines: any[] = [], checkout: any, discount: any, acknowledgement: any, recovery: any, recoveryQuote: any, error = '', pending = false;
+try {
+  const s = await shopping(Astro); state = s.state;
+  if (state) {
+    pending = Boolean(state.pending && state.pending.kind !== 'checkout');
+    cart = state.cartId ? await s.api.cart(state.cartId, s.ip) : null;
+    lines = await Promise.all((cart?.lines.nodes || []).map(async (line: any) => ({ ...line, update: await s.store.form(s.sid, state, 'update', { lineId: line.id, price: line.merchandise.price }), remove: await s.store.form(s.sid, state, 'remove', { lineId: line.id }) })));
+    if (cart) { checkout = await s.store.form(s.sid, state, 'checkout', cartQuote(cart)); discount = await s.store.form(s.sid, state, 'discount'); acknowledgement = await s.store.form(s.sid, state, 'ack', cartQuote(cart)); }
+    if (pending || (state.cartId && !cart) || state.recoveryIntent) { recoveryQuote = await s.commerce.recoveryQuote(state, s.ip); recovery = await s.store.form(s.sid, state, 'recover', recoveryQuote); }
+  }
+} catch { error = 'Your cart could not be loaded. Its contents have not been discarded. Please retry.'; Astro.response.status = 503; }
+---
+<CommerceLayout title="Your cart"><h1>Your cart</h1><div data-cart-content>{error ? <p role="alert">{error} <a href="/cart">Retry</a></p> : !state ? <SessionStart returnTo="/cart" /> : <>
+  <p>Market: {state.country}. Currency: {state.currency}.</p>
+  {pending && <p role="alert">A cart action is pending or its outcome is unknown. The current Shopify cart is shown below, but matching quantities do not prove the action completed. Checkout is paused. Review and explicitly create a new cart if needed.</p>}
+  {!lines.length && <p>Your cart is empty.</p>}
+  <ul class="commerce-cart-lines">{lines.map(line => <li><a href={`/products/${line.merchandise.product.handle}?variant=${line.merchandise.id.split('/').at(-1)}`}>{line.merchandise.product.title}, {line.merchandise.title}</a><p>{money(line.merchandise.price)} each. Line total: {money(line.cost.totalAmount)}</p><form method="post" action="/api/shopify/cart" data-commerce-form data-kind="update"><input type="hidden" name="token" value={line.update.token} /><label>Quantity for {line.merchandise.product.title}<input type="number" name="quantity" min="1" max="99" step="1" value={line.quantity} required /></label><button disabled={pending}>Update quantity</button></form><form method="post" action="/api/shopify/cart" data-commerce-form data-kind="remove"><input type="hidden" name="token" value={line.remove.token} /><button disabled={pending}>Remove {line.merchandise.product.title}</button></form></li>)}</ul>
+  {cart && <><p>Subtotal: {money(cart.cost.subtotalAmount)}</p><p>Total before final checkout charges: {money(cart.cost.totalAmount)}</p><p>Shipping and taxes are confirmed by Shopify at checkout.</p>
+    <form method="post" action="/api/shopify/cart" data-commerce-form data-kind="discount"><input type="hidden" name="token" value={discount.token} /><label>Discount codes, separated by commas<input name="codes" maxlength="200" value={cart.discountCodes.map((d: any) => d.code).join(', ')} /></label><button disabled={pending}>Apply discounts</button></form>
+    {cart.discountCodes.map((d: any) => <p role={!d.applicable ? 'status' : undefined}>{d.code}: {d.applicable ? 'applied' : 'not applied'}</p>)}
+    <form method="post" action="/api/shopify/cart" data-commerce-form data-kind="ack"><input type="hidden" name="token" value={acknowledgement.token} /><label><input type="checkbox" name="confirm" value="yes" required /> I confirm the displayed items, market, prices and discount results.</label><button disabled={pending}>Confirm current totals</button></form>
+    <form method="post" action="/api/shopify/cart" data-kind="checkout"><input type="hidden" name="token" value={checkout.token} /><button disabled={pending || !lines.length || state.needsAcknowledgement}>Continue to secure checkout</button></form>
+  </>}
+  {recovery && <section aria-labelledby="recover-cart-heading"><h2 id="recover-cart-heading">Create a new cart from reviewed items</h2><p>This retires the uncertain cart. Choose the items to carry into the new cart. Unselected items are left out. Leave every item unselected to start an empty cart.</p><form method="post" action="/api/shopify/cart" data-commerce-form data-kind="recover"><input type="hidden" name="token" value={recovery.token} /><input type="hidden" name="recovery" value="selection" /><ul>{recoveryQuote.lines.map((line: any, index: number) => <li><label><input type="checkbox" name={`keep.${index}`} value="yes" checked={line.available} disabled={!line.available} />{line.title}, quantity {line.quantity}, {money(line.price)} each{!line.available && '. Unavailable, this item cannot be carried into the new cart.'}</label></li>)}</ul><p>Market: {recoveryQuote.country}. Currency: {recoveryQuote.currency}. Discount codes to recheck: {recoveryQuote.codes.map((d: any) => d.code).join(', ') || 'None'}.</p><label><input type="checkbox" name="confirm" value="yes" required /> I confirm only the selected items, their quantities and current prices, this market and these discount codes. This may create an empty cart.</label><button>Create this new cart</button></form></section>}
+</>}</div></CommerceLayout>

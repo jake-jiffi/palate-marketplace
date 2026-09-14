@@ -25,6 +25,12 @@ is()  { # <desc> <actual> <expected>
   if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (got '$2', want '$3')"; fi
 }
 
+# A pre-scaffold legacy survey now has an explicit owner before its first call.
+bootstrap() {
+  if node "$HOOK" --init-legacy --project "$1"; then ok "explicit legacy bootstrap: $1";
+  else bad "explicit legacy bootstrap failed: $1"; fi
+}
+
 # Feed the hook one Palate call, as PostToolUse would.
 call() { # <cwd> <tool> <args-json> <result-text>
   printf '{"cwd":%s,"tool_name":%s,"tool_input":%s,"tool_response":{"content":[{"type":"text","text":%s}]}}' \
@@ -41,6 +47,7 @@ VERTICALS='{"total":2170,"catalogue_stamp":"2026-07-09T04:12:55.108Z","mcp_versi
 # 1. THE MCP ANSWERS: every stamp lands, and the library is VERIFIED.
 # =====================================================================================
 W="$TMP/w1"; mkdir -p "$W"
+bootstrap "$W"
 call "$W" "mcp__palate__refs_list_verticals" '{}' "$VERTICALS"
 MAN="$W/build-manifest.json"
 is "the plugin version is the one on disk" "$(field "$MAN" .plugin_version)" "$(tr -d '[:space:]' < "$ROOT/VERSION")"
@@ -54,6 +61,7 @@ is "and the library is NOT flagged unverified" "$(field "$MAN" .library_unverifi
 #    A build can survey by search alone, and a null stamp must never read as a verified one.
 # =====================================================================================
 W2="$TMP/w2"; mkdir -p "$W2"
+bootstrap "$W2"
 call "$W2" "mcp__palate__refs_search" '{"query":"pelvic health clinic"}' '{"results":[{"slug":"therapy-in-london"}]}'
 MAN2="$W2/build-manifest.json"
 is "no verticals call: library is null"      "$(field "$MAN2" .library)" "null"
@@ -64,6 +72,7 @@ is "the plugin version is recorded anyway"   "$(field "$MAN2" .plugin_version)" 
 # 3. AN OLDER MCP answers refs_list_verticals with no stamp. Tolerated, never invented.
 # =====================================================================================
 W3="$TMP/w3"; mkdir -p "$W3"
+bootstrap "$W3"
 call "$W3" "mcp__palate__refs_list_verticals" '{}' '{"total":2170,"verticals":[{"vertical":"health","count":207}]}'
 MAN3="$W3/build-manifest.json"
 is "an MCP with no stamp leaves library null" "$(field "$MAN3" .library)" "null"
@@ -88,6 +97,7 @@ FAKE="$TMP/plugin-root"; mkdir -p "$FAKE/scripts/reference-capture"
 printf '9.9.9\n' > "$FAKE/VERSION"
 printf "export const RUBRIC_VERSION = '2026-09-09.stamped';\n" > "$FAKE/scripts/reference-capture/rubric.mjs"
 W4="$TMP/w4"; mkdir -p "$W4"
+CLAUDE_PLUGIN_ROOT="$FAKE" bootstrap "$W4"
 CLAUDE_PLUGIN_ROOT="$FAKE" call "$W4" "mcp__palate__refs_search" '{"query":"clinic"}' '{"results":[{"slug":"nocturne-label"}]}'
 MAN4="$W4/build-manifest.json"
 is "the rubric version is read from its export" "$(field "$MAN4" .rubric_version)" "2026-09-09.stamped"
@@ -97,6 +107,7 @@ is "and the plugin root env is honoured"        "$(field "$MAN4" .plugin_version
 # A rubric with no export records null rather than a guess.
 printf 'export const DIMENSIONS = [];\n' > "$FAKE/scripts/reference-capture/rubric.mjs"
 W5="$TMP/w5"; mkdir -p "$W5"
+CLAUDE_PLUGIN_ROOT="$FAKE" bootstrap "$W5"
 CLAUDE_PLUGIN_ROOT="$FAKE" call "$W5" "mcp__palate__refs_search" '{"query":"clinic"}' '{"results":[{"slug":"nocturne-label"}]}'
 is "no export: the rubric version is null" "$(field "$W5/build-manifest.json" .rubric_version)" "null"
 is "no export: and it says so, rather than leaving the reader to notice" \

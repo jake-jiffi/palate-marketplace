@@ -3,6 +3,11 @@ description: Bring an existing site under Palate management, whether or not Pala
 argument-hint: "[path to the site folder, or a live URL]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+The project already has live-design state. Use its status and source operations to update the profile; do not initialise legacy state or convert it again. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-beta:adopt
 
 The site: **$ARGUMENTS**

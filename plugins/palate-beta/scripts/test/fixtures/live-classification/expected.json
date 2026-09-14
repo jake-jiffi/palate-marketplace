@@ -1,0 +1,12 @@
+{
+  "case-01": { "kind": "service", "platform": "WordPress", "newAstro": true, "shopify": false, "preserve": ["services", "projects", "contact", "phone"], "unresolved": ["enquiry delivery", "attachment storage and hosting limits"] },
+  "case-02": { "kind": ["portfolio", "editorial"], "platform": "unknown", "newAstro": true, "shopify": false, "preserve": ["work routes", "journal routes", "contact email"], "mustNotInvent": ["checkout", "required CMS"] },
+  "case-03": { "kind": "saas-marketing", "platform": "unknown", "newAstro": true, "shopify": false, "preserve": ["external sign-in", "external signup", "external billing"], "mustNotInvent": ["application", "billing backend"] },
+  "case-04": { "kind": "commerce", "platform": "Shopify", "newAstro": true, "shopify": true, "preserve": ["collections", "exact variants", "cart", "hosted account", "checkout"], "unresolved": ["Storefront connection", "session store"] },
+  "case-05": { "kind": "commerce", "platform": "WooCommerce", "newAstro": true, "shopify": false, "preserve": ["existing catalogue", "basket", "account", "checkout"], "unresolved": ["existing backend integration"], "mustNotInvent": ["Shopify migration"] },
+  "case-06": { "kind": "hybrid", "platform": ["unknown service platform", "Shopify shop"], "newAstro": true, "shopify": "shop journey only", "preserve": ["bespoke framing", "consultation", "print shop", "cart", "checkout"] },
+  "case-07": { "kind": "service", "platform": "unknown", "newAstro": true, "shopify": false, "preserve": ["practice", "projects", "contact"], "mustNotInfer": ["Shopify platform from CDN alone", "commerce"] },
+  "case-08": { "kind": "unknown", "platform": "unknown", "newAstro": true, "shopify": false, "unresolved": ["business type", "primary journey", "facts and route coverage"], "required": ["label limited preview", "use supplied assets only as verified", "material clarification"], "mustNotInvent": ["catalogue", "complete source coverage"] },
+  "case-09": { "kind": "commerce", "platform": "Shopify", "newAstro": true, "shopify": true, "preserve": ["subscription requirement", "membership portal"], "launchBlocker": "Unsupported recurring purchase and account-management integration must be resolved; do not substitute one-time guest purchase." },
+  "case-10": { "mode": "maintenance", "stack": "Next.js", "newAstro": false, "shopify": false, "preserve": ["existing stack", "source outside requested change"], "required": ["change visible number and tel href"], "mustNotDo": ["scaffold", "three-option redesign"] }
+}

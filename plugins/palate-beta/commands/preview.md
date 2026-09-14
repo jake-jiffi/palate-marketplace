@@ -3,6 +3,11 @@ description: Serve the working tree locally and show before and after stills of 
 argument-hint: "[path to the site] [--routes /,/blog] [--full]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Use the live-build preview command to open the development gallery or selected page. Check that its owned server is still responding after the command returns. Show the first useful option as soon as it is ready. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-beta:preview
 
 See the change before anyone else does. The local dev server IS the preview: no build queue, no

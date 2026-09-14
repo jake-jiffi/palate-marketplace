@@ -20,6 +20,8 @@
 # after going live. Nothing is broken; nobody set a variable. So the check refuses to run,
 # says which variable and where to put it, and exits 2 so it can never read as a pass either.
 set -uo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow writer verify-form-roundtrip "$PWD"
 URL="${1:?site url}"
 URL="${URL%/}"
 shift || true

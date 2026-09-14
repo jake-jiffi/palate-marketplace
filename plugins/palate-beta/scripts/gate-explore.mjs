@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { routeOrExit } from "./lib/workflow-route.mjs";
 /**
  * scripts/gate-explore.mjs - the Explore PRESENTATION gate.
  *
@@ -77,6 +78,7 @@ import { parseKitVariations, splitPieces, presentationOf } from "./boards-render
 import { refusedRung, WORSE_PHRASE, SURFACES } from "./gate-board-judge.mjs";
 
 const dir = process.argv[2] || ".";
+routeOrExit("reader", "gate-explore", [dir]);
 
 // NEVER GRADE THE PLUGIN'S OWN FILES. This defaults to ".", and the plugin ships a template
 // variants.ts, so a run from a plugin checkout would judge the scaffold's example entries as

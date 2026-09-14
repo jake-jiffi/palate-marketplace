@@ -1,0 +1,23 @@
+---
+import CommerceLayout from '../../layouts/CommerceLayout.astro';
+import SessionStart from '../../components/commerce/SessionStart.astro';
+import { shopping } from '../../lib/shopify/server';
+import { money } from '../../lib/shopify/storefront.mjs';
+import { variantQuote } from '../../lib/shopify/commerce.mjs';
+export const prerender = false;
+let product: any, purchase: any, state: any, error = '';
+try {
+  const s = await shopping(Astro); state = s.state;
+  const options = [...Astro.url.searchParams].filter(([k]) => k.startsWith('option.')).map(([k, value]) => ({ name: k.slice(7), value }));
+  product = await s.api.product(Astro.params.handle, { variantId: Astro.url.searchParams.has('variant') ? Astro.url.searchParams.get('variant') : undefined, options, buyerIp: s.ip });
+  if (!product) Astro.response.status = 404;
+  else if (state && product.selectedVariant?.availableForSale && !product.requiresSellingPlan) purchase = await s.store.form(s.sid, state, 'add', variantQuote(product.selectedVariant, state.country));
+} catch { error = 'This product could not be loaded. Please retry.'; Astro.response.status = 503; }
+const variant = product?.selectedVariant;
+const selected = new Map(variant?.selectedOptions?.map((o: any) => [o.name, o.value]) || []);
+---
+<CommerceLayout title={product?.title || 'Product'}>{error ? <p role="alert">{error} <a href={Astro.url.pathname + Astro.url.search}>Retry</a></p> : !product ? <><h1>Product unavailable</h1><a href="/collections">Browse collections</a></> : <article class="commerce-product"><div>{(variant?.image ? [variant.image, ...product.images.nodes.filter((i: any) => i.url !== variant.image.url)] : product.images.nodes).map((img: any, i: number) => <img src={img.url} alt={img.altText || product.title} width={img.width || 900} height={img.height || 1100} loading={i ? 'lazy' : 'eager'} />)}</div><div><h1>{product.title}</h1><p>{product.description}</p>
+  <form method="get" class="commerce-options">{product.options.map((option: any) => <label>{option.name}<select name={`option.${option.name}`}>{option.values.map((value: string) => <option value={value} selected={selected.get(option.name) === value}>{value}</option>)}</select></label>)}<button>View this exact option</button></form>
+  {variant ? <><p class="commerce-price">{money(variant.price)} {variant.price.currencyCode}</p>{variant.compareAtPrice && Number(variant.compareAtPrice.amount) > Number(variant.price.amount) && <p>Previously <s>{money(variant.compareAtPrice)}</s></p>}<p>{variant.title}</p></> : <p role="alert">This exact option combination does not exist. Choose another combination.</p>}
+  {product.requiresSellingPlan ? <p>Purchase requires a selling plan. Contact the shop for help.</p> : !variant ? null : !variant.availableForSale ? <p role="status">This option is sold out.</p> : !state ? <SessionStart /> : purchase && <form method="post" action="/api/shopify/cart" data-commerce-form data-kind="add"><input type="hidden" name="token" value={purchase.token} /><label>Quantity <input type="number" name="quantity" min="1" max="99" step="1" value="1" required /></label><button>Add to cart</button></form>}
+</div></article>}</CommerceLayout>

@@ -3,6 +3,11 @@ description: Transfer the whole site to the customer's own accounts, write the o
 argument-hint: "[--dry-run] [github-owner] [contact email]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Report the selected site, working journeys, actual test and deployment evidence, and any remaining launch integrations. A local synthetic form receipt is not proof of customer delivery. Use the live-build reference for the portable project commands. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-beta:handover
 
 Arguments: **$ARGUMENTS**

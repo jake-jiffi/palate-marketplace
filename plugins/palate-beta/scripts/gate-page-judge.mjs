@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { refuseLegacy } from "./lib/workflow-route.mjs";
 /**
  * scripts/gate-page-judge.mjs - the built pages are judged against the picture they were
  * composed from, on the entrance AND on the ending, by the same instrument that judged the
@@ -223,6 +224,7 @@ export async function main(argv = process.argv.slice(2)) {
    */
   const VALUE_FLAGS = new Set(["--judgements", "--serve", "--port"]);
   const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUE_FLAGS.has(argv[i - 1])));
+  refuseLegacy([resolve(positional[0] || ".")], "page-judge");
 
   // The release valve is read FIRST, so a build that has switched the judge off never has to
   // have its artefacts in order to get past it.

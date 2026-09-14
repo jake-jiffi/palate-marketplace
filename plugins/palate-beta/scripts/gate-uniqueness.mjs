@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { routeOrExit } from "./lib/workflow-route.mjs";
 /**
  * scripts/gate-uniqueness.mjs - the portable uniqueness gate (S2).
  *
@@ -50,6 +51,7 @@ function discover(dir) {
 const argv = process.argv.slice(2);
 let files = argv;
 const pi = argv.indexOf("--project");
+routeOrExit("reader", "gate-uniqueness", pi >= 0 ? [argv[pi + 1]] : files);
 if (pi >= 0) {
   const dir = argv[pi + 1];
   if (!dir) {

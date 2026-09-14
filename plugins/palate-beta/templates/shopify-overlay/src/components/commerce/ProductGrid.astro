@@ -1,0 +1,9 @@
+---
+import { money } from '../../lib/shopify/storefront.mjs';
+const { products = [] } = Astro.props;
+---
+{products.length ? <ul class="commerce-grid">{products.map((product: any) => <li><a href={`/products/${encodeURIComponent(product.handle)}`}>
+  {product.featuredImage && <img src={product.featuredImage.url} alt={product.featuredImage.altText || ''} width="640" height="720" loading="lazy" />}
+  <h2>{product.title}</h2><p>{money(product.priceRange.minVariantPrice)}{Number(product.priceRange.minVariantPrice.amount) !== Number(product.priceRange.maxVariantPrice.amount) && ' and up'}</p>
+  {!product.availableForSale && <p>Sold out</p>}{product.requiresSellingPlan && <p>Selling plan required. Online purchase unavailable.</p>}
+</a></li>)}</ul> : <p role="status">No products match these choices. Try another search or clear the filters.</p>}

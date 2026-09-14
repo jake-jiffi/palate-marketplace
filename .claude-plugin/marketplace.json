@@ -17,9 +17,9 @@
     },
     {
       "name": "palate-beta",
-      "version": "1.17.0-beta.22",
+      "version": "1.18.0-beta.1",
       "source": "./plugins/palate-beta",
-      "description": "BETA, EXPECTED TO HAVE BUGS. The unstable track of the Palate website-builder, published so testers can opt in without disturbing a working install. Adds a repo-native content runtime (markdown collections, a single source for business facts), a content graph with blast radius, a contribution contract that gates every change on the same 41 checks the certified grader uses, and 24 slash commands. NOT for client work. Install ONE of palate-beta or palate-website-builder, never both: both register hooks on plain Write, so two manifest recorders would write the same build-manifest.json and double-count MCP calls."
+      "description": "Opt-in tester beta, expected to have bugs. Live Astro design options with real MCP references, interactive motion and optional Shopify commerce. Design speed, visual consistency and complete end-to-end workflows are not yet validated. Use disposable projects, not client production work. Install one Palate plugin at a time. See BETA-TESTING.md."
     }
   ]
 }

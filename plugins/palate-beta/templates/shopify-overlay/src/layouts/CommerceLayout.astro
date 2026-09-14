@@ -1,0 +1,159 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import '../styles/commerce.css';
+const { title, description } = Astro.props;
+---
+<BaseLayout title={title} description={description}>
+  <nav aria-label="Shop navigation" class="commerce-nav"><a href="/">Home</a><a href="/collections">Collections</a><a href="/search?q=*">All products</a><a href="/search">Search</a><a href="/cart" data-open-cart>Cart</a></nav>
+  <main class="commerce-main"><slot /></main>
+  <dialog id="shopping-drawer" aria-labelledby="shopping-drawer-title"><header><h2 id="shopping-drawer-title">Your cart</h2><button type="button" data-close-cart aria-label="Close cart">Close</button></header><p data-drawer-status role="status" aria-live="polite"></p><div data-drawer-body></div><p><a href="/cart">Open full cart page</a></p></dialog>
+  <p class="commerce-status" role="status" aria-live="polite" data-commerce-status></p>
+</BaseLayout>
+<script>
+  const status = document.querySelector('[data-commerce-status]');
+  const drawer = document.querySelector<HTMLDialogElement>('#shopping-drawer');
+  const feedbackTarget = () => drawer?.open ? drawer.querySelector('[data-drawer-status]') || status : status;
+  const announce = (message: string) => { const target = feedbackTarget(); if (target) target.textContent = message; };
+  let opener: HTMLElement | null = null;
+  let openerSelector = '[data-open-cart]';
+  const pendingKey = 'palate-uncertain-shopping-intent';
+  let memoryPending: any, pendingLoaded = false, storageAvailable = true;
+  const readPending = () => { if (!pendingLoaded) { pendingLoaded = true; try { memoryPending = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); } catch { memoryPending = null; storageAvailable = false; } } return memoryPending; };
+  const savePending = (value: any) => { pendingLoaded = true; memoryPending = value; try { sessionStorage.setItem(pendingKey, JSON.stringify(value)); } catch { storageAvailable = false; } };
+  const clearPending = () => { pendingLoaded = true; memoryPending = null; try { sessionStorage.removeItem(pendingKey); } catch { storageAvailable = false; } };
+  const receiptCodes = new Set(['form-expired','context-conflict','session-expired','market-conflict','quantity','discount','confirmation','operation','payload-conflict','stale','pending','unknown','confirmation-required','owner-conflict','cart-expired','invalid-cart','empty-cart','cart-changed','acknowledged','unavailable','checkout-host','price-changed','line-changed','recovery-empty','recovery-changed','cart-adjusted','cart-updated','shop-unavailable']);
+  const validReceipt = (receipt: any, httpStatus: number) => receipt && Number.isInteger(receipt.status) && receipt.status === httpStatus && receiptCodes.has(receipt.code) && typeof receipt.message === 'string';
+  const blockPendingForms = () => {
+    if (!readPending()) return;
+    document.querySelectorAll<HTMLButtonElement>('form[data-commerce-form]:not([data-kind="recover"]) button').forEach(button => button.disabled = true);
+  };
+  function pendingNotice() {
+    const target = feedbackTarget();
+    const intent = readPending(); if (!intent || !target) return;
+    blockPendingForms();
+    target.textContent = 'A shopping response is unresolved. Check that same action’s result, or review your cart and explicitly recover it.';
+    if (!storageAvailable) target.textContent += ' Browser storage is unavailable. Keep this tab open until the action is resolved.';
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Check this action’s result';
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const result = await fetch('/api/shopify/cart', { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(intent.body) });
+        const receipt = await result.json();
+        if (!validReceipt(receipt, result.status)) throw new Error('Unrecognised shopping response');
+        if (!['unknown', 'pending'].includes(receipt.code)) { clearPending(); announce(receipt.message); await refreshPageForms(); if (drawer?.open) await refreshDrawer(); }
+        else { announce(receipt.message); pendingNotice(); }
+      } catch { button.disabled = false; }
+    }); target.append(button);
+    const link = document.createElement('a'); link.href = '/cart'; link.textContent = 'Review or recover cart'; target.append(link);
+  }
+  async function openCart(trigger?: HTMLElement) {
+    if (!drawer?.open) {
+      opener = trigger ?? document.activeElement as HTMLElement;
+      const kind = opener?.closest<HTMLFormElement>('form[data-kind]')?.dataset.kind;
+      openerSelector = kind ? `.commerce-main form[data-kind="${kind}"] button` : '[data-open-cart]';
+      drawer?.showModal();
+    }
+    await refreshDrawer();
+  }
+  async function refreshDrawer() {
+    const body = drawer?.querySelector('[data-drawer-body]');
+    if (!body) return;
+    body.textContent = 'Loading your cart…';
+    try {
+      const res = await fetch('/cart', { cache: 'no-store' });
+      if (!res.ok) throw new Error('cart');
+      const content = new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('[data-cart-content]');
+      if (!content) throw new Error('cart');
+      body.replaceChildren(...Array.from(content.childNodes));
+      blockPendingForms();
+      if (readPending()) pendingNotice();
+    } catch { body.textContent = 'Your cart could not be loaded. Open the full cart page to retry.'; }
+  }
+  async function refreshPageForms() {
+    const res = await fetch(location.href, { cache: 'no-store' });
+    if (!res.ok) throw new Error('forms');
+    const page = new DOMParser().parseFromString(await res.text(), 'text/html');
+    const localCart = document.querySelector('.commerce-main [data-cart-content]');
+    const freshCart = page.querySelector('[data-cart-content]');
+    if (localCart && freshCart) localCart.replaceChildren(...Array.from(freshCart.childNodes));
+    else {
+      if (readPending()) return; // Passive refresh must not turn an uncertain add into a new intent.
+      const localForm = document.querySelector<HTMLFormElement>('.commerce-main form[data-kind="add"]');
+      const freshForm = page.querySelector<HTMLFormElement>('form[data-kind="add"]');
+      if (localForm && freshForm) {
+        const quantity = localForm.querySelector<HTMLInputElement>('[name="quantity"]')?.value;
+        localForm.replaceWith(freshForm);
+        if (quantity) freshForm.querySelector<HTMLInputElement>('[name="quantity"]')!.value = quantity;
+      }
+    }
+    blockPendingForms();
+  }
+  document.addEventListener('click', event => {
+    const target = event.target as HTMLElement;
+    const open = target.closest<HTMLAnchorElement>('[data-open-cart]');
+    if (open && drawer && typeof drawer.showModal === 'function') { event.preventDefault(); openCart(open); }
+    if (target.closest('[data-close-cart]')) drawer?.close();
+  });
+  drawer?.addEventListener('close', () => {
+    const target = opener?.isConnected ? opener : document.querySelector<HTMLElement>(openerSelector) || document.querySelector<HTMLElement>('[data-open-cart]');
+    target?.focus();
+  });
+  let refreshing = false;
+  async function refreshVisibleCart() {
+    if (refreshing || document.hidden || document.querySelector('form[data-pending]') || document.activeElement?.matches('input,select,textarea')) return;
+    refreshing = true;
+    try { await refreshPageForms(); if (drawer?.open) await refreshDrawer(); }
+    catch { announce('Current shopping controls could not be refreshed. Reload before your next action.'); }
+    finally { refreshing = false; }
+  }
+  window.addEventListener('focus', refreshVisibleCart);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshVisibleCart(); });
+  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('palate-cart-updated') : null;
+  channel?.addEventListener('message', refreshVisibleCart);
+  document.addEventListener('submit', async event => {
+    const form = event.target as HTMLFormElement;
+    if (!form.matches('[data-commerce-form]') || form.dataset.kind === 'checkout') return;
+    event.preventDefault();
+    if (form.dataset.pending) return;
+    if (readPending() && form.dataset.kind !== 'recover') { pendingNotice(); return; }
+    form.dataset.pending = 'true'; form.setAttribute('aria-busy', 'true');
+    const buttons = form.querySelectorAll<HTMLButtonElement>('button'); buttons.forEach(b => b.disabled = true);
+    announce('Updating your cart…');
+    let knownResult = false;
+    const body = new URLSearchParams(new FormData(form) as any);
+    savePending({ body: [...body.entries()], kind: form.dataset.kind });
+    try {
+      // The server-issued token is retained even after a lost response. Never invent a new ID
+      // or automatically repeat a request whose outcome is uncertain.
+      const result = await fetch(form.action, { method: 'POST', headers: { Accept: 'application/json' }, body });
+      const receipt = await result.json();
+      if (!validReceipt(receipt, result.status)) throw new Error('Unrecognised shopping response');
+      if (!['unknown', 'pending'].includes(receipt.code)) clearPending();
+      announce(receipt.message);
+      if (receipt.code === 'context-conflict') {
+        const restore = document.createElement('form'); restore.method = 'post'; restore.action = '/api/shopify/session';
+        const token = document.createElement('input'); token.type = 'hidden'; token.name = 'restore'; token.value = String(new FormData(form).get('token')); restore.append(token);
+        const button = document.createElement('button'); button.textContent = 'Continue with this tab’s cart'; restore.append(button); feedbackTarget()?.append(restore);
+      } else if (receipt.status === 200 || receipt.code === 'cart-adjusted') {
+        knownResult = true;
+        await refreshPageForms(); // A known result permits a new deliberate shopping intent.
+        channel?.postMessage('changed');
+        const trigger = document.querySelector<HTMLElement>(`.commerce-main form[data-kind="${form.dataset.kind}"] button`) || undefined;
+        await openCart(trigger);
+        announce(receipt.message);
+      } else if (['unknown', 'pending'].includes(receipt.code)) { pendingNotice(); await openCart(); }
+    } catch { if (knownResult) { announce('Your cart action completed. Reload the page to get fresh shopping controls.'); } else pendingNotice(); }
+    finally { delete form.dataset.pending; form.removeAttribute('aria-busy'); buttons.forEach(b => b.disabled = knownResult || Boolean(readPending())); }
+  });
+  pendingNotice();
+  const bootstrap = document.querySelector<HTMLFormElement>('[data-commerce-bootstrap]');
+  if (bootstrap) {
+    const establish = async () => {
+      const res = await fetch('/api/shopify/session', { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(new FormData(bootstrap) as any) });
+      if (res.ok) location.reload();
+    };
+    // The lock covers the Set-Cookie response. A second tab then sees the established SID.
+    const locks = navigator.locks;
+    (locks ? locks.request('palate-shop-bootstrap', establish) : establish()).catch(() => { announce('Use the start shopping button to establish your session.'); });
+  }
+</script>

@@ -1,6 +1,26 @@
 # Palate Website Builder
 
-A Claude Code skill that builds production-grade Astro websites, grounded by the Palate MCP. The Palate MCP serves a library of 268 deeply-analysed real websites (with inner-page depth, design tokens, do/don't rules, component prompts, and a taste layer), so the sites this skill builds carry real design craft instead of generic AI output.
+Palate helps Claude and Codex turn an existing website, brief and assets into working Astro designs. It uses real reference sites for composition and interaction, keeps motion in the normal experience, and carries the chosen direction into the finished site.
+
+## Live design beta
+
+New builds start in an empty directory. The first useful design appears as a live page while the remaining options are being made. Choose in chat, then continue in the same project. Its saved choice and runtime work across sessions and hosts.
+
+- Start with [the builder skill](SKILL.md) and [live build instructions](references/live-build.md).
+- Run the generated project's `npm run preview:live` to open its development gallery. The gallery and discarded draft routes are excluded from production builds.
+- Use `node scripts/palate.mjs status` to resume. The project owns a pinned runtime; it does not search another host's plugin cache.
+- Existing Shopify stores can use the optional buying integration. Service, portfolio, editorial and SaaS marketing websites retain their own journeys. A Shopify CDN image alone does not make a website a shop.
+- Reduced motion is a visitor preference, with an alternative interaction. It is not the design default.
+
+A new design preview needs Node 22.12 or later and the Palate MCP connection. Hosting, email delivery, CMS, private brand packages and commerce persistence are configured when the actual project needs them. A local preview does not establish production delivery or deployment.
+
+The beta package includes conventional skill discovery for Claude and Codex. Install only one Palate plugin at a time. Connect the existing `palate` MCP server through the host's supported settings, keep its token in the environment, and start a fresh session after updating. Hook installation and hook trust are separate; the explicit project commands remain available without hooks.
+
+Existing projects without `palate.project.json`, brand packages and legacy maintenance use [LEGACY.md](LEGACY.md). They are not automatically migrated. The details below apply to those retained workflows, including their older scaffold and deployment setup.
+
+# Legacy website and brand workflows
+
+A Claude Code skill that builds production-grade Astro websites, grounded by the Palate MCP. The Palate MCP serves a library of analysed real websites (with inner-page depth, design tokens, do/don't rules, component prompts, and a taste layer), so the sites this skill builds carry real design craft instead of generic AI output.
 
 ## Two modes
 
@@ -11,7 +31,7 @@ A Claude Code skill that builds production-grade Astro websites, grounded by the
 ## How the modes connect
 
 ```
-Palate MCP (268 references)  ──informs──>  BUILD SITE
+Palate MCP references  ──informs──>  BUILD SITE
                                                 │ calls when needed
                                                 ▼
                                             BUILD BRAND ──> brand package ──> BUILD SITE consumes

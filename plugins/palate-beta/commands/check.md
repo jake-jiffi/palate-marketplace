@@ -3,6 +3,11 @@ description: Run the contribution contract over what changed, heal what is mecha
 argument-hint: "[files...] (defaults to the working tree diff)"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Use the live-build verification contract and the project runtime. `node scripts/palate.mjs verify --check --project <site>` only checks whether current accepted evidence exists; it does not run missing browser checks. Execute the missing checks before recording verification. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 Run the contract over the changed routes and return a verdict. This is the gate that runs on
 every contribution, so it is scoped to the diff and nothing else.
 

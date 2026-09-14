@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "palate-beta",
-  "version": "1.17.0-beta.22",
-  "description": "BETA, EXPECTED TO HAVE BUGS. The unstable track of the Palate website-builder, published so testers can opt in. Do not run it alongside palate-website-builder: both register hooks on plain Write, so two manifest recorders would write the same build-manifest.json and double-count MCP calls. Install one at a time. Builds and maintains production-grade Astro websites grounded by the Palate MCP: scaffold a new site, or add pages, sections and features to an existing one (CONTINUE mode) with the same taste rigour. Also converts brand assets into a four-format design-token package. Connect the Palate MCP with one `claude mcp add --scope user` command (token from app.palatemcp.com).",
+  "version": "1.18.0-beta.1",
+  "description": "Palate beta. Use one Palate plugin at a time. Build source-aware Astro websites with live design choices, real Palate references and interactive motion. Continue existing sites and add Shopify buying journeys when the product needs them. Connect the hosted Palate MCP using the account token from app.palatemcp.com.",
   "author": {
     "name": "Jiffi",
     "url": "https://palatemcp.com"

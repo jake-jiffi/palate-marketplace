@@ -18,6 +18,36 @@
 set -euo pipefail
 
 DIR="${1:-palate-site}"
+# This entry is also distributed as a standalone bootstrap, so the early identity guard
+# cannot depend on sibling files having been downloaded. It runs before mkdir/copy/degit.
+node --input-type=module - "$DIR" <<'PALATE_IDENTITY'
+import fs from 'node:fs';
+import path from 'node:path';
+const requested = path.resolve(process.argv[2]);
+let existing = requested;
+const missing = [];
+for (;;) {
+  try { existing = path.join(fs.realpathSync(existing), ...missing); break; }
+  catch (error) {
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+    const parent = path.dirname(existing);
+    if (parent === existing) break;
+    missing.unshift(path.basename(existing)); existing = parent;
+  }
+}
+for (let dir of new Set([requested, existing])) for (;;) {
+  try {
+    fs.lstatSync(path.join(dir, 'palate.project.json'));
+    console.error('[palate] This destination belongs to a live-design project. Use its pinned scripts/palate.mjs runtime; legacy scaffolding cannot overwrite it.');
+    process.exit(2);
+  } catch (error) {
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+  }
+  const parent = path.dirname(dir);
+  if (parent === dir) break;
+  dir = parent;
+}
+PALATE_IDENTITY
 TOOL="${2:-codex}"
 REF="${PALATE_REF:-main}"
 REPO="jake-jiffi/palate-website-builder"

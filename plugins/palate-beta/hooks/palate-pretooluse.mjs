@@ -71,6 +71,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { resolveBuildContext } from "./project-dir.mjs";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
@@ -447,6 +448,9 @@ function divergeValid(m, mode = "brand-creation") {
 
 const p = readStdin();
 if (!p) allow();
+if (handleLiveWorkflow(p, "PreToolUse", [resolveBuildContext(p.cwd || process.cwd(), {
+  hint: p.tool_input?.file_path || p.tool_input?.filePath || p.tool_input?.path,
+}).dir])) process.exit(0);
 if (process.env.PALATE_GATE_OFF === "1") {
   recordGatesOff(p.cwd || process.cwd(), p.tool_input && p.tool_input.file_path);
   allow();

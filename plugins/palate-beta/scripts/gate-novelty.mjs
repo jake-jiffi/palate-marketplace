@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { routeOrExit } from "./lib/workflow-route.mjs";
 /**
  * scripts/gate-novelty.mjs - the deterministic NOVELTY gate (Move 1).
  *
@@ -464,6 +465,7 @@ let _manifestVariantDonors = null;
 
 // ============================================================================
 function main() {
+routeOrExit("reader", "gate-novelty", [process.cwd(), manifestPath, ...variantFiles]);
   // Mode R: --require-diverge --manifest <f> is the done-time mirror of the PreToolUse
   // DIVERGE wall, invoked by gate-done.sh ONLY when an active build-site marker exists.
   // Unlike the fail-open concept pre-check, this mode is HARD: an active build site that

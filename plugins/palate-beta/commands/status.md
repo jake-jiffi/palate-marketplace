@@ -3,6 +3,11 @@ description: One site, read cold: whether the live site answers, what is failing
 argument-hint: "[path to the site] [--live to probe whether the deployed origin answers]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Run `node scripts/palate.mjs status --project <site>` and report current options, selection and stale evidence. Do not infer an absent legacy manifest means that nothing has been recorded. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-beta:status
 
 Site: **$ARGUMENTS** (default: the current directory).

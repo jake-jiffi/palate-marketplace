@@ -1,0 +1,52 @@
+[
+  {
+    "id": "case-01",
+    "brief": "Use this existing website and its assets to make a beautiful website. Show me three working design options first.",
+    "source": { "url": "https://example.test/", "html": "<meta name='generator' content='WordPress 6.8'><nav><a href='/services/'>Services</a><a href='/projects/'>Projects</a><a href='/contact/'>Contact</a></nav><h1>Bay Aluminium</h1><p>Windows, doors and screens. Visit our Ballina showroom.</p><a href='tel:0266866667'>02 6686 6667</a><form action='/wp-admin/admin-ajax.php'><input name='name'><input name='email'><textarea name='project'></textarea><input type='file' name='plans'><button>Request a quote</button></form>", "assets": ["logo.svg", "sliding-door.jpg", "showroom.jpg"] }
+  },
+  {
+    "id": "case-02",
+    "brief": "Rebuild my website from these pages and images. I want a strong visual result.",
+    "source": { "url": "https://example.test/", "html": "<h1>Alex Lane, photographer</h1><nav><a href='/work/'>Selected work</a><a href='/journal/'>Journal</a><a href='mailto:alex@example.test'>Contact</a></nav><a href='/work/coast/'>Coast, photographic series</a><a href='/journal/winter-light/'>Winter light, field notes</a>", "assets": ["coast-01.jpg", "coast-02.jpg", "portrait.jpg"] }
+  },
+  {
+    "id": "case-03",
+    "brief": "Improve this website and keep the existing customer paths working.",
+    "source": { "url": "https://example.test/", "html": "<h1>Fieldplan, scheduling for field teams</h1><nav><a href='/features/'>Features</a><a href='/pricing/'>Pricing</a><a href='/customers/'>Customers</a><a href='https://app.example.test/login'>Sign in</a></nav><a href='https://app.example.test/signup'>Start a trial</a><p>Manage billing in your account at app.example.test.</p>", "assets": ["logo.svg", "calendar-product.png"] }
+  },
+  {
+    "id": "case-04",
+    "brief": "Use our current website and product photographs to show three redesign options, then rebuild the shop.",
+    "source": { "url": "https://example.test/", "html": "<script>window.Shopify={shop:'example.myshopify.com',currency:{active:'AUD'}};</script><nav><a href='/collections/all'>Shop</a><a href='/cart'>Bag</a><a href='/account'>Account</a></nav><h1>Coffee for early starts</h1><a href='/products/house-blend'>House blend</a><form action='/cart/add' method='post'><select name='id'><option value='44819749699757'>250 g, whole bean, A$18</option><option value='44819749699758'>1 kg, whole bean, A$58</option></select><button>Add to cart</button></form><a href='https://example.myshopify.com/checkouts/c/example'>Checkout</a>", "assets": ["logo.svg", "house-blend.jpg", "coffee-bar.jpg"] }
+  },
+  {
+    "id": "case-05",
+    "brief": "Give this shop a much better design while preserving our current buying journey.",
+    "source": { "url": "https://example.test/", "html": "<meta name='generator' content='WordPress'><link rel='stylesheet' href='/wp-content/plugins/woocommerce/assets/css/woocommerce.css'><nav><a href='/shop/'>Shop</a><a href='/basket/'>Basket</a><a href='/my-account/'>My account</a></nav><h1>Independent homewares</h1><form action='/?add-to-cart=42' method='post'><button>Add to basket</button></form><a href='/checkout/'>Checkout</a>", "assets": ["bowl.jpg", "vase.jpg"] }
+  },
+  {
+    "id": "case-06",
+    "brief": "Rebuild our website and keep both parts of the business easy to use.",
+    "source": { "url": "https://example.test/", "html": "<h1>Frame Workshop</h1><nav><a href='/bespoke-framing/'>Bespoke framing</a><a href='/contact/'>Book a consultation</a><a href='https://shop.example.test/collections/prints'>Buy prints</a></nav><p>Consultations happen in our workshop.</p>", "linkedShop": "<script>Shopify.shop='frame-workshop.myshopify.com'</script><a href='/products/coast-print'>Coast print</a><form action='/cart/add'><select name='id'><option value='123'>A3</option><option value='124'>A2</option></select><button>Add to cart</button></form>", "assets": ["workshop.jpg", "coast-print.jpg"] }
+  },
+  {
+    "id": "case-07",
+    "brief": "Make a new website from this source and our images.",
+    "source": { "url": "https://example.test/", "html": "<h1>Northbank architecture</h1><img src='https://cdn.shopify.com/s/files/1/0000/hero.jpg' alt='Northbank house'><nav><a href='/practice/'>Practice</a><a href='/projects/'>Projects</a><a href='/contact/'>Discuss a project</a></nav><p>We design homes and public spaces.</p>", "assets": ["northbank-house.jpg", "logo.svg"] }
+  },
+  {
+    "id": "case-08",
+    "brief": "I want a beautiful new website using these assets. The old website may be unavailable.",
+    "source": { "url": "https://example.test/", "status": 403, "html": "<h1>Checking your browser</h1><p>Please enable JavaScript and cookies to continue.</p>", "assets": ["logo.svg", "building-exterior.jpg"], "notes": "The supplied files contain no business details, catalogue or route inventory." }
+  },
+  {
+    "id": "case-09",
+    "brief": "Rebuild the public website and preserve everything customers currently need to buy and manage their plan.",
+    "source": { "url": "https://example.test/", "html": "<script>Shopify.shop='subscription-example.myshopify.com'</script><h1>Monthly coffee subscription</h1><p>Every product requires a recurring subscription. Pause deliveries, swap products and update billing in the membership portal.</p><form action='/cart/add'><input name='selling_plan' value='210'><input name='id' value='44819749699757'><button>Subscribe monthly</button></form><a href='https://members.example.test/'>Manage subscription</a>", "assets": ["coffee-box.jpg"] }
+  },
+  {
+    "id": "case-10",
+    "brief": "Change the phone number in the footer from 02 5550 1111 to 02 5550 2222.",
+    "existingProject": { "files": ["package.json", "next.config.mjs", "app/layout.tsx", "app/page.tsx", "components/Footer.tsx"], "package": { "dependencies": { "next": "15.5.0", "react": "19.1.0" } }, "footer": "<footer><a href='tel:0255501111'>02 5550 1111</a></footer>", "markers": [] }
+  }
+]

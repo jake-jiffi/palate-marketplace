@@ -1,0 +1,4 @@
+---
+const { returnTo = Astro.url.pathname + Astro.url.search } = Astro.props;
+---
+<form method="post" action="/api/shopify/session" data-commerce-bootstrap><input type="hidden" name="returnTo" value={returnTo} /><p>Establish your shopping session to add items and keep your cart across pages.</p><button>Start shopping</button></form>

@@ -24,6 +24,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 // A source file newer than its baseline by less than this is checkout noise, not an edit. See
 // staleBaselines() for why the comparison is mtime-to-mtime rather than mtime-to-timestamp.
@@ -198,6 +199,7 @@ function daysSincePublished(index) {
 
 function main() {
   const payload = readStdin();
+  if (handleLiveWorkflow(payload || {}, "SessionStart")) return;
 
   // "compact" is not a session opening, it is the middle of one. The person has already seen this
   // line and the state is churning under an active build, so re-injecting it is noise at best and

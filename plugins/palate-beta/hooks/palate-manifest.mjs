@@ -39,6 +39,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveBuildContext } from "./project-dir.mjs";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
+import { inspectWorkflow } from "../scripts/lib/workflow-route.mjs";
+import { pluginRootRefusal } from "./project-dir.mjs";
 
 function readStdin() {
   try {
@@ -700,9 +703,57 @@ function adoptStaleManifest(ctx) {
   return target;
 }
 
+// An explicit legacy entry preserves surveys that start before a scaffold.
+// A generic MCP call in an uninitialised directory does not establish that intent.
+function initialiseLegacy() {
+  const args = process.argv.slice(2);
+  if (args[0] !== "--init-legacy") return false;
+  try {
+    if (args.length !== 3 || args[1] !== "--project") throw new Error("Use --init-legacy --project <existing directory>");
+    const requested = path.resolve(args[2]);
+    const dir = fs.realpathSync(requested);
+    if (!fs.statSync(dir).isDirectory()) throw new Error("Legacy project must be a directory");
+    const route = inspectWorkflow([requested, dir]);
+    if (route.kind !== "legacy") throw new Error(route.error || "A live-design project cannot acquire legacy state");
+    const refusal = pluginRootRefusal(requested) || pluginRootRefusal(dir);
+    if (refusal) throw new Error(refusal);
+    const target = path.join(dir, "build-manifest.json");
+    try {
+      const existing = fs.lstatSync(target);
+      if (!existing.isFile() || existing.isSymbolicLink()) throw new Error("Existing legacy manifest must be a normal file");
+      JSON.parse(fs.readFileSync(target, "utf8"));
+      return true;
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+    const state = blank();
+    state.project = dir;
+    state.project_resolved_by = "explicit-legacy";
+    const fd = fs.openSync(target, "wx", 0o600);
+    const owned = fs.fstatSync(fd);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(state, null, 2) + "\n");
+      // Live init activates by replacing an empty directory. If it won after the
+      // preflight, remove only our new file from its directory and refuse.
+      const current = inspectWorkflow([requested, dir]);
+      if (current.kind !== "legacy") throw new Error(current.error || "A live-design project cannot acquire legacy state");
+    } catch (error) {
+      try {
+        const current = fs.lstatSync(target);
+        if (current.dev === owned.dev && current.ino === owned.ino) fs.unlinkSync(target);
+      } catch { /* Never remove an unproven or replaced record. */ }
+      throw error;
+    } finally { fs.closeSync(fd); }
+  } catch (error) {
+    process.stderr.write(`[palate] Legacy start refused: ${error.message}\n`);
+    process.exitCode = 2;
+  }
+  return true;
+}
+
 function main() {
+  if (initialiseLegacy()) return;
   const p = readStdin();
   if (!p) return;
+  if (handleLiveWorkflow(p, "PostToolUse")) return;
   const tool = p.tool_name || "";
   const input = p.tool_input || {};
   const result = normaliseResult(p.tool_response ?? p.tool_output ?? p.toolResponse ?? null);
@@ -712,10 +763,19 @@ function main() {
   // The file being written is the strongest hint available: a write into src/pages/index.astro
   // names its project even when the session cwd sits two levels above it.
   const ctx = resolveBuildContext(p.cwd || process.cwd(), { hint: written });
+  if (handleLiveWorkflow(p, "PostToolUse", [ctx.dir, ctx.manifest])) return;
   // NEVER RECORD A BUILD INTO THE PLUGIN. This wrote five stray build-manifest.json files into
   // the skill repo, one of them recording 188 files_written across three unrelated
   // repositories, because the resolver fell back to whatever directory the session sat in.
   if (ctx.how === "refused" || !ctx.manifest) return;
+  if (ctx.how === "fallback" && !fs.existsSync(ctx.manifest) &&
+      !fs.existsSync(path.join(ctx.dir, JOURNAL_REL))) {
+    // Do not pollute an empty/source-only destination before new init. Known legacy
+    // projects, explicit starts, environment targets and journals still record.
+    const quota = detectQuota(result);
+    if (quota) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(quota, result) }) + "\n");
+    return;
+  }
   const MANIFEST = adoptStaleManifest(ctx);
   const projectDir = ctx.dir;
 
@@ -935,4 +995,4 @@ function main() {
 }
 
 main();
-process.exit(0);
+process.exit(process.exitCode || 0);

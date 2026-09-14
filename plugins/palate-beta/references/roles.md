@@ -21,7 +21,7 @@ developers.
 **What they can do.** Anything the content runtime covers: write a post, edit a
 page's copy, change a business fact once and have every surface follow, swap an
 image, schedule a campaign, unpublish something. The commands are
-`/palate-website-builder:post`, `:edit`, `:fact`, `:image`, `:campaign`,
+`/palate-beta:post`, `:edit`, `:fact`, `:image`, `:campaign`,
 `:schedule`, `:publish`, `:unpublish`, `:preview`.
 
 **What they cannot do.** Merge. They hold no write access to the repository at

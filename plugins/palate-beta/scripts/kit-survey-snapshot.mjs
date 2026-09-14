@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { refuseLegacy } from "./lib/workflow-route.mjs";
 /**
  * kit-survey-snapshot.mjs - freeze the library survey the kit's contract is grounded in.
  *
@@ -123,6 +124,7 @@ if (invokedDirectly(import.meta.url)) {
   const manifestPath = args.find((a) => !a.startsWith("--"));
   const outAt = args.indexOf("--out");
   const outPath = outAt !== -1 ? resolve(args[outAt + 1]) : join(here, "..", "templates/astro-project/src/lib/kit-survey.json");
+refuseLegacy([process.cwd(), manifestPath, outPath], "kit-survey-snapshot");
 
   if (!manifestPath || !existsSync(manifestPath)) {
     console.error("kit-survey-snapshot: could not run: pass the path to a build-manifest.json written by the Palate recorder.");

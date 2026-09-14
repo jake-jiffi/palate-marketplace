@@ -3,6 +3,11 @@ description: Undo the last publish, or a named one, with the reason recorded and
 argument-hint: "--reason \"why\" [--publish <commit sha>] [--to <deployment url>] [--dir <path>]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Use the pinned runtime checkpoint restore into a new empty directory. Preserve the current working tree and private data. Do not invoke the legacy infrastructure rollback script. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-beta:rollback
 
 Put the site back. There are two mechanisms and picking the wrong one is the entire cost of this

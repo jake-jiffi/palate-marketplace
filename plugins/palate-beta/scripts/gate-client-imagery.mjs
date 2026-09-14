@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { routeOrExit } from "./lib/workflow-route.mjs";
 /**
  * gate-client-imagery.mjs - a build that harvests a client's photographs and then uses none of
  * them has thrown away the only visual asset the client actually owns.
@@ -31,6 +32,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative, extname } from "node:path";
 
 const dir = process.argv[2] || ".";
+routeOrExit("gate", "gate-client-imagery", [dir]);
 const IMG = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"]);
 
 /** Where a harvest lands, in the shapes this plugin has actually produced. */

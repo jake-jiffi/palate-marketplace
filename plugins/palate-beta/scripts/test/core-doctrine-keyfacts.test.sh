@@ -1,30 +1,31 @@
 #!/usr/bin/env bash
+# These assertions protect the retained legacy workflow. New live-design routing is tested separately.
 # Key-fact cross-check (the "improve everywhere" backstop). The portable doctrine
 # (references/core-doctrine.md) is a hand-distilled view of the full plugin doctrine. A diff
 # guard cannot prove a SUMMARY matches its source, so this asserts the load-bearing CLOSED FACTS
-# stay consistent: if SKILL.md / anti-patterns.md change one of these, the doctrine must too
+# stay consistent: if LEGACY.md / anti-patterns.md change one of these, the doctrine must too
 # (and then `node scripts/gen-skill-lite.mjs` reships every tool). Mechanical, deterministic.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 D="$DIR/references/core-doctrine.md"
-S="$DIR/SKILL.md"
+S="$DIR/LEGACY.md"
 A="$DIR/references/anti-patterns.md"
 fail() { echo "FAIL: $1"; exit 1; }
 
-# 1. The build spine + the MCP namespace must be present in BOTH the doctrine and SKILL.md.
+# 1. The build spine + the MCP namespace must be present in BOTH the doctrine and LEGACY.md.
 for f in DIVERGE CONVERGE COMMISSION EXPLORE "mcp__palate"; do
   grep -q "$f" "$D" || fail "doctrine is missing '$f' (the build spine / MCP namespace)"
-  grep -q "$f" "$S" || fail "SKILL.md is missing '$f' but the doctrine has it (they diverged)"
+  grep -q "$f" "$S" || fail "LEGACY.md is missing '$f' but the doctrine has it (they diverged)"
 done
 
-# 2. The free-cap number must match SKILL.md exactly.
+# 2. The free-cap number must match LEGACY.md exactly.
 #    NOTE what this does and does not prove. It proves the two DOCS agree; it cannot see the
 #    ENFORCED cap, which lives in mcp-server \`lib/auth.ts\` PLAN_LIMITS.free.monthlyEnrichedCap.
 #    Both docs said 50 for weeks after pricing v3 moved enforcement to 20, and this test passed
 #    the whole time because they were consistently wrong together. When the plan changes, change
 #    the number HERE as well, from the enforcing constant and not from the other doc.
 grep -q "20 deep" "$D" || fail "doctrine lost the '20 deep' free cap"
-grep -q "20 deep" "$S" || fail "SKILL.md free cap changed but the doctrine disagrees (re-curate)"
+grep -q "20 deep" "$S" || fail "LEGACY.md free cap changed but the doctrine disagrees (re-curate)"
 
 # 3. Every banned-as-default face the lint enforces (anti-patterns.md) must appear in the
 #    doctrine, so a new ban in the lint forces a doctrine update.
@@ -39,4 +40,4 @@ grep -q "44" "$D"       || fail "doctrine lost the perceptual-floor numbers (e.g
 grep -qiE "axis|axes" "$D" || fail "doctrine lost the visual-rubric axes"
 grep -qi "quota_exceeded" "$D" || fail "doctrine lost the quota hard-stop"
 
-echo "PASS: core-doctrine.md key facts agree with SKILL.md + anti-patterns.md"
+echo "PASS: core-doctrine.md key facts agree with LEGACY.md + anti-patterns.md"

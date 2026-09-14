@@ -3,6 +3,11 @@ description: Record which direction the client picked, what they said, and anyth
 argument-hint: "--hero b3 [--section b5] [--intensity 3] [--answer motion=... --answer mix=... --answer cms=...] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--canvas-url <url>] [--canvas-skipped \"<reason>\"] [--proof <url> [--proof-unmeasured \"<reason>\"]] [--second-pass] [--looked <route> --shot <path> --verdict \"...\" [--primary]] [--override <route> --section <band> --what \"...\" --reason \"...\"]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Read current project status, record the choice through the pinned runtime select operation, and continue from the selected direction. Preserve the person's combined-design instructions. The input and revision contract is in the live-build reference. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 Record the client's pick from the Explore boards, on the canvas or from `/explore`. This is the
 only moment the Explore stage produces a number, so it runs even when the pick arrived in a
 sentence over the phone.

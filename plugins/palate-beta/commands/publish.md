@@ -3,6 +3,11 @@ description: Check the change against the contract, heal what is fixable, then c
 argument-hint: "[what changed, one line] [--dir <path>] [--yes]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Follow the live-build release contract. Require current verification, resolved launch integrations and authorisation for the actual site deployment. A plugin release or local preview is not a site deployment receipt. Do not fall through to the legacy publish pipeline. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-beta:publish
 
 Ship the working tree. The person's only decision is to agree: everything mechanical happens

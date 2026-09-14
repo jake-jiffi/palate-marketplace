@@ -58,6 +58,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { buildLogEntry } from "./build-log-entry.mjs";
 import { resolveBuildContext } from "./project-dir.mjs";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
@@ -498,6 +499,7 @@ function writeStopGate(manifestPath, gate) {
 }
 
 const p = readStdin() || {};
+if (handleLiveWorkflow(p, "Stop", [resolveBuildContext(p.cwd || process.cwd()).dir])) process.exit(0);
 if (process.env.PALATE_GATE_OFF === "1") {
   recordGatesOff(p.cwd || process.cwd());
   process.exit(0);

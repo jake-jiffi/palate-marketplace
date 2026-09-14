@@ -85,6 +85,8 @@ const refuse = (reason) => { process.stderr.write(`palate-pick: ${reason}\n`); p
 const badArgs = (reason) => { process.stderr.write(`palate-pick: ${reason}\n`); process.exit(2); };
 
 const dir = resolve(positional[0] || ".");
+const { refuseLegacy } = await import("./lib/workflow-route.mjs");
+refuseLegacy([dir], "palate-pick");
 
 const manifestPath = join(dir, "build-manifest.json");
 let manifest = {};

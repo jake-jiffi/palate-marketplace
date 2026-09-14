@@ -49,6 +49,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { invokedDirectly } from "./lib/invoked-directly.mjs";
+import { refuseLegacy } from "./lib/workflow-route.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE = join(HERE, "reference-capture");
@@ -858,6 +859,7 @@ export function toArtboard({ html, css, fonts = "", imports = [], script = "", n
  * own layout rules.
  */
 export function writeCanvasJson({ boards, refs = [], donors = [], out }) {
+  if (out) refuseLegacy([out], "board canvas output");
   const artboards = [];
   const annotations = [];
 
@@ -956,6 +958,7 @@ export function writeCanvasJson({ boards, refs = [], donors = [], out }) {
 async function main() {
   const projectDir = resolve(positional[0] || ".");
   const outDir = resolve(projectDir, opt("--out", ".palate/explore"));
+  refuseLegacy([projectDir, outDir], "boards-render");
   const seedDir = join(outDir, "seed");
   const shotsDir = join(outDir, "shots");
   const refsPath = opt("--refs", null);

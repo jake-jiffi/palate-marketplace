@@ -1,0 +1,29 @@
+{
+  "name": "palate-beta",
+  "version": "1.18.0-beta.1",
+  "description": "Palate beta. Use one Palate plugin at a time. Build source-aware Astro websites with live design choices, real Palate references and interactive motion. Continue existing sites and add Shopify buying journeys when the product needs them.",
+  "author": {
+    "name": "Jiffi",
+    "url": "https://palatemcp.com"
+  },
+  "homepage": "https://palatemcp.com/docs",
+  "repository": "https://github.com/jake-jiffi/palate-website-builder",
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Palate Beta",
+    "shortDescription": "Live website design grounded in real references",
+    "longDescription": "Use an existing website and its assets to explore working Astro designs, choose a direction and finish the site. Motion is part of the design. Shopify integration is available for commerce, while other websites retain their own requirements.",
+    "developerName": "Jiffi",
+    "category": "Design",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "websiteURL": "https://palatemcp.com",
+    "defaultPrompt": [
+      "Use this website and its assets to show me three beautiful, interactive design options, then build the direction I choose."
+    ]
+  }
+}

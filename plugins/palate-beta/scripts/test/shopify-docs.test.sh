@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# These assertions protect the retained legacy workflow. New live-design routing is tested separately.
 # The Shopify documentation must stay DISCOVERABLE and must keep the facts that were paid for.
 #
 # Every claim asserted here cost a real defect on a real build. A doc that loses one of them
@@ -6,7 +7,7 @@
 # because nothing reads it on a schedule.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
-SKILL="$DIR/../../SKILL.md"
+SKILL="$DIR/../../LEGACY.md"
 RUN="$DIR/../../references/shopify-runbook.md"
 DOC="$DIR/../../references/commerce-doctrine.md"
 pass=0; fail=0
@@ -16,10 +17,10 @@ has() { if grep -qi -- "$2" "$3" 2>/dev/null; then echo "ok   - $1"; pass=$((pas
 # --- discoverable at all -----------------------------------------------------
 [ -f "$RUN" ] && { echo "ok   - the runbook exists"; pass=$((pass+1)); } || { echo "FAIL - no runbook"; fail=$((fail+1)); }
 [ -f "$DOC" ] && { echo "ok   - the doctrine exists"; pass=$((pass+1)); } || { echo "FAIL - no doctrine"; fail=$((fail+1)); }
-has "SKILL.md names the runbook"            "shopify-runbook" "$SKILL"
-has "SKILL.md names the doctrine"           "commerce-doctrine" "$SKILL"
-has "SKILL.md names the survey script"      "palate-shopify.mjs" "$SKILL"
-has "SKILL.md names the conformance gate"   "gate-headless.mjs" "$SKILL"
+has "LEGACY.md names the runbook"            "shopify-runbook" "$SKILL"
+has "LEGACY.md names the doctrine"           "commerce-doctrine" "$SKILL"
+has "LEGACY.md names the survey script"      "palate-shopify.mjs" "$SKILL"
+has "LEGACY.md names the conformance gate"   "gate-headless.mjs" "$SKILL"
 has "the doctrine points at the runbook"    "shopify-runbook" "$DOC"
 
 # --- the facts that cost something -------------------------------------------

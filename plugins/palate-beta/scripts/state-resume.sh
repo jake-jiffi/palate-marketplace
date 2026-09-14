@@ -3,6 +3,8 @@
 # In preview stage, the pipeline stops after previewVerified; phases B-F are
 # reported as "preview-gated" rather than pending.
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow reader state-resume "$PWD"
 [ -f .palate-skill-state.json ] || { echo "no-state"; exit 0; }
 STAGE=$(jq -r '.stage // "preview"' .palate-skill-state.json)
 

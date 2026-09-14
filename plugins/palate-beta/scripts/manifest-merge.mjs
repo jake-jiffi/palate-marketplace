@@ -41,6 +41,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { refuseLegacy } from "./lib/workflow-route.mjs";
 
 const args = process.argv.slice(2);
 const arg = (k, d) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
@@ -74,6 +75,7 @@ export function deepMerge(target, patch) {
 }
 
 function main() {
+  refuseLegacy([CWD, MANIFEST], "manifest-merge");
   const m = readJSON(MANIFEST);
   if (!m) {
     // No build manifest = not a tracked build. Nothing to merge into; exit clean.

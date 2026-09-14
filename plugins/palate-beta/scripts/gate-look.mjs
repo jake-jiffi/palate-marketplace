@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { routeOrExit } from "./lib/workflow-route.mjs";
 /**
  * scripts/gate-look.mjs - did anybody OPEN the pages this build shipped?
  *
@@ -41,6 +42,7 @@ import { join, resolve, relative, sep } from "node:path";
 import { pageTypeOf, normaliseRoute } from "./lib/route-kind.mjs";
 
 const dir = resolve(process.argv[2] || ".");
+routeOrExit("reader", "gate-look", [dir]);
 
 const skip = (reason) => {
   process.stderr.write(`gate-look: skipped (${reason})\n`);

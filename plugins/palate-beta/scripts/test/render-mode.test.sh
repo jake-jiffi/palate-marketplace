@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# These assertions protect the retained legacy workflow. New live-design routing is tested separately.
 # Tests the scaffold's RENDER MODE and the invariants that hang off it.
 #
 # THE BUG THIS EXISTS FOR, and it shipped for months. The scaffold was `output: "server"`, so
@@ -94,9 +95,9 @@ grep -q 'customPages' "$CONF" \
 # decide to fix a live client site, which on a store means getStaticPaths on every dynamic
 # route and is exactly where product pages disappear. The doctrine has to say so in both
 # places an agent would look.
-grep -q "NEVER RETROFIT AN EXISTING SITE" "$DIR/../../SKILL.md" \
-  && ok "SKILL.md scopes the render mode to new builds" \
-  || bad "SKILL.md does not forbid retrofitting an existing site's render mode"
+grep -q "NEVER RETROFIT AN EXISTING SITE" "$DIR/../../LEGACY.md" \
+  && ok "LEGACY.md scopes the render mode to new builds" \
+  || bad "LEGACY.md does not forbid retrofitting an existing site's render mode"
 grep -qi "Match the site you are in" "$DIR/../../references/continue-mode.md" \
   && ok "continue-mode.md tells an edit to match the site it is in" \
   || bad "continue-mode.md does not tell an edit to match the site's existing render mode"

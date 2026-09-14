@@ -8,7 +8,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|apply_patch",
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-manifest.mjs\"" }
         ]
@@ -16,7 +16,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|MultiEdit|Workflow",
+        "matcher": "Write|MultiEdit|Workflow|apply_patch",
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-pretooluse.mjs\"" }
         ]

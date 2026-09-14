@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# These assertions protect the retained legacy workflow. New live-design routing is tested separately.
 # The docs may not promise what the code does not do.
 #
 # Every claim below was in the doctrine and false: "Lighthouse 100 is the baseline" with no
@@ -481,8 +482,8 @@ notline "and the ungated line does not claim a pass" "$UNGATED" "clears the"
 # `ExploreSwitcher`) no longer ship. Doctrine that still sends a builder to write a board page
 # sends them to write Astro nothing will ever serve, and the boards-are-Astro claim is exactly
 # the one that cost a real build forty minutes before anything was shown.
-present "SKILL.md A.4 names the artboard the board actually is" \
-  "SKILL.md" ".palate/explore/seed/B<rung>.dc.html"
+present "LEGACY.md A.4 names the artboard the board actually is" \
+  "LEGACY.md" ".palate/explore/seed/B<rung>.dc.html"
 # A whole-file grep for the word "artboard" passes on one stray mention, so the registry's own
 # declaration is the check that matters: the board IS the file, and `href` cannot be required
 # again without this going red.
@@ -490,10 +491,10 @@ present "variants.ts requires the artboard" \
   "templates/astro-project/src/lib/variants.ts" "artboard: string;"
 present "variants.ts keeps href optional and unused" \
   "templates/astro-project/src/lib/variants.ts" "href?: string;"
-absent "SKILL.md no longer routes boards under src/pages/boards" \
-  "SKILL.md" "src/pages/boards"
-absent "SKILL.md no longer wraps board sections in SectionMark" \
-  "SKILL.md" "SectionMark"
+absent "LEGACY.md no longer routes boards under src/pages/boards" \
+  "LEGACY.md" "src/pages/boards"
+absent "LEGACY.md no longer wraps board sections in SectionMark" \
+  "LEGACY.md" "SectionMark"
 absent "explore-stage.md no longer sends anyone to a /boards/ route" \
   "references/explore-stage.md" "/boards/"
 present "explore-stage.md names the mark every kit section carries on a board" \
@@ -542,8 +543,8 @@ present "explore-stage.md states the bar the judge refuses at" \
   "references/explore-stage.md" "THE BAR IS \`comparable\` OR \`better\`"
 present "explore-stage.md says somewhat_worse is refused as clearly_worse is" \
   "references/explore-stage.md" "read \`somewhat_worse\` on any one"
-present "SKILL.md A.4 states the bar the judge refuses at" \
-  "SKILL.md" "THE BAR IS \`comparable\` OR \`better\` ON EVERY SURFACE"
+present "LEGACY.md A.4 states the bar the judge refuses at" \
+  "LEGACY.md" "THE BAR IS \`comparable\` OR \`better\` ON EVERY SURFACE"
 present "palate-verifier.md states the bar the Explore gate refuses at" \
   "agents/palate-verifier.md" "comparable or better on every surface the direction was judged on"
 present "build-manifest.md says both lower rungs refuse" \
@@ -552,8 +553,8 @@ present "build-manifest.md says both lower rungs refuse" \
 # be got wrong: the library holds no whole-page capture for some references.
 present "explore-stage.md says a null surface refuses nothing" \
   "references/explore-stage.md" "reads null and refuses nothing"
-present "SKILL.md A.4 names the judge that runs before the canvas" \
-  "SKILL.md" "gate-board-judge.mjs"
+present "LEGACY.md A.4 names the judge that runs before the canvas" \
+  "LEGACY.md" "gate-board-judge.mjs"
 # `^2c\.` and not any "2c." substring: the point is the STEP HEADING, and a mention of the step
 # inside another paragraph would satisfy a loose grep while the step itself had been deleted.
 matches "palate-verifier.md carries the judging step as a step" \
@@ -565,8 +566,8 @@ present "palate-verifier.md names the file the judgements are collected into" \
 # agent dispatches, exactly as it does for the site ladder.
 absent "palate-verifier.md never tells the verifier to dispatch a subagent" \
   "agents/palate-verifier.md" "ispatch"
-present "SKILL.md A.4 says the main agent dispatches the judging subagents" \
-  "SKILL.md" "YOU dispatch the judging subagents"
+present "LEGACY.md A.4 says the main agent dispatches the judging subagents" \
+  "LEGACY.md" "YOU dispatch the judging subagents"
 present "explore-stage.md owns the dispatch, one fresh subagent per comparison" \
   "references/explore-stage.md" "ONE FRESH general-purpose subagent per comparison"
 present "build-manifest.md records what the judge wrote" \
@@ -613,10 +614,10 @@ present "explore-stage registers the other three artboards" \
   "references/explore-stage.md" "presentation: { inner:"
 present "explore-stage registers where every piece came from" \
   "references/explore-stage.md" "pieces: { navigation:"
-present "SKILL.md A.4 registers the other three artboards" \
-  "SKILL.md" "presentation: { inner:"
-present "SKILL.md A.4 registers where every piece came from" \
-  "SKILL.md" "pieces: { navigation:"
+present "LEGACY.md A.4 registers the other three artboards" \
+  "LEGACY.md" "presentation: { inner:"
+present "LEGACY.md A.4 registers where every piece came from" \
+  "LEGACY.md" "pieces: { navigation:"
 present "explore-stage names the caption every sheet block prints" \
   "references/explore-stage.md" "Navigation: NavSimple, drawn from aesop"
 # The five stills and the row. A row is a COMPARISON (the columns are constants in boards-render
@@ -639,8 +640,8 @@ present "explore-stage says three pairs are six comparisons" \
   "references/explore-stage.md" "six comparisons"
 present "explore-stage names the lowest surface as the one that stands" \
   "references/explore-stage.md" "lowest across the surfaces judged"
-present "SKILL.md A.4 says the judge states three pairs per direction" \
-  "SKILL.md" "THREE pairs per direction"
+present "LEGACY.md A.4 says the judge states three pairs per direction" \
+  "LEGACY.md" "THREE pairs per direction"
 present "palate-verifier.md says the judge states three pairs per direction" \
   "agents/palate-verifier.md" "THREE pairs per direction"
 # Each pair asks its OWN question. The request carries no top-level `question`, so a surface told
@@ -669,17 +670,17 @@ present "explore-stage says the kit is what a variation is checked against" \
   "references/explore-stage.md" "against src/lib/kit.ts"
 present "explore-stage says a donor is checked against the survey" \
   "references/explore-stage.md" "references_surveyed"
-present "SKILL.md A.4 says the gate checks the variations and the donors" \
-  "SKILL.md" "references_surveyed"
+present "LEGACY.md A.4 says the gate checks the variations and the donors" \
+  "LEGACY.md" "references_surveyed"
 
 # ================= MOMENT 2 NO LONGER PROMISES ROUTES ====================================
 # `/v1`..`/vN` have not existed since canvas-first Explore (beta.17): a board is an artboard and
 # there is no route to open. The checkpoint that told the agent to hand over those links was the
 # last surface still promising them.
-absent "SKILL.md's checkpoint no longer promises /v1../vN routes" \
-  "SKILL.md" "The preview link is live with"
-present "SKILL.md's checkpoint hands over the canvas, else /explore" \
-  "SKILL.md" "the canvas is live (else \`/explore\`)"
+absent "LEGACY.md's checkpoint no longer promises /v1../vN routes" \
+  "LEGACY.md" "The preview link is live with"
+present "LEGACY.md's checkpoint hands over the canvas, else /explore" \
+  "LEGACY.md" "the canvas is live (else \`/explore\`)"
 
 # ================= THE CALIBRATION ANSWER IS ASKED ONCE AND RECORDED TWICE ================
 # The intake asks it BEFORE the deep survey and the wall holds it on the checkpoint, so the old
@@ -725,13 +726,13 @@ present "explore-stage.md publishes the canvas only once the judge has passed" \
 # THE ANSWER SHAPE THE JUDGE ACTUALLY VALIDATES. `scoreBoardPair` REQUIRES `candidate_is`, so a
 # surface that still asks for `[{ id, verdict }]` sends every judgement back in a shape the gate
 # refuses, after the subagents have been paid for. The old shape must appear nowhere.
-for f in SKILL.md references/explore-stage.md agents/palate-verifier.md; do
+for f in LEGACY.md references/explore-stage.md agents/palate-verifier.md; do
   absent "$f asks for no judgement shape the judge refuses" "$f" "[{ id, verdict }]"
 done
-present "SKILL.md A.4 asks for the shape the judge validates" \
-  "SKILL.md" "[{ id, candidate_is, verdict }]"
-present "SKILL.md A.4 tells the subagent which letter is the candidate" \
-  "SKILL.md" "candidate_is"
+present "LEGACY.md A.4 asks for the shape the judge validates" \
+  "LEGACY.md" "[{ id, candidate_is, verdict }]"
+present "LEGACY.md A.4 tells the subagent which letter is the candidate" \
+  "LEGACY.md" "candidate_is"
 
 present "explore-stage holds board copy to the client's own facts" references/explore-stage.md "arithmetic is not a source"
 present "explore-stage says gate-facts never reads an artboard" references/explore-stage.md "never reads an artboard"
@@ -740,20 +741,20 @@ present "explore-stage says gate-facts never reads an artboard" references/explo
 # answer could not steer anything it was for. The surveyor now runs in two acts and the wall
 # holds the six answers on the checkpoint; these assertions pin the doctrine that says so.
 present "the surveyor names its calibration-only first act" \
-  "agents/palate-surveyor.md" "calibration only"
+  "references/legacy-survey.md" "calibration only"
 present "the surveyor names the intake it is handed for the deep survey" \
-  "agents/palate-surveyor.md" "the intake"
+  "references/legacy-survey.md" "the intake"
 present "the surveyor sets the intensity facet from the calibration answer" \
-  "agents/palate-surveyor.md" "\`intensity\` facet from the calibration position"
+  "references/legacy-survey.md" "\`intensity\` facet from the calibration position"
 present "the surveyor searches the admired sites with refs_for_business" \
-  "agents/palate-surveyor.md" "\`refs_for_business\` on each site they admire"
+  "references/legacy-survey.md" "\`refs_for_business\` on each site they admire"
 present "the surveyor treats the avoid list as an exclusion" \
-  "agents/palate-surveyor.md" "never a donor"
+  "references/legacy-survey.md" "never a donor"
 present "the surveyor names the primary action in the composition note" \
-  "agents/palate-surveyor.md" "COMPOSITION NOTE: the primary action is"
-present "SKILL.md's checkpoint names the recorded intake" "SKILL.md" "shown.intake"
-present "SKILL.md's checkpoint says the intake comes before the deep survey" \
-  "SKILL.md" "BEFORE THE DEEP SURVEY"
+  "references/legacy-survey.md" "COMPOSITION NOTE: the primary action is"
+present "LEGACY.md's checkpoint names the recorded intake" "LEGACY.md" "shown.intake"
+present "LEGACY.md's checkpoint says the intake comes before the deep survey" \
+  "LEGACY.md" "BEFORE THE DEEP SURVEY"
 present "explore-stage step 1 asks which calibration reference is closest" \
   "references/explore-stage.md" "which of the calibration references is closest"
 present "explore-stage step 1 asks for admired sites" \
@@ -774,24 +775,24 @@ present "explore-stage step 1 records them on the checkpoint" \
 # ASKING THE PERSON. Prose questions in a terminal get prose answers, or none: the person has
 # to type, so they answer the first and skip the rest. Where the harness has a structured
 # question tool, every question the skill puts to a person goes through it.
-matches "SKILL.md carries an Asking the person house rule" "SKILL.md" "^### Asking the person"
-present "the rule names the tool" "SKILL.md" "AskUserQuestion"
-present "the rule asks for 2 to 4 options per question" "SKILL.md" "two to four options"
-present "the rule puts the recommended option first and labels it" "SKILL.md" "(Recommended)"
-present "the rule caps a round at four questions in one call" "SKILL.md" "four questions in ONE call"
-present "the rule asks for multi-select where answers are not exclusive" "SKILL.md" "multi-select"
-present "the rule falls back to prose only where the tool is absent" "SKILL.md" "only where the tool is absent"
+matches "LEGACY.md carries an Asking the person house rule" "LEGACY.md" "^### Asking the person"
+present "the rule names the tool" "LEGACY.md" "AskUserQuestion"
+present "the rule asks for 2 to 4 options per question" "LEGACY.md" "two to four options"
+present "the rule puts the recommended option first and labels it" "LEGACY.md" "(Recommended)"
+present "the rule caps a round at four questions in one call" "LEGACY.md" "four questions in ONE call"
+present "the rule asks for multi-select where answers are not exclusive" "LEGACY.md" "multi-select"
+present "the rule falls back to prose only where the tool is absent" "LEGACY.md" "only where the tool is absent"
 # ...and it is APPLIED at each checkpoint moment, pinned to that moment's own line. A single
-# "AskUserQuestion appears in SKILL.md" is satisfied by the house rule alone, which is exactly
+# "AskUserQuestion appears in LEGACY.md" is satisfied by the house rule alone, which is exactly
 # the assertion that goes on passing after the application is deleted.
 matches "checkpoint moment 2 asks the pick round through the tool" \
-  "SKILL.md" "^2\. \*\*After Explore.*AskUserQuestion"
+  "LEGACY.md" "^2\. \*\*After Explore.*AskUserQuestion"
 matches "checkpoint moment 3 asks the Compose confirm through the tool" \
-  "SKILL.md" "^3\. \*\*After Compose.*AskUserQuestion"
+  "LEGACY.md" "^3\. \*\*After Compose.*AskUserQuestion"
 matches "checkpoint moment 4 asks the provisioning confirm through the tool" \
-  "SKILL.md" "^4\. \*\*Before production provisioning.*AskUserQuestion"
+  "LEGACY.md" "^4\. \*\*Before production provisioning.*AskUserQuestion"
 matches "A.5's question round is one call of the tool" \
-  "SKILL.md" "A\.5 PAUSE.*AskUserQuestion"
+  "LEGACY.md" "A\.5 PAUSE.*AskUserQuestion"
 present "explore-stage asks the intake through the tool" \
   "references/explore-stage.md" "AskUserQuestion"
 present "explore-stage asks the question round through the tool" \
@@ -812,10 +813,10 @@ present "explore-stage says the measurement must match the note in kind" \
   "references/explore-stage.md" "must match the board's motion note IN KIND"
 present "explore-stage names the honest escape rather than a skip" \
   "references/explore-stage.md" "--proof-unmeasured"
-present "SKILL.md A.6 says the proof is measured" \
-  "SKILL.md" "THE PROOF IS MEASURED, NOT DECLARED"
-present "SKILL.md A.6 names the field the gate reads" \
-  "SKILL.md" "explore.proof.measured"
+present "LEGACY.md A.6 says the proof is measured" \
+  "LEGACY.md" "THE PROOF IS MEASURED, NOT DECLARED"
+present "LEGACY.md A.6 names the field the gate reads" \
+  "LEGACY.md" "explore.proof.measured"
 # ...where the browser it drives is installed. Without it the probe skips, and a skip is not a
 # refusal: asserting on it would turn a missing dependency into a doctrine failure.
 if node --input-type=module -e 'import { createRequire } from "node:module"; createRequire(process.argv[1]).resolve("playwright");' \
@@ -867,10 +868,10 @@ fi
 
 # THE LOCAL GRADE'S LADDER IS A DONE SUB-GATE. On the eastcoast v3 build grade-local.mjs had
 # already judged the home `somewhat_worse` than its exemplar, at the 12.9th taste percentile,
-# with flattery.risk true, and nothing read the file. SKILL.md A.12 and local-grade.md both have
+# with flattery.risk true, and nothing read the file. LEGACY.md A.12 and local-grade.md both have
 # to say it runs before done, not after, or the same silent skip happens again.
-present "SKILL.md A.12 says the full local grade runs before done and gate-taste reads it" \
-  "SKILL.md" "Run this before the done gate, not after"
+present "LEGACY.md A.12 says the full local grade runs before done and gate-taste reads it" \
+  "LEGACY.md" "Run this before the done gate, not after"
 present "local-grade.md says gate-done's taste sub-gate reads local-grade.json" \
   "references/local-grade.md" "\`gate-done.sh\`'s \`taste\` sub-gate"
 
@@ -881,50 +882,50 @@ present "local-grade.md says gate-done's taste sub-gate reads local-grade.json" 
 # pick nothing in the process was a design act. These sentences are what make it one, and every
 # one of them is now carried by a script, so a doc that loses one is a doc describing a build
 # step that still runs and is no longer written down.
-present "SKILL.md A.6 says Compose is a design act" \
-  "SKILL.md" "COMPOSE IS A DESIGN ACT"
-present "SKILL.md A.6 says the home page lifts the picked board" \
-  "SKILL.md" "LIFTS THE PICKED BOARD"
-present "SKILL.md A.6 names the command that records a departure from the board" \
-  "SKILL.md" '--override <route> --section'
-present "SKILL.md A.6 marks the route the drawn inner page became" \
-  "SKILL.md" "marked --primary when its look is recorded"
-present "SKILL.md A.6 says the kit is parts and states" \
-  "SKILL.md" "the kit is parts and states, never the page"
-absent "SKILL.md A.6 no longer tells Compose to write the rest of the site's pages" \
-  "SKILL.md" "the rest of the site's pages in the picked direction"
-present "SKILL.md A.6 composes a page template once, as a designed page type" \
-  "SKILL.md" "composed ONCE as a designed page type"
-present "SKILL.md A.6 refuses the native-size fallback for a photograph" \
-  "SKILL.md" '"inset at native size" is never a fallback'
-present "SKILL.md A.6 records the look per page type" \
-  "SKILL.md" '--looked <route> --shot'
-present "SKILL.md A.6 says the page judge's subagents are dispatched by you" \
-  "SKILL.md" "built pages are judged the way the boards were, and YOU dispatch"
-present "SKILL.md A.6 says fidelity now measures the framing" \
-  "SKILL.md" "the hero media's framing"
+present "LEGACY.md A.6 says Compose is a design act" \
+  "LEGACY.md" "COMPOSE IS A DESIGN ACT"
+present "LEGACY.md A.6 says the home page lifts the picked board" \
+  "LEGACY.md" "LIFTS THE PICKED BOARD"
+present "LEGACY.md A.6 names the command that records a departure from the board" \
+  "LEGACY.md" '--override <route> --section'
+present "LEGACY.md A.6 marks the route the drawn inner page became" \
+  "LEGACY.md" "marked --primary when its look is recorded"
+present "LEGACY.md A.6 says the kit is parts and states" \
+  "LEGACY.md" "the kit is parts and states, never the page"
+absent "LEGACY.md A.6 no longer tells Compose to write the rest of the site's pages" \
+  "LEGACY.md" "the rest of the site's pages in the picked direction"
+present "LEGACY.md A.6 composes a page template once, as a designed page type" \
+  "LEGACY.md" "composed ONCE as a designed page type"
+present "LEGACY.md A.6 refuses the native-size fallback for a photograph" \
+  "LEGACY.md" '"inset at native size" is never a fallback'
+present "LEGACY.md A.6 records the look per page type" \
+  "LEGACY.md" '--looked <route> --shot'
+present "LEGACY.md A.6 says the page judge's subagents are dispatched by you" \
+  "LEGACY.md" "built pages are judged the way the boards were, and YOU dispatch"
+present "LEGACY.md A.6 says fidelity now measures the framing" \
+  "LEGACY.md" "the hero media's framing"
 
 # THE RUBRIC IS NOT THE GATE. On that build all six axes came back 4 of 4 at both viewports with
 # `defects: []` while the observations beside them named the duplication as defect 10 and marked
 # it accepted. A score somebody awards themselves cannot be the thing that decides.
-present "SKILL.md A.9 demotes the six axes to working notes" \
-  "SKILL.md" "THE SIX AXES ARE WORKING NOTES, NOT THE GATE"
-present "SKILL.md A.9 says nothing reads the self-scored axes" \
-  "SKILL.md" "Nothing reads \`visual.iterations[].axes\`"
+present "LEGACY.md A.9 demotes the six axes to working notes" \
+  "LEGACY.md" "THE SIX AXES ARE WORKING NOTES, NOT THE GATE"
+present "LEGACY.md A.9 says nothing reads the self-scored axes" \
+  "LEGACY.md" "Nothing reads \`visual.iterations[].axes\`"
 # ... AND A.9 NO LONGER SAYS THE OPPOSITE FOUR HUNDRED WORDS LATER. It listed the artefacts the
 # Stop hook reads and ended the list with "every rubric axis cleared the bar", which gate-done.sh
 # does not read at all: it reads `.visual.pass`, the console, the shot count and the iteration
 # count. A demotion undone inside its own item is a demotion nobody can act on.
-present "SKILL.md A.9 names what the done gate actually reads" \
-  "SKILL.md" "zero console errors, the verifier's own \`visual.pass\`)"
-absent "SKILL.md A.9 no longer claims the done gate reads the rubric axes" \
-  "SKILL.md" "every rubric axis cleared the bar"
+present "LEGACY.md A.9 names what the done gate actually reads" \
+  "LEGACY.md" "zero console errors, the verifier's own \`visual.pass\`)"
+absent "LEGACY.md A.9 no longer claims the done gate reads the rubric axes" \
+  "LEGACY.md" "every rubric axis cleared the bar"
 
 # THE JUDGE RUNS LAST, ON THE SETTLED BUILD. The visual loop rebuilds, and a page rebuilt after
 # it was judged makes its comparison stale, so judging before the loop buys every comparison
 # twice and passes none of them.
-present "SKILL.md A.6 puts the page judge after the visual loop" \
-  "SKILL.md" "THE PAGES ARE JUDGED LAST, ON THE SETTLED BUILD"
+present "LEGACY.md A.6 puts the page judge after the visual loop" \
+  "LEGACY.md" "THE PAGES ARE JUDGED LAST, ON THE SETTLED BUILD"
 present "explore-stage.md says the judge runs on the settled build" \
   "references/explore-stage.md" "the judge runs on the settled build"
 present "the verifier says its page judge runs last, on the settled build" \
@@ -940,11 +941,11 @@ present "the verifier says the six axes are working notes" \
 
 # THE THREE NEW DONE SUB-GATES, named where the gates are listed, or a reader learns about them
 # only when one blocks.
-present "SKILL.md names the look gate" "SKILL.md" "scripts/gate-look.mjs"
-present "SKILL.md names the page judge" "SKILL.md" "scripts/gate-page-judge.mjs"
-present "SKILL.md names the taste gate" "SKILL.md" "scripts/gate-taste.mjs"
-present "SKILL.md names the repeated-silhouette finding in the rendered gate" \
-  "SKILL.md" "repeated-silhouette"
+present "LEGACY.md names the look gate" "LEGACY.md" "scripts/gate-look.mjs"
+present "LEGACY.md names the page judge" "LEGACY.md" "scripts/gate-page-judge.mjs"
+present "LEGACY.md names the taste gate" "LEGACY.md" "scripts/gate-taste.mjs"
+present "LEGACY.md names the repeated-silhouette finding in the rendered gate" \
+  "LEGACY.md" "repeated-silhouette"
 
 # COMPOSE READS THE SAME WAY IN THE FILE A BUILDER OPENS FOR EXPLORE.
 present "explore-stage says Compose lifts the board rather than rebuilding it" \

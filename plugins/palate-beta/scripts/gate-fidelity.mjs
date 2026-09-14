@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { routeOrExit } from "./lib/workflow-route.mjs";
 /**
  * scripts/gate-fidelity.mjs - did the built home page carry the direction the client picked?
  *
@@ -123,6 +124,7 @@ class SkipSignal extends Error {
 const cannotCheckMidRun = (reason) => { throw new SkipSignal(reason); };
 
 const dir = resolve(positional[0] || ".");
+routeOrExit("reader", "gate-fidelity", [dir]);
 const refusal = pluginRootRefusal(dir);
 if (refusal) cannotCheck(`refused: ${refusal}. Name the site directory explicitly.`);
 

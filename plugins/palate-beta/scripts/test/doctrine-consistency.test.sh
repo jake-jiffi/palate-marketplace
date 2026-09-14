@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
+# These assertions protect the retained legacy workflow. New live-design routing is tested separately.
 # Doctrine consistency: the cross-file contradiction guard.
 #
-# THE FAILURE THIS EXISTS FOR. On 18 June a plumbing commit rewrote SKILL.md so every Explore
+# THE FAILURE THIS EXISTS FOR. On 18 June a plumbing commit rewrote LEGACY.md so every Explore
 # variant "carr[ied] one of the 1-2 ADVANCED concepts (not a fresh spine)" while
 # explore-stage.md kept saying "generate 8-10 genuinely different versions". Two shipped files
-# stated opposite instructions for two months; SKILL.md is the always-loaded one, so the funnel
+# stated opposite instructions for two months; LEGACY.md is the always-loaded one, so the funnel
 # won silently at build time, every preview regressed to one concept's mean, and the owner
 # repeatedly asked why builds were timid. Nobody decided any of that.
 #
@@ -25,7 +26,7 @@ bad() { echo "FAIL - $1"; fail=$((fail+1)); }
 
 # The surfaces doctrine ships on. skill-lite/ is generated, but a stale generation IS a shipped
 # contradiction (four tools would carry the old rule), so it is checked too.
-DOCTRINE_FILES=(SKILL.md references/core-doctrine.md references/story-engine.md references/explore-stage.md)
+DOCTRINE_FILES=(LEGACY.md references/core-doctrine.md references/story-engine.md references/explore-stage.md)
 LITE_FILES=(skill-lite/AGENTS.md skill-lite/cursor/palate.mdc skill-lite/gemini/GEMINI.md skill-lite/copilot/copilot-instructions.md)
 
 # --- 1. THE FUNNEL STAYS DEAD --------------------------------------------------------------
@@ -70,9 +71,9 @@ done
 # The gates moved from Compose-only to per-variant because clients see variants FIRST. The two
 # files a builder actually reads for Explore must both say it, or one of them quietly reverts
 # the change for whoever grounds on it.
-grep -q "FAILING VARIANT IS NOT REGISTERED" SKILL.md \
-  && ok "SKILL.md: a failing variant is not registered" \
-  || bad "SKILL.md lost the per-variant gate (a failing variant must not be registered)"
+grep -q "FAILING VARIANT IS NOT REGISTERED" LEGACY.md \
+  && ok "LEGACY.md: a failing variant is not registered" \
+  || bad "LEGACY.md lost the per-variant gate (a failing variant must not be registered)"
 grep -q "NO VARIANT IS REGISTERED UNTIL IT PASSES" references/explore-stage.md \
   && ok "explore-stage.md: no variant registered until it passes" \
   || bad "explore-stage.md lost the per-variant gate statement"
@@ -80,10 +81,10 @@ grep -q "NO VARIANT IS REGISTERED UNTIL IT PASSES" references/explore-stage.md \
 # --- 5. ONE CONCEPT PER RUNG, ONE DONOR EACH -----------------------------------------------
 # "Its own concept" / one donor per rung is what makes the preview a range instead of eight
 # dressings of one idea. Pinned where variants are specified.
-grep -qiE "ITS OWN concept|one concept per rung" SKILL.md \
-  && ok "SKILL.md: each variant carries its own concept" \
-  || bad "SKILL.md no longer says each variant carries its own concept"
-grep -qiE "no donor slug (is )?used twice|one distinct donor" SKILL.md references/story-engine.md \
+grep -qiE "ITS OWN concept|one concept per rung" LEGACY.md \
+  && ok "LEGACY.md: each variant carries its own concept" \
+  || bad "LEGACY.md no longer says each variant carries its own concept"
+grep -qiE "no donor slug (is )?used twice|one distinct donor" LEGACY.md references/story-engine.md \
   && ok "the no-donor-reused rule is stated" \
   || bad "the no-donor-reused rule vanished from the ladder doctrine"
 
@@ -102,15 +103,15 @@ grep -qiE "RUNG-SCOPED|BINDS THE BOTTOM OF THE LADDER" references/build-commissi
 grep -qi "CALM BRAND STILL SPANS THE LADDER" references/explore-stage.md \
   && ok "explore-stage.md: a calm brand still spans the ladder" \
   || bad "explore-stage.md no longer says a calm brand spans the full ladder"
-grep -qi "governs the CHARACTER of motion" SKILL.md \
-  && ok "SKILL.md: calm governs the character of motion, not its existence" \
-  || bad "SKILL.md reads 'a calm brand demands calm' with no character/existence split (reads as motionless)"
+grep -qi "governs the CHARACTER of motion" LEGACY.md \
+  && ok "LEGACY.md: calm governs the character of motion, not its existence" \
+  || bad "LEGACY.md reads 'a calm brand demands calm' with no character/existence split (reads as motionless)"
 
 # --- 7. ONE COUNT RULE, STATED THE SAME WAY IN ALL THREE PLACES ----------------------------
 # The count moved from eight complete pages to five boards. Three files state it and a reader
 # grounds on whichever one they opened, so the failure mode is exactly the 18 June one: two
 # shipped files with opposite numbers and the always-loaded one winning in silence.
-for f in SKILL.md references/explore-stage.md; do
+for f in LEGACY.md references/explore-stage.md; do
   grep -qiE "defaulting to 5|[Dd]efault 5" "$f" \
     && ok "$f: the board count defaults to 5" \
     || bad "$f no longer says the count defaults to 5 (the other files do)"
@@ -123,7 +124,7 @@ grep -qiE "N sets the resolution, never the range|sets the RESOLUTION of\s*$|RES
   || bad "explore-stage.md lost 'the count sets the resolution, never the range'"
 # THE DELETED LINE MUST STAY DELETED. "fewer is a failed Explore" was the eight-page floor, and
 # it contradicts a default of five on the same page.
-if grep -qiE "fewer is a failed Explore|[Ee]ight is the floor" references/explore-stage.md SKILL.md; then
+if grep -qiE "fewer is a failed Explore|[Ee]ight is the floor" references/explore-stage.md LEGACY.md; then
   bad "the eight-page floor came back, and it contradicts the count rule beside it"
 else
   ok "the eight-page floor stays deleted"
@@ -133,9 +134,9 @@ fi
 # A board is a still, so a bold rung is chosen on a picture of itself. The home page is built
 # and shown MOVING before anything is built on top of it, and a file that omits it teaches a
 # builder to go straight from a pick to three thousand pages.
-grep -qi "MOTION PROOF" SKILL.md \
-  && ok "SKILL.md: Compose proves the home page moving first" \
-  || bad "SKILL.md lost the motion proof (a bold rung ships unseen in motion)"
+grep -qi "MOTION PROOF" LEGACY.md \
+  && ok "LEGACY.md: Compose proves the home page moving first" \
+  || bad "LEGACY.md lost the motion proof (a bold rung ships unseen in motion)"
 grep -qi "MOTION PROOF" references/explore-stage.md \
   && ok "explore-stage.md: Compose proves the home page moving first" \
   || bad "explore-stage.md lost the motion proof"
@@ -158,7 +159,7 @@ grep -qiE "inferred one still governs" references/build-commission.md \
 # model to hand-edit a file the PostToolUse hook also writes, and a model that sometimes does
 # not leaves `fidelity=skipped` on every build after Compose with nothing saying a check was
 # lost. Both files that tell Compose to prove the home page have to carry the command.
-for f in SKILL.md references/explore-stage.md; do
+for f in LEGACY.md references/explore-stage.md; do
   grep -q "palate-pick.mjs" "$f" && grep -q -- "--proof" "$f" \
     && ok "$f: the motion proof is recorded by a named command" \
     || bad "$f tells Compose to record the motion proof without naming the command that writes it"
@@ -170,7 +171,7 @@ done
 # them with. The four rules that make Compose a design act again have to be in BOTH files a
 # builder opens, or the one they happened to read wins in silence, which is the 18 June failure
 # in a different stage.
-for f in SKILL.md references/explore-stage.md; do
+for f in LEGACY.md references/explore-stage.md; do
   grep -qiE "LIFTS? THE PICKED BOARD" "$f" \
     && ok "$f: the home page is lifted from the picked board" \
     || bad "$f no longer says the home page is lifted from the picked board (it will be rebuilt from the kit)"
@@ -186,7 +187,7 @@ for f in SKILL.md references/explore-stage.md; do
 done
 # AND THE KIT IS NOT THE PAGE. "Fill the rest of the site from the kit" is what produced
 # eighteen pages nobody composed; the instruction may not come back in either file.
-if grep -qiE "fill the rest of the site (from|with) the kit" SKILL.md references/explore-stage.md; then
+if grep -qiE "fill the rest of the site (from|with) the kit" LEGACY.md references/explore-stage.md; then
   bad "the fill-the-site-from-the-kit instruction came back, and it is what Compose was rewritten to strike"
 else
   ok "no file tells Compose to fill the rest of the site from the kit"

@@ -45,6 +45,8 @@ const run = promisify(execFile);
  * test is caught by the completeness case rather than quietly joining the fifteen.
  */
 const CLIS = [
+  "scripts/install-shopify-overlay.mjs",
+  "scripts/lib/workflow-route.mjs",
   "scripts/boards-render.mjs",
   "scripts/palate-traffic.mjs",
   "scripts/palate-route-review.mjs",

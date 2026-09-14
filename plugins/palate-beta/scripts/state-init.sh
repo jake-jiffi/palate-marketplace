@@ -22,6 +22,8 @@
 # stricter brand-creation, so an older caller that omits it still demands colour+type
 # variation. Read by hooks/palate-pretooluse.mjs and scripts/gate-novelty.mjs.
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow writer state-init "$PWD"
 
 # --force may sit anywhere in the arguments; everything else keeps its position.
 FORCE=0

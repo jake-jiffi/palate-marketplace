@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { refuseLegacy } from "./lib/workflow-route.mjs";
 /**
  * scripts/gate-board-judge.mjs - every Explore board is compared with its own donor.
  *
@@ -131,6 +132,7 @@ export function readJSON(p) {
  * Returns an error string, or null when the record landed.
  */
 export function mergeManifest(projectDir, patch, landed) {
+  try { refuseLegacy([projectDir], "board-judge merge"); } catch (error) { return error.message; }
   const merge = join(HERE, "manifest-merge.mjs");
   const manifest = join(projectDir, "build-manifest.json");
   if (!existsSync(manifest) || !existsSync(merge)) return null; // not a tracked build; nothing owed
@@ -216,6 +218,7 @@ export async function main(argv = process.argv.slice(2)) {
   // named would resolve the project to the judgements file and then report it as not an Explore
   // build, which reads as "nothing to judge" rather than as the operator's slip that it is.
   const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--")));
+  refuseLegacy([resolve(positional[0] || ".")], "board-judge");
 
   // The release valve is read FIRST, so a build that has switched the judge off never has to
   // have its artefacts in order to get past it.

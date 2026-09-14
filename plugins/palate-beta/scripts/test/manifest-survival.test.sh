@@ -19,6 +19,12 @@ is()  { # <desc> <actual> <expected>
   if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (got '$2', want '$3')"; fi
 }
 
+# A pre-scaffold legacy survey now has an explicit owner before its first call.
+bootstrap() {
+  if node "$HOOK" --init-legacy --project "$1"; then ok "explicit legacy bootstrap: $1";
+  else bad "explicit legacy bootstrap failed: $1"; fi
+}
+
 # Feed the hook one Palate call, as PostToolUse would.
 call() { # <cwd> <tool> <args-json> <result-text>
   printf '{"cwd":%s,"tool_name":%s,"tool_input":%s,"tool_response":{"content":[{"type":"text","text":%s}]}}' \
@@ -37,6 +43,7 @@ mancalls() { jq '((.mcp_calls // []) | length)' "$1" 2>/dev/null || echo ERR; }
 #    still be there afterwards.
 # =====================================================================================
 W="$TMP/w1"; mkdir -p "$W"
+bootstrap "$W"
 call "$W" "mcp__palate__refs_search" '{"query":"pelvic health clinic"}' '{"results":[{"slug":"therapy-in-london"},{"slug":"august-health-ehr"}]}'
 call "$W" "mcp__palate__refs_get" '{"slug":"therapy-in-london","layer":["do_dont"]}' '{"slug":"therapy-in-london","do_dont":{"do":["warm ground"],"dont":["cold white"]}}'
 is "survey lands while there is no scaffold" "$(mancalls "$W/build-manifest.json")" "2"
@@ -112,6 +119,7 @@ is "and B did not inherit A's references" "$(jq -r '.references_surveyed[0]' "$X
 #    script to merge three scattered journals before it could carry on.
 # =====================================================================================
 D="$TMP/deep"; mkdir -p "$D"
+bootstrap "$D"
 call "$D" "mcp__palate__refs_search" '{"query":"childrens health"}' '{"results":[{"slug":"aa"},{"slug":"bb"}]}'
 is "the build records its first calls at the root" "$(mancalls "$D/build-manifest.json")" "1"
 
@@ -129,6 +137,7 @@ is "one journal, not three" "$(find "$D" -name mcp-journal.jsonl | wc -l | tr -d
 
 # The bound matters: a manifest ABOVE a repository root belongs to something else.
 O="$TMP/outer"; mkdir -p "$O/inner"; git -C "$O/inner" init -q 2>/dev/null
+bootstrap "$O/inner"
 echo '{"schema":3,"mcp_calls":[]}' > "$O/build-manifest.json"
 call "$O/inner" "mcp__palate__refs_search" '{"query":"unrelated"}' '{"results":[{"slug":"zz"}]}'
 is "a manifest above a repo root is NOT adopted" "$(mancalls "$O/build-manifest.json")" "0"
@@ -139,12 +148,14 @@ is "the repo gets its own" "$(mancalls "$O/inner/build-manifest.json")" "1"
 # under project "/Users/<user>". A manifest in HOME (or above it) is never a build's.
 H="$TMP/home"; mkdir -p "$H/dev/client-site"
 printf '{"schema":3,"project":"%s","mcp_calls":[]}' "$H" > "$H/build-manifest.json"
+HOME="$H" bootstrap "$H/dev/client-site"
 HOME="$H" call "$H/dev/client-site" "mcp__palate__refs_search" '{"query":"aluminium"}' '{"results":[{"slug":"yy"}]}'
 is "a stray manifest in HOME is NOT adopted by a repo-less build folder" "$(mancalls "$H/build-manifest.json")" "0"
 is "the build folder gets its own manifest" "$(mancalls "$H/dev/client-site/build-manifest.json")" "1"
 is "and its own journal" "$(find "$H" -name mcp-journal.jsonl | wc -l | tr -d ' ')" "1"
 # ...while a manifest ABOVE the cwd but BELOW home is still the build's (case 7 stays true under HOME too)
 mkdir -p "$H/dev/other-site/.palate/harvest"
+HOME="$H" bootstrap "$H/dev/other-site"
 HOME="$H" call "$H/dev/other-site" "mcp__palate__refs_search" '{"query":"a"}' '{"results":[{"slug":"a1"}]}'
 HOME="$H" call "$H/dev/other-site/.palate/harvest" "mcp__palate__refs_search" '{"query":"b"}' '{"results":[{"slug":"b1"}]}'
 is "a subdirectory under HOME still finds its build's manifest" "$(mancalls "$H/dev/other-site/build-manifest.json")" "2"
@@ -161,6 +172,7 @@ is "and the reference" "$(jq -r '.references_surveyed[0]' "$M2/build-manifest.js
 # refs_search contributed no slugs: tool_response was the result's JSON text, not an object, and
 # nothing parsed it while resultEvidence called it "ok". Both shapes the hook has been handed.
 RS="$TMP/rawstring"; mkdir -p "$RS"
+bootstrap "$RS"
 printf '{"cwd":%s,"tool_name":"mcp__palate__refs_search","tool_input":{"query":"q"},"tool_response":%s}' \
   "$(jq -Rn --arg v "$RS" '$v')" "$(jq -Rn --arg v '{"results":[{"slug":"str-a"},{"slug":"str-b"}]}' '$v')" | node "$HOOK" 2>/dev/null
 is "a JSON-text tool_response still yields the slugs" "$(jq -r '.references_surveyed|sort|join(",")' "$RS/build-manifest.json")" "str-a,str-b"
