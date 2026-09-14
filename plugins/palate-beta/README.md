@@ -18,6 +18,8 @@ The beta package includes conventional skill discovery for Claude and Codex. Ins
 
 Existing projects without `palate.project.json`, brand packages and legacy maintenance use [LEGACY.md](LEGACY.md). They are not automatically migrated. The details below apply to those retained workflows, including their older scaffold and deployment setup.
 
+Live builds include an independent critic after the chosen direction is viewable and before full-site handover. The coordinator autonomously deepens the critic/builder effort when observed design, creativity or motion gaps need stronger work; a manual request or rating is not required. You can also ask for a **jury review** or use `/palate-beta:jury`. [The critic protocol](references/critic-review.md) shares four revision rounds across corrections, escalation and final repairs, with early stopping, stable Palate references and actual motion checks. It preserves identity and product facts, stays separate from the grading instrument and does not restart for small edits.
+
 # Legacy website and brand workflows
 
 A Claude Code skill that builds production-grade Astro websites, grounded by the Palate MCP. The Palate MCP serves a library of analysed real websites (with inner-page depth, design tokens, do/don't rules, component prompts, and a taste layer), so the sites this skill builds carry real design craft instead of generic AI output.

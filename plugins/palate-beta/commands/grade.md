@@ -3,6 +3,8 @@ description: Grade the site. Defaults to the free local grade, which works on a 
 argument-hint: "[url or path] [--certified to buy the shareable number] [--vertical health]"
 ---
 
+This command runs the grading instrument when that instrument is explicitly requested. Normal live-design critic checkpoints and `/palate-beta:jury` use [critic-review.md](../references/critic-review.md) instead. Their internal scores do not trigger this command or another local-grade comparison loop. Preserve an explicit request for this grading instrument as a separate task.
+
 ## A site can always be graded
 
 **Never tell anyone their site cannot be graded.** There is no such state. If it is not

@@ -71,6 +71,7 @@ The checks, and the numbers.
 | Command | What it does |
 |---|---|
 | `/palate-beta:check` | Run the contribution contract over what changed, heal what is fixable, return one verdict. |
+| `/palate-beta:jury` | Request deeper critique, also activated autonomously for craft gaps. Independent critic and separate builder, stable references, one shared four-round allowance with early stopping. Separate from the grading instrument. |
 | `/palate-beta:drift` | How far each route has moved from its own baseline. Free, local, and not a judgement. |
 | `/palate-beta:sweep` | The site-level checks no single contribution can trigger: crawlability, schema, orphans, dead links, stale content. |
 | `/palate-beta:grade` | Grades locally and free by default, on a localhost preview, deployed or not. Certification is opt-in and is the only number that can be shared. |
