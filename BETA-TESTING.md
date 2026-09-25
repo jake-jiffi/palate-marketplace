@@ -1,4 +1,4 @@
-# Palate 1.18.0-beta.6, tester release
+# Palate 1.18.0-beta.7, tester release
 
 This is an opt-in release for a small tester group, published on 25 September 2026. Features are frozen so we can collect feedback from real use. The production plugin remains at 1.16.0.
 
@@ -13,6 +13,9 @@ Beta.4 fixes reference lookup when Codex converts the jury command into a skill.
 Beta.5 adds optional generated media through Higgsfield. When the Higgsfield CLI or MCP is installed, Palate asks once per site whether it may use it and how much it may spend (300 credits recommended, 800 for a full scroll film, 100 for images only, or no), holds that cap to half your live balance, and uses generated stills in design options and video, including scroll-through films, only for the chosen direction. Which model serves each job comes from a table in the package, not from the conversation. Generated media is illustrative and is never presented as a business's real premises, people or products. Without Higgsfield nothing changes and nothing is mentioned. The media path was tested against a real Higgsfield account: stills, video, a three-scene scroll film in a live preview, spend matching the account exactly, and recovery of an interrupted job without a second charge. It has not been tested in a complete website build.
 
 Beta.6 builds every site on one design system. Once you choose a direction, Palate codifies it into a single system file (type scale, colours, page structure and heading styles independent of heading tags, following Finsweet's Client-First structure with values from your chosen design), keeps a hidden style guide in the local preview at `/_palate/style-guide` that updates whenever the system changes, and checks that no page sets its own type sizes or colours. A deliberate one-off stays, with a written reason. Scroll films can now cover just the opening, one section or the whole page, chosen for what the site's visitors need. The check was run against real builds; it has not yet been used in a complete new build.
+
+Beta.7 makes clear that a scroll film is never a default. Agreeing to a Higgsfield budget is not a request for a film: one is planned only when the chosen direction calls for it, and the film plan always offers "No film".
+
 
 
 ## Known limitations
@@ -58,7 +61,7 @@ codex plugin marketplace add https://github.com/jake-jiffi/palate-marketplace.gi
 codex plugin add palate-beta@palate
 ```
 
-If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.6`.
+If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.7`.
 
 Use your existing Palate MCP connection, or follow its authentication prompt. Start the builder with `/palate-beta:palate-website-builder` in Claude or `$palate-beta:palate-website-builder` in Codex. Provide the website or brand material you have and describe what visitors should be able to do.
 

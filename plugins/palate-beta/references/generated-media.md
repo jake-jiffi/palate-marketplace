@@ -12,8 +12,8 @@ Otherwise ask one `AskUserQuestion` before composing options, alongside the purp
 
 | Option | Description to show |
 | --- | --- |
-| Yes, up to 300 credits (Recommended) | Generated stills for the design options, then motion or a short film for the chosen direction. State their balance and that you stop at the cap. |
-| Yes, up to 800 credits | Room for a full scroll-through film of the chosen direction. |
+| Yes, up to 300 credits (Recommended) | Generated stills where they help the design options, and motion or a film for the chosen direction only if its design calls for one. State their balance and that you stop at the cap. |
+| Yes, up to 800 credits | Room for a full scroll-through film, if the chosen direction calls for one. |
 | Images only, up to 100 credits | Generated stills, no video. |
 | No, build without it | Nothing is generated. |
 
@@ -73,7 +73,7 @@ Give each direction one style preamble, reused word for word in every prompt, so
 
 ## After selection: motion and scroll films
 
-How much of the page scrolls through film is a design decision for this site, not a default. Decide it from what visitors come to do and from references that use scroll-driven film well (search the library's motion facets and inspect their clips), then choose one scope:
+A film is never a default, and agreeing to a budget is not a request for one. How much of the page scrolls through film, if any, is a design decision for this site. Decide it from what visitors come to do and from references that use scroll-driven film well (search the library's motion facets and inspect their clips), then choose one scope:
 
 | Scope | Suits | Shape |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ How much of the page scrolls through film is a design decision for this site, no
 
 Scope sets the cost, so it goes in the priced plan below. Never trap content or the primary action behind the film: every scope keeps navigation, the key facts and the action reachable without scrolling the whole film.
 
-Before rendering, price the plan with `media quote` and confirm it with one `AskUserQuestion` carrying totals that fit the remaining cap, with your recommended scope first and its reason: for example "Hero film, one dive, about 96 credits (Recommended)", "Chapter film on the process section, 3 scenes, about 400", "Full-page journey, 5 scenes, about 700", "Stills with light motion, about 40". Include whether to render a native phone cut, which roughly doubles the video cost.
+Before rendering, price the plan with `media quote` and confirm it with one `AskUserQuestion` carrying totals that fit the remaining cap, with your recommended scope first and its reason: for example "Hero film, one dive, about 96 credits (Recommended)", "Chapter film on the process section, 3 scenes, about 400", "Full-page journey, 5 scenes, about 700", "Stills with light motion, about 40", "No film". Always include "No film". Include whether to render a native phone cut, which roughly doubles the video cost.
 
 The method below is adapted from [scroll-world](https://github.com/oso95/scroll-world) (MIT).
 
