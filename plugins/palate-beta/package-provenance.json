@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "sourceCommit": "aae2b0dfd056fb0bb25bc296ac72760cf12aee5e",
+  "sourceCommit": "664a7ef67989c8b1e8bf0badd0816b47eeafb617",
   "sourceVersion": "1.18.0",
-  "version": "1.18.0-beta.5",
+  "version": "1.18.0-beta.6",
   "rollback": false,
-  "sourceDigest": "b56059a9441a15540a21d42ddb4b0c077965cad1ee6e6652f8b71295ec439d33",
-  "contentDigest": "3c84df18dfa18a9cdbe05c24f04b5a728f021b3db58e3b681af06573c90bb110",
+  "sourceDigest": "5989893051088452f04905b11ddcf8cb9a3341773aee4875d0f65280a4e6f76c",
+  "contentDigest": "739994fa0ae8b81b855a1f5ef9e9d04ae904fff6b4b6ad223cf7825b0342cbed",
   "entry": "skills/palate-website-builder/SKILL.md",
   "rebasedLinks": [
     "commands/jury.md",
@@ -13,6 +13,7 @@
     "references/live-build.md",
     "LEGACY.md",
     "references/generated-media.md",
+    "references/site-system.md",
     "references/critic-review.md"
   ]
 }

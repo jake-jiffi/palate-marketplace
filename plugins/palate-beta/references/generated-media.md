@@ -73,9 +73,18 @@ Give each direction one style preamble, reused word for word in every prompt, so
 
 ## After selection: motion and scroll films
 
-A scroll film suits a chosen direction whose idea is movement: a journey through the business's process, a place, a product assembling, a world the visitor travels through. Otherwise use a short motion loop or keep the stills. Do not bolt a film onto a direction that is not about travel.
+How much of the page scrolls through film is a design decision for this site, not a default. Decide it from what visitors come to do and from references that use scroll-driven film well (search the library's motion facets and inspect their clips), then choose one scope:
 
-Before rendering, price the plan with `media quote` and confirm it with one `AskUserQuestion` carrying totals that fit the remaining cap: for example "Walkthrough film, 5 scenes, about 390 credits (Recommended)", "Aerial fly-through, about 700", "Stills with light motion, about 40", "No film". Include whether to render a native phone cut, which roughly doubles the video cost.
+| Scope | Suits | Shape |
+| --- | --- | --- |
+| Hero film | Most sites: the world makes a strong opening, but visitors come to scan services, prices or hours, or to enquire | One scene, or two joined by a connector, pinned for one to two viewport heights, then the page scrolls normally. The primary action is visible in the opening and again when the film releases. |
+| Chapter film | A site where one part of the story is a journey (how it is made, the process, the place) and the rest is ordinary content | Two to four scenes mounted on that section alone, with ordinary sections before and after. |
+| Full-page journey | A site that is the journey: a launch, a campaign, an experiential brand, a product story that fits four to seven beats | The whole narrative, with navigation and the primary action reachable throughout, never only at the end. |
+| No film | A direction whose idea is not movement | A short motion loop, or the stills. |
+
+Scope sets the cost, so it goes in the priced plan below. Never trap content or the primary action behind the film: every scope keeps navigation, the key facts and the action reachable without scrolling the whole film.
+
+Before rendering, price the plan with `media quote` and confirm it with one `AskUserQuestion` carrying totals that fit the remaining cap, with your recommended scope first and its reason: for example "Hero film, one dive, about 96 credits (Recommended)", "Chapter film on the process section, 3 scenes, about 400", "Full-page journey, 5 scenes, about 700", "Stills with light motion, about 40". Include whether to render a native phone cut, which roughly doubles the video cost.
 
 The method below is adapted from [scroll-world](https://github.com/oso95/scroll-world) (MIT).
 

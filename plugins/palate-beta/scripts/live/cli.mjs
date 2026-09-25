@@ -6,12 +6,13 @@ import { spawnSync } from 'node:child_process';
 import { SCHEMA, RUNTIME_VERSION, MARKER, sha256, stable, json, fail, noSymlinks, confined, listFiles, atomicJson, resolveProject, readState, validateState, fingerprint, buildFingerprint, readStatus, acquireLock } from './project.mjs';
 import { allowedArtefact, emptyTarget, stagingDirectory, activate, createCheckpoint, restoreCheckpoint, discardStaging } from './checkpoint.mjs';
 import { detect, readBudget, summary, consent, quote, generate, record } from './media.mjs';
+import { checkSystem } from './system.mjs';
 
 const runtimeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 function options(args) {
   const parsed = { command: args.shift() || 'status' };
   if (parsed.command === '--help') return { command: 'help' };
-  if (['checkpoint', 'media'].includes(parsed.command)) parsed.action = args.shift();
+  if (['checkpoint', 'media', 'system'].includes(parsed.command)) parsed.action = args.shift();
   while (args.length) {
     const flag = args.shift();
     if (!['--project', '--input', '--expect', '--op', '--id', '--into', '--check', '--help'].includes(flag)) fail(`Unknown argument: ${flag}`);
@@ -162,12 +163,13 @@ async function initialise(args, input, digest) {
 function runVerification(project, state, input) {
   if (!state.selection) fail('Select a direction before verifying the full site.');
   if (!Array.isArray(input.commands) || !Array.isArray(input.reviews || []) || !Array.isArray(input.required || [])) fail('Verification needs commands, optional reviews and required scopes.');
-  const required = [...new Set(['check', 'build', 'browser', ...(input.required || [])])];
+  const required = [...new Set(['check', 'build', 'browser', 'system', ...(input.required || [])])];
   const before = fingerprint(project);
   const checks = [];
   for (const command of input.commands) {
     if (!command.scope || !Array.isArray(command.argv) || !command.argv.length || command.argv.some(value => typeof value !== 'string')) fail('Each executed check needs scope and an argv string array.');
     if (['check', 'build'].includes(command.scope) && stable(command.argv) !== stable(['npm', 'run', command.scope])) fail(`The ${command.scope} scope must execute npm run ${command.scope}; arbitrary commands cannot claim that scope.`);
+    if (command.scope === 'system' && stable(command.argv) !== stable(['node', 'scripts/palate.mjs', 'system', 'check'])) fail('The system scope must execute node scripts/palate.mjs system check.');
     const result = spawnSync(command.argv[0], command.argv.slice(1), { cwd: project, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 10 * 60 * 1000, shell: false });
     const report = `.palate/verification/${crypto.randomUUID()}.json`; fs.mkdirSync(path.dirname(confined(project, report)), { recursive: true });
     atomicJson(confined(project, report), { argv: command.argv, status: result.status, signal: result.signal, error: result.error?.message || null, stdout: result.stdout || '', stderr: result.stderr || '' });
@@ -198,6 +200,7 @@ async function media(args, input) {
 export async function execute(args) {
   const input = args.input ? json(noSymlinks(path.resolve(args.input))) : {};
   if (args.command === 'media') return media(args, input);
+  if (args.command === 'system') { if (args.action !== 'check') fail('Use system check.'); return checkSystem(resolveProject(args.project)); }
   if (args.command === 'status') return { ok: true, ...readStatus(resolveProject(args.project)) };
   if (args.command === 'verify' && args.check) {
     const status = readStatus(resolveProject(args.project));
@@ -277,8 +280,9 @@ select input: {"optionId":"a"}
 Combine: {"optionId":"a","combine":["b"],"instructions":"Explicit chosen mechanisms"}. Recompose and reopen the chosen direction before verification.
 
 verify input:
-{"commands":[{"scope":"check","argv":["npm","run","check"]},{"scope":"build","argv":["npm","run","build"]}],"reviews":[{"scope":"browser","path":".palate/evidence/browser.json","result":"passed"}],"required":["browser"]}
-Executed commands and supplied reviews remain separate. check, build and browser are always required; independent release testing lives outside this runtime.
+{"commands":[{"scope":"check","argv":["npm","run","check"]},{"scope":"build","argv":["npm","run","build"]},{"scope":"system","argv":["node","scripts/palate.mjs","system","check"]}],"reviews":[{"scope":"browser","path":".palate/evidence/browser.json","result":"passed"}],"required":["browser"]}
+Executed commands and supplied reviews remain separate. check, build, system and browser are always required; independent release testing lives outside this runtime.
+node scripts/palate.mjs system check    type and colour from src/styles/system.css only, after a direction is chosen (references/site-system.md)
 node scripts/palate.mjs verify --check is read-only and refuses stale source/build evidence.
 
 node scripts/palate.mjs checkpoint create --expect REV --op ID
@@ -298,6 +302,6 @@ node scripts/palate.mjs media record --input FILE --op ID      {"model":"...","c
 node scripts/palate.mjs media status
 `); return; }
     const result = await execute(args); process.stdout.write(`${JSON.stringify(result)}\n`);
-    if (result.verification?.result === 'failed') process.exitCode = 1;
+    if (result.verification?.result === 'failed' || result.ok === false) process.exitCode = 1;
   } catch (error) { process.stderr.write(`${JSON.stringify({ ok: false, code: error.code || 'ERROR', message: error.message })}\n`); process.exitCode = 1; }
 }

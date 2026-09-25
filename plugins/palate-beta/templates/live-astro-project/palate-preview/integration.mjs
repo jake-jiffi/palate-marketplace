@@ -9,6 +9,7 @@ export default function liveDesignPreview() {
         development = command === 'dev';
         if (!development) return;
         injectRoute({ pattern: '/_palate', entrypoint: fileURLToPath(new URL('./gallery.astro', import.meta.url)), prerender: false });
+        injectRoute({ pattern: '/_palate/style-guide', entrypoint: fileURLToPath(new URL('./style-guide.astro', import.meta.url)), prerender: false });
         injectRoute({ pattern: '/_palate/directions/[id]', entrypoint: fileURLToPath(new URL('./direction.astro', import.meta.url)), prerender: false });
       },
       'astro:server:setup': async ({ server }) => {

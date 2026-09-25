@@ -1,0 +1,78 @@
+---
+// Renders the site system straight from src/styles/system.css (and src/styles/system/**), so the
+// style guide cannot fall behind it: a token or class added to the system appears here on reload.
+// The site's own components go in the default slot, from src/style-guide/index.astro.
+const files = import.meta.glob(['/src/styles/system.css', '/src/styles/system/**/*.css'], { query: '?raw', import: 'default', eager: true });
+const raw = Object.values(files).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
+const tokens = new Map();
+for (const match of raw.matchAll(/(--[\w-]+)\s*:\s*([^;}]+)/g)) if (!tokens.has(match[1])) tokens.set(match[1], match[2].trim());
+const classes = [...new Set([...raw.matchAll(/\.((?:heading-style|text-size|text-weight|text-style|text-color|background-color|container|padding-section|button)[\w-]*)/g)].map(match => match[1]))];
+const pick = (pattern: RegExp) => classes.filter(name => pattern.test(name));
+const colours = [...tokens].filter(([name, value]) => /colou?r/i.test(name) || /^(?:#|rgb|hsl|oklch|oklab|lab|lch|color\()/i.test(value));
+const spaces = [...tokens].filter(([name]) => /space|padding|gap|margin|gutter/i.test(name));
+const type = [...tokens].filter(([name]) => /font|heading|text-size|line-height|letter|weight/i.test(name));
+const sample = 'Every page reads from one system, so titles and spacing agree';
+const missing = !Object.keys(files).length;
+---
+<div class="palate-sg">
+  <p class="palate-sg__note">Style guide, local preview only. Generated from src/styles/system.css; change the system there and this page follows. Not published.</p>
+  {missing && <p class="palate-sg__note">No src/styles/system.css yet. Codify the chosen direction first (references/site-system.md).</p>}
+
+  <section><p class="palate-sg__label">Heading tags, their default size</p>
+    <h1>Heading 1: {sample}</h1><h2>Heading 2: {sample}</h2><h3>Heading 3: {sample}</h3>
+    <h4>Heading 4: {sample}</h4><h5>Heading 5: {sample}</h5><h6>Heading 6: {sample}</h6>
+  </section>
+
+  {pick(/^heading-style/).length > 0 && <section><p class="palate-sg__label">Heading styles (a class, independent of the tag)</p>
+    {pick(/^heading-style/).map(name => <div class="palate-sg__row"><code>.{name}</code><p class={name}>{sample}</p></div>)}
+  </section>}
+
+  {pick(/^text-(?:size|weight|style|color)/).length > 0 && <section><p class="palate-sg__label">Text</p>
+    <div class="palate-sg__row"><code>p (default)</code><p>{sample}.</p></div>
+    {pick(/^text-(?:size|weight|style|color)/).map(name => <div class="palate-sg__row"><code>.{name}</code><p class={name}>{sample}.</p></div>)}
+  </section>}
+
+  {colours.length > 0 && <section><p class="palate-sg__label">Colour</p>
+    <div class="palate-sg__swatches">{colours.map(([name, value]) => <div class="palate-sg__swatch"><span style={`background: var(${name})`}></span><code>{name}</code><code>{value}</code></div>)}</div>
+  </section>}
+
+  {pick(/^background-color/).length > 0 && <section><p class="palate-sg__label">Backgrounds</p>
+    {pick(/^background-color/).map(name => <div class={`palate-sg__panel ${name}`}><code>.{name}</code><p>{sample}.</p></div>)}
+  </section>}
+
+  {spaces.length > 0 && <section><p class="palate-sg__label">Spacing</p>
+    {spaces.map(([name, value]) => <div class="palate-sg__row"><code>{name}: {value}</code><span class="palate-sg__bar" style={`width: var(${name})`}></span></div>)}
+  </section>}
+
+  {pick(/^(?:container|padding-section)/).length > 0 && <section><p class="palate-sg__label">Structure: page gutter, content width, section spacing</p>
+    {pick(/^container/).map(name => <div class="padding-global"><div class={`${name} palate-sg__outline`}><code>.padding-global &gt; .{name}</code></div></div>)}
+    {pick(/^padding-section/).map(name => <div class={`${name} palate-sg__band`}><code>.{name}</code></div>)}
+  </section>}
+
+  {pick(/^button/).length > 0 && <section><p class="palate-sg__label">Buttons</p>
+    <div class="palate-sg__buttons">{pick(/^button/).map(name => <a href="#" class={name}>{name}</a>)}</div>
+  </section>}
+
+  {type.length > 0 && <section><p class="palate-sg__label">Type tokens</p>
+    {type.map(([name, value]) => <div class="palate-sg__row"><code>{name}</code><code>{value}</code></div>)}
+  </section>}
+
+  <section><p class="palate-sg__label">Site components</p><slot /></section>
+</div>
+<style>
+  .palate-sg { display: grid; gap: 4rem; padding: 3rem clamp(1rem, 4vw, 3rem) 6rem; }
+  .palate-sg > section { display: grid; gap: 1.25rem; }
+  .palate-sg__label, .palate-sg__note, .palate-sg code { font: 500 0.75rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; text-transform: none; }
+  .palate-sg__label { border-top: 1px solid currentColor; padding-top: 0.5rem; opacity: 0.7; }
+  .palate-sg__note { opacity: 0.7; }
+  .palate-sg__row { display: grid; grid-template-columns: minmax(10rem, 16rem) 1fr; gap: 1.5rem; align-items: baseline; }
+  .palate-sg__swatches { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .palate-sg__swatch { display: grid; gap: 0.25rem; width: 9rem; }
+  .palate-sg__swatch span { display: block; height: 4rem; border: 1px solid rgb(128 128 128 / 0.35); }
+  .palate-sg__bar { display: block; height: 0.75rem; background: rgb(128 128 128 / 0.45); }
+  .palate-sg__outline { outline: 1px dashed rgb(128 128 128 / 0.7); padding-block: 0.75rem; }
+  .palate-sg__band { outline: 1px dashed rgb(128 128 128 / 0.7); background: rgb(128 128 128 / 0.08); }
+  .palate-sg__panel { padding: 1.5rem; }
+  .palate-sg__buttons { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+  @media (max-width: 40rem) { .palate-sg__row { grid-template-columns: 1fr; gap: 0.25rem; } }
+</style>

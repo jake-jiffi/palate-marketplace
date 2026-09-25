@@ -157,8 +157,9 @@ test('verification distinguishes executed commands from reviews and expires afte
   pkg.scripts.check = 'node -e "process.exit(0)"'; pkg.scripts.build = `node -e "require('fs').mkdirSync('dist',{recursive:true});require('fs').writeFileSync('dist/index.html','built')"`;
   write(project, 'package.json', pkg); await ready(project);
   write(project, '.palate/evidence/browser.json', { cases: [{ name: 'enquiry journey', result: 'passed' }] });
-  const input = { commands: [{ scope: 'check', argv: ['npm', 'run', 'check'] }, { scope: 'build', argv: ['npm', 'run', 'build'] }], reviews: [{ scope: 'browser', path: '.palate/evidence/browser.json', result: 'passed' }] };
-  const verification = await mutate(project, 'verify', input); assert.equal(verification.verification.result, 'passed'); assert.deepEqual(verification.verification.checks.map(check => check.kind), ['executed-command', 'executed-command', 'supplied-review']);
+  write(project, 'src/styles/system.css', 'h1{font-size:var(--h1)}h2{font-size:var(--h2)}h3{font-size:var(--h3)}h4{font-size:var(--h4)}h5{font-size:var(--h5)}h6{font-size:var(--h6)}.padding-global{}.container-large{}.padding-section-large{}.heading-style-h1{}.heading-style-h2{}.heading-style-h3{}.heading-style-h4{}.heading-style-h5{}.heading-style-h6{}.text-size-regular{}'); await ready(project);
+  const input = { commands: [{ scope: 'check', argv: ['npm', 'run', 'check'] }, { scope: 'build', argv: ['npm', 'run', 'build'] }, { scope: 'system', argv: ['node', 'scripts/palate.mjs', 'system', 'check'] }], reviews: [{ scope: 'browser', path: '.palate/evidence/browser.json', result: 'passed' }] };
+  const verification = await mutate(project, 'verify', input); assert.equal(verification.verification.result, 'passed'); assert.deepEqual(verification.verification.checks.map(check => check.kind), ['executed-command', 'executed-command', 'executed-command', 'supplied-review']);
   assert.equal((await execute({ command: 'verify', project, check: true })).verified, true);
   write(project, '.palate/evidence/browser.json', { changed: true }); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/); await mutate(project, 'verify', input);
   write(project, 'dist/index.html', 'different build'); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/);
