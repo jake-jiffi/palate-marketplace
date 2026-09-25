@@ -17,7 +17,7 @@
     },
     {
       "name": "palate-beta",
-      "version": "1.18.0-beta.4",
+      "version": "1.18.0-beta.5",
       "source": "./plugins/palate-beta",
       "description": "Opt-in tester beta, expected to have bugs. Live Astro design options with real MCP references, interactive motion and optional Shopify commerce. Design speed, visual consistency and complete end-to-end workflows are not yet validated. Use disposable projects, not client production work. Install one Palate plugin at a time. See BETA-TESTING.md."
     }

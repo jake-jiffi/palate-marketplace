@@ -11,3 +11,5 @@ dist/
 .palate/checkpoints/
 .palate/submissions/
 .palate/cart/
+.palate/media/raw/
+.palate/media/work/

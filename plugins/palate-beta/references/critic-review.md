@@ -49,7 +49,7 @@ Follow [live-build.md's reference inspection guidance](live-build.md#use-referen
 
 ## Inspect and score
 
-Judge art direction, originality, typography, composition, imagery, motion, content and the complete visitor experience within the stated scope. Explain a shortfall through the actual page or state and a named reference, not a generic instruction to make it premium. Judge the outcome even when it contradicts your previous recommendation. Supplied brand choices and purposeful labels are not defects simply because they are common.
+Judge art direction, originality, typography, composition, imagery, motion, content and the complete visitor experience within the stated scope. Explain a shortfall through the actual page or state and a named reference, not a generic instruction to make it premium. Judge the outcome even when it contradicts your previous recommendation. Supplied brand choices and purposeful labels are not defects simply because they are common. A site without generated media is not missing anything. Judge generated media like any imagery, and as a critical defect when it passes for the client's real premises, people, products or results.
 
 Use the website directly. Capture relevant pages and states at desktop and phone sizes. Exercise core journeys, validation, loading, empty, success, error and recovery states, plus offline, permission and saved-data-after-refresh behaviour **where applicable**. Check navigation, keyboard access, focus, contrast and responsive behaviour. Use test accounts and local/test destinations; never send a real customer enquiry, make a purchase or expose credentials in reports. Respect existing permissions and deployment boundaries.
 

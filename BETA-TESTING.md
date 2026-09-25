@@ -1,6 +1,6 @@
-# Palate 1.18.0-beta.4, tester release
+# Palate 1.18.0-beta.5, tester release
 
-This is an opt-in release for a small tester group, published on 14 September 2026. Features are frozen so we can collect feedback from real use. The production plugin remains at 1.16.0.
+This is an opt-in release for a small tester group, published on 25 September 2026. Features are frozen so we can collect feedback from real use. The production plugin remains at 1.16.0.
 
 The beta introduces working Astro design options, motion as part of the ordinary design experience, and reference research through the Palate MCP. You can start with an existing website, brand material, a written brief, or no material and a short intake conversation. Shopify is an optional path for appropriate ecommerce projects, especially existing Shopify stores.
 
@@ -9,6 +9,8 @@ Beta.3 adds an independent website critic and a separate builder, with review af
 The review instructions require direct browser inspection and comparison with Palate references. Motion needs evidence of visible changes during interaction or scrolling. Missing evidence must be reported as unverified. These are instructions for the host agent, not a guarantee that every run will follow them correctly.
 
 Beta.4 fixes reference lookup when Codex converts the jury command into a skill. Local checks cover the original command and generated wrapper paths. The critic process itself is unchanged from beta.3.
+
+Beta.5 adds optional generated media through Higgsfield. When the Higgsfield CLI or MCP is installed, Palate asks once per site whether it may use it and how much it may spend (300 credits recommended, 800 for a full scroll film, 100 for images only, or no), holds that cap to half your live balance, and uses generated stills in design options and video, including scroll-through films, only for the chosen direction. Which model serves each job comes from a table in the package, not from the conversation. Generated media is illustrative and is never presented as a business's real premises, people or products. Without Higgsfield nothing changes and nothing is mentioned. The media path was tested against a real Higgsfield account: stills, video, a three-scene scroll film in a live preview, spend matching the account exactly, and recovery of an interrupted job without a second charge. It has not been tested in a complete website build.
 
 ## Known limitations
 
@@ -53,7 +55,7 @@ codex plugin marketplace add https://github.com/jake-jiffi/palate-marketplace.gi
 codex plugin add palate-beta@palate
 ```
 
-If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.4`.
+If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.5`.
 
 Use your existing Palate MCP connection, or follow its authentication prompt. Start the builder with `/palate-beta:palate-website-builder` in Claude or `$palate-beta:palate-website-builder` in Codex. Provide the website or brand material you have and describe what visitors should be able to do.
 

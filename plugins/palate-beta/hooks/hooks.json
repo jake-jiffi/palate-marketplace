@@ -20,6 +20,19 @@
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-pretooluse.mjs\"" }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "if": "Bash(higgsfield *)", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-media-guard.mjs\"" },
+          { "type": "command", "if": "Bash(higgs *)", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-media-guard.mjs\"" }
+        ]
+      },
+      {
+        "matcher": "mcp__.*higgsfield.*",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/palate-media-guard.mjs\"" }
+        ]
       }
     ],
     "Stop": [

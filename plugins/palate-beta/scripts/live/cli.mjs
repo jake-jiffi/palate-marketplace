@@ -5,12 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { SCHEMA, RUNTIME_VERSION, MARKER, sha256, stable, json, fail, noSymlinks, confined, listFiles, atomicJson, resolveProject, readState, validateState, fingerprint, buildFingerprint, readStatus, acquireLock } from './project.mjs';
 import { allowedArtefact, emptyTarget, stagingDirectory, activate, createCheckpoint, restoreCheckpoint, discardStaging } from './checkpoint.mjs';
+import { detect, readBudget, summary, consent, quote, generate, record } from './media.mjs';
 
 const runtimeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 function options(args) {
   const parsed = { command: args.shift() || 'status' };
   if (parsed.command === '--help') return { command: 'help' };
-  if (parsed.command === 'checkpoint') parsed.action = args.shift();
+  if (['checkpoint', 'media'].includes(parsed.command)) parsed.action = args.shift();
   while (args.length) {
     const flag = args.shift();
     if (!['--project', '--input', '--expect', '--op', '--id', '--into', '--check', '--help'].includes(flag)) fail(`Unknown argument: ${flag}`);
@@ -181,8 +182,22 @@ function runVerification(project, state, input) {
   const passed = before === source && build && status.validity.selectionCurrent && ['check', 'build'].every(scope => checks.some(check => check.scope === scope && check.kind === 'executed-command' && check.result === 'passed')) && required.every(scope => checks.some(check => check.scope === scope && check.result === 'passed')) && checks.every(check => check.result === 'passed');
   return { id: crypto.randomUUID(), at: new Date().toISOString(), decisionId: state.selection.decisionId, scope: input.scope || 'full-site', required, checks, sourceFingerprint: source, buildFingerprint: build, result: passed ? 'passed' : 'failed', sourceChangedDuringChecks: before !== source };
 }
+async function media(args, input) {
+  if (args.action === 'detect') {
+    let project = null; try { project = resolveProject(args.project); } catch {}
+    return detect(project);
+  }
+  const project = resolveProject(args.project);
+  if (args.action === 'status') return { ok: true, ...summary(readBudget(project)) };
+  if (args.action === 'consent') return consent(project, input, args.op);
+  if (args.action === 'quote') return quote(project, input);
+  if (args.action === 'generate') return generate(project, input, args.op);
+  if (args.action === 'record') return record(project, input, args.op);
+  fail('Use media detect, status, consent, quote, generate or record.');
+}
 export async function execute(args) {
   const input = args.input ? json(noSymlinks(path.resolve(args.input))) : {};
+  if (args.command === 'media') return media(args, input);
   if (args.command === 'status') return { ok: true, ...readStatus(resolveProject(args.project)) };
   if (args.command === 'verify' && args.check) {
     const status = readStatus(resolveProject(args.project));
@@ -271,6 +286,16 @@ node scripts/palate.mjs checkpoint restore --id HASH --into /absolute/empty-targ
 Restore preserves the original project and records its receipt in the new target. The restored preview and build need fresh verification.
 node scripts/palate.mjs checkpoint discard-staging --into /absolute/owned-staging --expect REV --op ID
 Only staging whose recorded process identity is proven gone can be removed.
+
+Optional generated media (Higgsfield), see references/generated-media.md:
+node scripts/palate.mjs media detect            read-only; reports nothing to the person when unavailable
+node scripts/palate.mjs media consent --input FILE --op ID    {"decision":"cap-300"}: cap-300, cap-800, images-100 or declined
+node scripts/palate.mjs media quote --input FILE              free: which model a need routes to, and its price
+node scripts/palate.mjs media generate --input FILE --op ID
+  {"need":"still","args":["--prompt","...","--aspect_ratio","16:9"],"purpose":"Opening scene","direction":"a","dest":"src/directions/a/media/opening.png"}
+  Needs and their models: scripts/live/media-models.json. Later film legs add "chain":"<first leg op>".
+node scripts/palate.mjs media record --input FILE --op ID      {"model":"...","credits":15,"purpose":"...","file":"src/..."}
+node scripts/palate.mjs media status
 `); return; }
     const result = await execute(args); process.stdout.write(`${JSON.stringify(result)}\n`);
     if (result.verification?.result === 'failed') process.exitCode = 1;
