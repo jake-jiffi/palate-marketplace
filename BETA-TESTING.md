@@ -1,4 +1,4 @@
-# Palate 1.18.0-beta.7, tester release
+# Palate 1.18.0-beta.8, tester release
 
 This is an opt-in release for a small tester group, published on 25 September 2026. Features are frozen so we can collect feedback from real use. The production plugin remains at 1.16.0.
 
@@ -15,6 +15,8 @@ Beta.5 adds optional generated media through Higgsfield. When the Higgsfield CLI
 Beta.6 builds every site on one design system. Once you choose a direction, Palate codifies it into a single system file (type scale, colours, page structure and heading styles independent of heading tags, following Finsweet's Client-First structure with values from your chosen design), keeps a hidden style guide in the local preview at `/_palate/style-guide` that updates whenever the system changes, and checks that no page sets its own type sizes or colours. A deliberate one-off stays, with a written reason. Scroll films can now cover just the opening, one section or the whole page, chosen for what the site's visitors need. The check was run against real builds; it has not yet been used in a complete new build.
 
 Beta.7 makes clear that a scroll film is never a default. Agreeing to a Higgsfield budget is not a request for a film: one is planned only when the chosen direction calls for it, and the film plan always offers "No film".
+
+Beta.8 changes nothing in the builder. Its install instructions now use terminal commands (`claude plugin ...`), because the `/plugin` chat commands open the plugin browser instead of installing when typed into the desktop app.
 
 
 
@@ -33,26 +35,25 @@ Use a disposable local project and keep backups. Review generated code and conte
 
 Install only one Palate plugin at a time. Remove the production plugin or any local candidate installation before installing this beta. Leave unrelated plugins alone.
 
-In Claude Code, add the marketplace if it is not already configured:
+In your terminal (these work for Claude Code in the terminal, an IDE or the desktop app; the `/plugin` chat commands only run in the terminal version), add the marketplace if it is not already configured:
 
-```text
-/plugin marketplace add jake-jiffi/palate-marketplace
+```sh
+claude plugin marketplace add jake-jiffi/palate-marketplace
 ```
 
 For an existing marketplace, refresh it:
 
-```text
-/plugin marketplace update palate
+```sh
+claude plugin marketplace update palate
 ```
 
-Then install and reload:
+Then install:
 
-```text
-/plugin install palate-beta@palate
-/reload-plugins
+```sh
+claude plugin install palate-beta@palate
 ```
 
-If `palate-beta@palate` is already installed, use `/plugin update palate-beta@palate` after refreshing the marketplace, then reload.
+If `palate-beta@palate` is already installed, run `claude plugin update palate-beta@palate` after refreshing the marketplace. Either way, fully quit and reopen Claude Code (in the desktop app, start a new session) so the plugin loads.
 
 In Codex, add the marketplace if needed, then install:
 
@@ -61,7 +62,7 @@ codex plugin marketplace add https://github.com/jake-jiffi/palate-marketplace.gi
 codex plugin add palate-beta@palate
 ```
 
-If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.7`.
+If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.8`.
 
 Use your existing Palate MCP connection, or follow its authentication prompt. Start the builder with `/palate-beta:palate-website-builder` in Claude or `$palate-beta:palate-website-builder` in Codex. Provide the website or brand material you have and describe what visitors should be able to do.
 

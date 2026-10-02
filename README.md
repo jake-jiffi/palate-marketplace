@@ -5,15 +5,17 @@ website builders.
 
 ## Install (Claude Code)
 
-Run these as two separate commands (slash commands run one at a time, so enter the first, wait, then the second):
+Run these in your terminal, one at a time. They work the same whether you use Claude Code in the
+terminal, an IDE or the desktop app. (The `/plugin` chat commands only run in the terminal version of
+Claude Code; typed into the desktop app they open the plugin browser instead.)
 
-```
-/plugin marketplace add jake-jiffi/palate-marketplace
+```bash
+claude plugin marketplace add jake-jiffi/palate-marketplace
+claude plugin install palate-website-builder@palate
 ```
 
-```
-/plugin install palate-website-builder@palate
-```
+Signed in at [app.palatemcp.com](https://app.palatemcp.com)? The dashboard gives you all of this as one
+prompt with your token in it: paste it into Claude Code and it runs every command itself.
 
 > **If the install fails with "Host key verification failed" / "No ED25519 host key is known for github.com":**
 > this is a known Claude Code installer issue ([anthropics/claude-code#50725](https://github.com/anthropics/claude-code/issues/50725));
@@ -26,10 +28,14 @@ Run these as two separate commands (slash commands run one at a time, so enter t
 >
 > then run the install command again. Updating Claude Code (`claude update`) also helps on recent versions.
 
-After installing, run `/reload-plugins` (or restart Claude Code) so the website-builder skill loads. A
-freshly installed plugin is not active until you do.
+Then connect the Palate MCP, in the same terminal. With a token from
+[app.palatemcp.com](https://app.palatemcp.com) it connects with no sign-in step:
 
-Then connect the Palate MCP. Easiest is to sign in with your browser, no token:
+```bash
+claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp --header "Authorization: Bearer plt_live_xxx"
+```
+
+Or sign in with your browser instead, no token:
 
 ```bash
 claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp
@@ -39,10 +45,11 @@ claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/ap
 it the connection only exists where you ran the command, so the skill (which builds client sites in
 fresh directories) loses the Palate tools. Adding the server does not open the browser by itself: it
 shows `! Needs authentication`, so finish in Claude Code by running `/mcp`, selecting `palate`,
-choosing **Authenticate**, and clicking **Allow**. Prefer a token (CI, or other clients)? Create one at
-[app.palatemcp.com](https://app.palatemcp.com) and add `--header "Authorization: Bearer plt_live_xxx"`
-(it connects with no sign-in step). Run `/mcp` to confirm `palate` is connected; update later with
-`/plugin marketplace update palate`, then restart Claude Code so the refreshed plugin loads.
+choosing **Authenticate**, and clicking **Allow**.
+
+Finally, fully quit and reopen Claude Code (in the desktop app, start a new session): the plugin and the
+connection only load at start. Run `/mcp` to confirm `palate` is connected. Update later with
+`claude plugin marketplace update palate`, then restart Claude Code so the refreshed plugin loads.
 
 ## What you get
 

@@ -22,10 +22,13 @@ There are two plugins in this marketplace and exactly one source repo.
 | `palate-website-builder` | customers, including paying ones | skill repo `main` | a deliberate promotion, never otherwise |
 | `palate-beta` | testers who opted in | skill repo `beta` | any time; it is expected to have bugs |
 
-**The customer install path never changes.** `/plugin marketplace add
-jake-jiffi/palate-marketplace` then `/plugin install
-palate-website-builder@palate`. Beta is the same marketplace and a different
-plugin: `/plugin install palate-beta@palate`.
+**The customer install path never changes.** `claude plugin marketplace add
+jake-jiffi/palate-marketplace` then `claude plugin install
+palate-website-builder@palate`, in a terminal. Beta is the same marketplace and
+a different plugin: `claude plugin install palate-beta@palate`. Every surface
+gives the terminal commands, never the `/plugin` chat commands: typed into the
+desktop app's chat box those open the plugin browser instead of running (a real
+tester, 2026-10-02).
 
 ### Hard rules
 
@@ -71,7 +74,7 @@ Only when the beta track has been used in earnest and you are satisfied.
    to a customer asking what they are running, and it has drifted four times.
    Step 5 fails if you skip this, which is the point of it existing.
 5. `./scripts/check-tracks.sh`, then commit and push.
-6. Customers get it with `/plugin marketplace update palate`. **No reinstall,
+6. Customers get it with `claude plugin marketplace update palate`. **No reinstall,
    and no change to any documented command**, which is the whole reason beta is
    a separate plugin rather than a rename.
 
@@ -83,15 +86,15 @@ Only when the beta track has been used in earnest and you are satisfied.
    main into `plugins/palate-website-builder`).
 3. Bump the two versions in `.claude-plugin/marketplace.json`
    (`metadata.version` and `plugins[0].version`) to match.
-4. Commit and push. Users get it with `/plugin marketplace update palate`
-   then a Claude Code restart (`/reload-plugins` also works).
+4. Commit and push. Users get it with `claude plugin marketplace update palate`
+   then a Claude Code restart.
 
 ## Rules
 
 - Never point `plugins[0].source` back at a git repo/URL: that reintroduces
   the SSH install failure for most users.
 - Relative sources require users to add the marketplace as a git source
-  (`/plugin marketplace add jake-jiffi/palate-marketplace`), which every
+  (`claude plugin marketplace add jake-jiffi/palate-marketplace`), which every
   Palate surface instructs. Never distribute a bare `marketplace.json` URL:
   relative paths do not resolve from URL-added marketplaces.
 - The vendored copy is generated: never hand-edit `plugins/`; fix things in

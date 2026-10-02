@@ -50,14 +50,13 @@ it says so rather than reporting a pass. Details in `INSTALL.md`.
 ## Install
 
 Palate is a Claude Code plugin (it bundles the skill, the agents, and the MCP-depth enforcement
-hooks). In Claude Code, run these as two separate commands (slash commands run one at a time):
+hooks). In your terminal, one at a time (these work for Claude Code in the terminal, an IDE or the
+desktop app; the `/plugin` chat commands only run in the terminal version):
+```bash
+claude plugin marketplace add jake-jiffi/palate-marketplace
+claude plugin install palate-website-builder@palate
 ```
-/plugin marketplace add jake-jiffi/palate-marketplace
-```
-```
-/plugin install palate-website-builder@palate
-```
-Then connect the Palate MCP. Two equal paths (always with `--scope user`, so the connector exists in
+Then connect the Palate MCP, in the same terminal. Two equal paths (always with `--scope user`, so the connector exists in
 every directory the skill builds in, not just the current one). Static token (deterministic, one
 header, works in CLI / IDE / Desktop / CI), token from https://app.palatemcp.com:
 ```bash
@@ -67,7 +66,8 @@ Or OAuth (no-copy convenience, browser sign-in):
 ```bash
 claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp
 ```
-Claude Code opens your browser to sign in and click Allow. Full steps, updating, and the
+Restart Claude Code so the plugin loads. With the token, Palate is connected; without it, run `/mcp`,
+choose `palate`, then Authenticate, and click Allow in the browser. Full steps, updating, and the
 legacy/manual path: see `INSTALL.md`.
 
 ## Layout
