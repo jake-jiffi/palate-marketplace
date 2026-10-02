@@ -19,19 +19,19 @@ On Windows, run Claude Code inside **WSL** or **Git Bash** and you get all of it
 
 Palate ships as a Claude Code plugin that bundles the skill, the survey/verify agents, and the
 MCP-depth enforcement hooks. You install the plugin, then connect the Palate MCP with one command.
-Two short steps, no environment variables to manage.
+Everything runs in your terminal, no environment variables to manage. (Signed in at
+app.palatemcp.com, the dashboard gives you all of this as one prompt with your token in it: paste it
+into Claude Code and it runs the commands itself.)
 
-1. In Claude Code, add the marketplace then install the plugin, as two separate commands
-   (slash commands run one at a time, so enter the first, wait, then the second):
+1. In your terminal, add the marketplace then install the plugin, one at a time:
+   ```bash
+   claude plugin marketplace add jake-jiffi/palate-marketplace
+   claude plugin install palate-website-builder@palate
    ```
-   /plugin marketplace add jake-jiffi/palate-marketplace
-   ```
-   ```
-   /plugin install palate-website-builder@palate
-   ```
-   Then run `/reload-plugins` (or restart Claude Code) so the website-builder skill loads. A freshly
-   installed plugin is not active until you do.
-2. Connect the Palate MCP. Two paths, pick one. Both add the connector once and store everything in
+   These work the same whether you use Claude Code in the terminal, an IDE or the desktop app. The
+   `/plugin` chat commands only run in the terminal version of Claude Code; typed into the desktop
+   app they open the plugin browser instead.
+2. Connect the Palate MCP, in the same terminal. Two paths, pick one. Both add the connector once and store everything in
    your Claude Code config (no environment variables).
 
    **Static token (deterministic, one header, works everywhere).** Get a token at
@@ -53,7 +53,9 @@ Two short steps, no environment variables to manage.
    scope, so `palate` only exists in the directory where you ran the command. The skill builds client
    sites in fresh directories, so a project-scoped server silently loses the `mcp__palate__*` tools
    there. Always use `--scope user`.
-3. Confirm: run `/mcp` (the `palate` server shows connected), or ask Claude to call `refs_list_verticals`.
+3. Fully quit and reopen Claude Code (in the desktop app, start a new session): the plugin and the
+   connection only load at start. Then confirm: run `/mcp` (the `palate` server shows connected), or
+   ask Claude to call `refs_list_verticals`.
 
 `brew install jq` once (the gate needs it) - see "One-time machine setup" below.
 
@@ -96,8 +98,8 @@ A website build calls the brand build in-process when the client has no brand pa
 
 ### Updating
 
-```
-/plugin marketplace update palate
+```bash
+claude plugin marketplace update palate
 ```
 Then restart Claude Code (or run `/mcp` and reconnect) so the new tools load. Until you do, you may
 see an `MCP server palate skipped` warning, especially when upgrading from an older bundled version.
@@ -106,9 +108,9 @@ installer.
 
 ### Uninstalling
 
-```
-/plugin uninstall palate-website-builder@palate
-claude mcp remove palate
+```bash
+claude plugin uninstall palate-website-builder@palate
+claude mcp remove palate --scope user
 ```
 Your cross-build memory at `~/.config/palate/builds.log.json` is left in place.
 

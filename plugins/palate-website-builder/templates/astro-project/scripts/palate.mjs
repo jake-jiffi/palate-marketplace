@@ -68,8 +68,8 @@ const root = pluginRoot();
 if (!root) {
   console.error(
     "palate: the Palate plugin was not found, so no gate ran. This is BLOCKED, not a pass.\n" +
-      "  Install it:  /plugin marketplace add jake-jiffi/palate-marketplace\n" +
-      "               /plugin install palate-website-builder@palate\n" +
+      "  Install it:  claude plugin marketplace add jake-jiffi/palate-marketplace\n" +
+      "               claude plugin install palate-website-builder@palate\n" +
       "  Or point at a checkout:  PALATE_PLUGIN_ROOT=/path/to/palate-website-builder",
   );
   process.exit(2);
@@ -93,7 +93,7 @@ if (!existsSync(target)) {
   console.error(
     `palate: ${gate} is not in the installed plugin at ${root}.\n` +
       "  It is probably older than this scaffold expects. Update it:\n" +
-      "  /plugin marketplace update palate   (then /reload-plugins)",
+      "  claude plugin marketplace update palate   (then restart Claude Code)",
   );
   process.exit(2);
 }

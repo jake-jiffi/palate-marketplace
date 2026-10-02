@@ -2,8 +2,33 @@
 
 What changed in the Palate website builder, and why it matters to a build you are about to run.
 
-Update with `/plugin marketplace update palate`, then `/reload-plugins`. No reinstall is needed
-and no documented command has ever changed.
+Update from a terminal with `claude plugin marketplace update palate`, then restart Claude Code.
+No reinstall is needed.
+
+## 1.16.1
+
+**Install and update from the terminal.** Typed into the Claude Code desktop app's chat box,
+`/plugin marketplace add ...` opens the plugin browser instead of installing, so a tester following
+our instructions installed nothing. The install guide and README now give the terminal commands,
+which work the same whether you use Claude Code in a terminal, an IDE or the desktop app:
+
+```bash
+claude plugin marketplace add jake-jiffi/palate-marketplace
+claude plugin install palate-website-builder@palate
+```
+
+then restart Claude Code. The scaffold's own messages say the same. Nothing about how a build runs
+has changed.
+
+## 1.16.0
+
+**A survey is no longer split across folders.** A build that changed into a subfolder wrote a
+second build record there, so the depth check reported no references surveyed on a build that had
+made over twenty library calls. The record is now found by looking up from wherever the build is.
+
+**The monthly limit message tells the truth.** When you run out of deep reads it now gives the real
+allowance and the date it resets, read from the library itself, and leads with the one-click
+upgrade link rather than a page that needs a sign-in.
 
 ## 1.15.0
 
