@@ -1,4 +1,4 @@
-# Palate 1.18.0-beta.8, tester release
+# Palate 1.18.0-beta.9, tester release
 
 This is an opt-in release for a small tester group, published on 25 September 2026. Features are frozen so we can collect feedback from real use. The production plugin remains at 1.16.0.
 
@@ -17,6 +17,8 @@ Beta.6 builds every site on one design system. Once you choose a direction, Pala
 Beta.7 makes clear that a scroll film is never a default. Agreeing to a Higgsfield budget is not a request for a film: one is planned only when the chosen direction calls for it, and the film plan always offers "No film".
 
 Beta.8 changes nothing in the builder. Its install instructions now use terminal commands (`claude plugin ...`), because the `/plugin` chat commands open the plugin browser instead of installing when typed into the desktop app.
+
+Beta.9 fixes two things found in a full test pass. New live projects shipped a lockfile with a high-severity advisory in `devalue`, a package Astro depends on; they now get the patched version. And the one-line status Palate prints when a session starts now names the right command for this beta (`/palate-beta:status`).
 
 
 
@@ -62,7 +64,7 @@ codex plugin marketplace add https://github.com/jake-jiffi/palate-marketplace.gi
 codex plugin add palate-beta@palate
 ```
 
-If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.8`.
+If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.9`.
 
 Use your existing Palate MCP connection, or follow its authentication prompt. Start the builder with `/palate-beta:palate-website-builder` in Claude or `$palate-beta:palate-website-builder` in Codex. Provide the website or brand material you have and describe what visitors should be able to do.
 

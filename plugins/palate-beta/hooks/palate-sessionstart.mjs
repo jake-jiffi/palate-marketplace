@@ -24,6 +24,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 // A source file newer than its baseline by less than this is checkout noise, not an edit. See
@@ -257,7 +258,7 @@ function main() {
   }
 
   if (!clauses.length) return;
-  const line = `Palate: ${clauses.slice(0, MAX_CLAUSES).join(" · ")}${red ? " · run /palate-website-builder:status" : ""}`;
+  const line = `Palate: ${clauses.slice(0, MAX_CLAUSES).join(" · ")}${red ? ` · run /${pluginName()}:status` : ""}`;
   process.stdout.write(line + "\n");
 }
 
@@ -270,3 +271,14 @@ if (process.env.PALATE_HOOK_TIMING === "1") {
   process.stderr.write(`palate-sessionstart: ${(Number(process.hrtime.bigint() - started) / 1e6).toFixed(2)}ms\n`);
 }
 process.exit(0);
+
+// Commands namespace by plugin name, and this file ships in more than one plugin (palate-beta
+// vendors it unchanged), so name the status command after the plugin that is running it.
+function pluginName() {
+  try {
+    const manifest = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json");
+    return JSON.parse(fs.readFileSync(manifest, "utf8")).name || "palate-website-builder";
+  } catch {
+    return "palate-website-builder";
+  }
+}
