@@ -753,7 +753,18 @@ function main() {
   if (initialiseLegacy()) return;
   const p = readStdin();
   if (!p) return;
-  if (handleLiveWorkflow(p, "PostToolUse")) return;
+  // A live project keeps its own records, but the monthly limit is the person's, not the
+  // project's: a refused deep read still stops the build and hands over the upgrade link.
+  const live = (extra) => {
+    if (!handleLiveWorkflow(p, "PostToolUse", extra)) return false;
+    if ((p.tool_name || "").startsWith("mcp__palate__")) {
+      const r = normaliseResult(p.tool_response ?? p.tool_output ?? p.toolResponse ?? null);
+      const q = detectQuota(r);
+      if (q) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(q, r) }) + "\n");
+    }
+    return true;
+  };
+  if (live()) return;
   const tool = p.tool_name || "";
   const input = p.tool_input || {};
   const result = normaliseResult(p.tool_response ?? p.tool_output ?? p.toolResponse ?? null);
@@ -763,7 +774,7 @@ function main() {
   // The file being written is the strongest hint available: a write into src/pages/index.astro
   // names its project even when the session cwd sits two levels above it.
   const ctx = resolveBuildContext(p.cwd || process.cwd(), { hint: written });
-  if (handleLiveWorkflow(p, "PostToolUse", [ctx.dir, ctx.manifest])) return;
+  if (live([ctx.dir, ctx.manifest])) return;
   // NEVER RECORD A BUILD INTO THE PLUGIN. This wrote five stray build-manifest.json files into
   // the skill repo, one of them recording 188 files_written across three unrelated
   // repositories, because the resolver fell back to whatever directory the session sat in.

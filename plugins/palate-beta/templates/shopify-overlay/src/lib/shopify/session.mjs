@@ -1,6 +1,9 @@
 import { randomBytes, createHash } from 'node:crypto';
 
 export const SESSION_SECONDS = 7 * 24 * 60 * 60;
+// A new session lives only until its cookie comes back. The first read slides it to SESSION_SECONDS,
+// so sessions created for a browser that refuses cookies expire within minutes.
+export const NEW_SESSION_SECONDS = 15 * 60;
 export const randomId = () => randomBytes(24).toString('hex');
 export const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -79,7 +82,7 @@ export class SessionStore {
     const sid = randomId();
     const state = { version: 1, generation: 0, revision: 0, country, currency, cartId: null,
       summary: null, discountCodes: [], needsAcknowledgement: false, pending: null, operations: {}, retired: [] };
-    await this.redis.set(this.key(sid), JSON.stringify(state), { NX: true, EX: SESSION_SECONDS });
+    await this.redis.set(this.key(sid), JSON.stringify(state), { NX: true, EX: NEW_SESSION_SECONDS });
     return { sid, state };
   }
   async transition(sid, action) {

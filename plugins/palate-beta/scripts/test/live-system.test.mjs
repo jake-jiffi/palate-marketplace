@@ -35,7 +35,7 @@ async function site(t, { select = true, system = SYSTEM } = {}) {
   await mutate(project, 'source', { productKind: 'service', platform: 'wordpress', routes: ['/'], journeys: ['enquiry'] });
   for (const id of ['a', 'b']) {
     write(project, `src/directions/${id}/index.astro`, `<h1>${id}</h1>`);
-    await mutate(project, 'option', { id, status: 'ready', label: id, previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
+    await mutate(project, 'option', { id, status: 'ready', referenceDecisions: [{ slug: 'aesop' }], label: id, previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
   }
   if (select) await mutate(project, 'select', { optionId: 'a' });
   if (system !== null) write(project, 'src/styles/system.css', system);
@@ -129,7 +129,7 @@ test('the check exits non-zero through the project wrapper, so verify can requir
 
 test('verify requires the system scope and refuses any other command claiming it', async t => {
   const project = await site(t);
-  write(project, '.palate/evidence/browser.json', '{}');
+  write(project, '.palate/evidence/browser.json', JSON.stringify({ cases: [{ name: 'home', result: 'passed' }] }));
   const missing = await mutate(project, 'verify', { commands: [], reviews: [{ scope: 'browser', path: '.palate/evidence/browser.json', result: 'passed' }] });
   assert.ok(missing.verification.required.includes('system'));
   assert.equal(missing.verification.result, 'failed');

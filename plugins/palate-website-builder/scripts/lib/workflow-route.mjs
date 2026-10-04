@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { invokedDirectly } from "./invoked-directly.mjs";
 import { validateState, LEGACY_MARKERS } from "../live/project.mjs";
@@ -80,16 +81,40 @@ export function editedPaths(payload) {
   return typeof file === "string" ? [path.resolve(cwd, file)] : [];
 }
 
+/**
+ * Whether a file sits inside some other Palate project, live or legacy. The walk stops below the
+ * home directory: stray legacy state in HOME (a ~/build-manifest.json is common) is not a project,
+ * and counting it would refuse every write outside the current one.
+ */
+function insidePalateProject(file) {
+  const home = canonicalTarget(os.homedir());
+  let dir = path.dirname(file);
+  for (;;) {
+    if (dir === home) return false;
+    if (present(path.join(dir, MARKER)) || LEGACY_MARKERS.some(marker => present(path.join(dir, marker)))) return true;
+    const parent = path.dirname(dir);
+    if (parent === dir) return false;
+    dir = parent;
+  }
+}
+
 export function hookWorkflow(payload, additional = []) {
   let files;
   try { files = editedPaths(payload).map(canonicalTarget); }
   catch (error) { return { kind: "unsupported", error: error.message }; }
   const result = inspectWorkflow([payload.cwd || process.cwd(), ...files, ...additional]);
-  if (result.kind === "live" && files.some(file => {
+  if (result.kind !== "live") return { ...result, files };
+  // A live project may write outside itself (notes, memory, another tool's config), which is
+  // how legacy behaved. Writing into another Palate project from here is still refused, because
+  // that project's records would change without its own workflow knowing.
+  const outside = files.filter(file => {
     const rel = path.relative(result.root, file);
     return rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
-  })) return { kind: "unsupported", error: "The edit spans project boundaries; no semantic record was changed" };
-  return { ...result, files };
+  });
+  if (outside.some(insidePalateProject)) {
+    return { kind: "unsupported", error: "The edit reaches into another Palate project; run it from that project" };
+  }
+  return { ...result, files: files.filter(file => !outside.includes(file)) };
 }
 
 export function reportRoute(result, operation) {

@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
 export const SCHEMA = 1;
-export const RUNTIME_VERSION = '1.18.0';
+export const RUNTIME_VERSION = '2.1.0';
 export const MARKER = 'palate.project.json';
 export const LEGACY_MARKERS = ['.palate-skill-state.json', 'build-manifest.json', 'palate.manifest.json', '.palate/state.json', '.palate/manifest.json'];
 export const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');

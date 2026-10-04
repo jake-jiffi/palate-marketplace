@@ -34,7 +34,7 @@ export class Commerce {
   async execute(sid, token, input = {}, buyerIp) {
     const form = await this.store.readForm(token);
     if (!form) return conflict('form-expired', 'This form has expired. Reload the page to continue.');
-    if (form.sid !== sid) return conflict('context-conflict', 'This tab belongs to a different cart. Continue with this tab’s cart before submitting again.', { });
+    if (form.sid !== sid) return conflict('context-conflict', 'This page belongs to a different shopping session. Reload the page to continue with your current cart.', { });
     const state = await this.store.read(sid);
     if (!state) return conflict('session-expired', 'Your shopping session has expired. Establish a new session to continue.');
     if (state.country !== this.api.country) return conflict('market-conflict', 'The market has changed. Restore the original market before continuing.');

@@ -130,11 +130,7 @@ const { title, description } = Astro.props;
       if (!validReceipt(receipt, result.status)) throw new Error('Unrecognised shopping response');
       if (!['unknown', 'pending'].includes(receipt.code)) clearPending();
       announce(receipt.message);
-      if (receipt.code === 'context-conflict') {
-        const restore = document.createElement('form'); restore.method = 'post'; restore.action = '/api/shopify/session';
-        const token = document.createElement('input'); token.type = 'hidden'; token.name = 'restore'; token.value = String(new FormData(form).get('token')); restore.append(token);
-        const button = document.createElement('button'); button.textContent = 'Continue with this tab’s cart'; restore.append(button); feedbackTarget()?.append(restore);
-      } else if (receipt.status === 200 || receipt.code === 'cart-adjusted') {
+      if (receipt.status === 200 || receipt.code === 'cart-adjusted') {
         knownResult = true;
         await refreshPageForms(); // A known result permits a new deliberate shopping intent.
         channel?.postMessage('changed');
@@ -146,11 +142,21 @@ const { title, description } = Astro.props;
     finally { delete form.dataset.pending; form.removeAttribute('aria-busy'); buttons.forEach(b => b.disabled = knownResult || Boolean(readPending())); }
   });
   pendingNotice();
+  // The marker below has done its job once the page has a session. Drop it so a copied address
+  // does not show the cookie notice to someone else.
+  const landed = new URL(location.href);
+  if (landed.searchParams.has('shop_session') && !document.querySelector('[data-commerce-cookies]')) { landed.searchParams.delete('shop_session'); history.replaceState(history.state, '', landed.href); }
   const bootstrap = document.querySelector<HTMLFormElement>('[data-commerce-bootstrap]');
   if (bootstrap) {
     const establish = async () => {
       const res = await fetch('/api/shopify/session', { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(new FormData(bootstrap) as any) });
-      if (res.ok) location.reload();
+      if (!res.ok) return;
+      // Navigate once with a marker, never reload. If the cookie did not come back, SessionStart renders
+      // a notice without this bootstrap form, so a browser that refuses cookies cannot loop.
+      let next = new URL(String(new FormData(bootstrap).get('returnTo') || location.pathname), location.href);
+      if (next.origin !== location.origin) next = new URL(location.pathname, location.href);
+      next.searchParams.set('shop_session', '1');
+      location.replace(next.href);
     };
     // The lock covers the Set-Cookie response. A second tab then sees the established SID.
     const locks = navigator.locks;

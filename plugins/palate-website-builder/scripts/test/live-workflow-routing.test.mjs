@@ -202,3 +202,31 @@ test("board writers guard their output destination as well as their source", () 
   assert.notEqual(result.status, 0); assert.match(result.stderr, /live-design/);
   assert.deepEqual(snapshot(root), before);
 });
+
+test("a live project can write outside itself, but never into another Palate project", () => {
+  const root = site("outside-writer");
+  const notes = path.join(scratch, "not-a-project", "notes.md");
+  const legacy = path.join(scratch, "legacy-site");
+  fs.mkdirSync(legacy, { recursive: true });
+  fs.writeFileSync(path.join(legacy, "build-manifest.json"), "{}");
+  const write = file => hook("pretooluse", { cwd: root, tool_name: "Write", tool_use_id: `w-${path.basename(file)}`, tool_input: { file_path: file, content: "x" } });
+  const free = write(notes);
+  assert.equal(free.status, 0, free.stderr);
+  assert.doesNotMatch(free.stdout, /"deny"/, "a plain file outside every project must not be refused");
+  const blocked = write(path.join(legacy, "src", "x.astro"));
+  assert.equal(JSON.parse(blocked.stdout).hookSpecificOutput.permissionDecision, "deny");
+  const inside = write(path.join(root, "src", "pages", "about.astro"));
+  assert.doesNotMatch(inside.stdout, /"deny"/);
+});
+
+test("a Palate call in a live project records which references it read and whether it answered", () => {
+  const root = site("recorder");
+  hook("manifest", { cwd: root, tool_name: "mcp__palate__refs_get", tool_use_id: "read-1", tool_input: { slugs: ["aesop", "linear"] }, tool_response: { content: [{ type: "text", text: "{\"aesop\":{}}" }] } });
+  hook("manifest", { cwd: root, tool_name: "mcp__palate__refs_get", tool_use_id: "read-2", tool_input: { slug: "stripe" }, tool_response: { structuredContent: { error: "quota_exceeded" } } });
+  const events = fs.readdirSync(path.join(root, ".palate/events")).map(name => JSON.parse(fs.readFileSync(path.join(root, ".palate/events", name), "utf8")));
+  const byId = Object.fromEntries(events.map(e => [e.toolUseId, e]));
+  assert.deepEqual(byId["read-1"].slugs, ["aesop", "linear"]);
+  assert.equal(byId["read-1"].ok, true);
+  assert.deepEqual(byId["read-2"].slugs, ["stripe"]);
+  assert.equal(byId["read-2"].ok, false, "a refused read is not evidence");
+});

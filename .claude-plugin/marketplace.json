@@ -6,24 +6,24 @@
   },
   "metadata": {
     "description": "Palate: the taste layer for AI website builders. Install the Palate website-builder plugin (skill + MCP-depth hooks; connect the Palate MCP with one claude mcp add --scope user command after install) for Claude Code.",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "plugins": [
     {
       "name": "palate-website-builder",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "source": "./plugins/palate-website-builder",
       "description": "Builds and maintains production Astro websites grounded by the Palate MCP. New sites start with working design options you can click through within minutes, carry one design system and a local style guide, and can use Higgsfield for generated images and scroll films when you have it. Continues existing sites, and adds Shopify buying journeys when the product needs them. Connect the Palate MCP with one claude mcp add --scope user command (token from app.palatemcp.com)."
     },
     {
       "name": "palate-beta",
-      "version": "2.1.0-beta.1",
+      "version": "2.2.0-beta.1",
       "source": "./plugins/palate-beta",
       "description": "Opt-in tester beta, expected to have bugs. Live Astro design options with real MCP references, interactive motion and optional Shopify commerce. Design speed, visual consistency and complete end-to-end workflows are not yet validated. Use disposable projects, not client production work. Install one Palate plugin at a time. See BETA-TESTING.md."
     },
     {
       "name": "palate-classic",
-      "version": "1.16.2",
+      "version": "1.16.3",
       "source": "./plugins/palate-classic",
       "description": "The 1.16 Palate builder, kept installable after Palate 2.0 and frozen: security, install and MCP fixes only. Use one Palate plugin at a time: uninstall palate-website-builder first, then restart Claude Code."
     }

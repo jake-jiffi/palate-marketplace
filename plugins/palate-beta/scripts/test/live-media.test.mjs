@@ -72,7 +72,7 @@ async function mutate(project, command, value) { return execute({ command, proje
 async function select(project) {
   await mutate(project, 'source', { productKind: 'service', platform: 'wordpress', routes: ['/'], journeys: ['enquiry'] });
   fs.mkdirSync(path.join(project, 'src/directions/a'), { recursive: true }); fs.writeFileSync(path.join(project, 'src/directions/a/index.astro'), '<h1>a</h1>');
-  await mutate(project, 'option', { id: 'a', status: 'ready', label: 'a', previewUrl: 'http://127.0.0.1:4321/_palate/directions/a' });
+  await mutate(project, 'option', { id: 'a', status: 'ready', referenceDecisions: [{ slug: 'aesop' }], label: 'a', previewUrl: 'http://127.0.0.1:4321/_palate/directions/a' });
   await mutate(project, 'select', { optionId: 'a' });
 }
 const still = (direction, name, extra = {}) => ({ need: 'still', args: ['--prompt', 'A clay world, no text', '--aspect_ratio', '3:2'], purpose: 'Opening world', direction, dest: `src/directions/${direction}/media/${name}.png`, ...extra });

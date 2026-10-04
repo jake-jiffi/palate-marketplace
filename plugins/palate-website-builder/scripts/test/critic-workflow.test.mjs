@@ -85,6 +85,12 @@ test('actual independent delegation, completion and unavailable-tool outcomes ar
 test('critic checkpoints do not fall through to the grading instrument or legacy verifier', () => {
   assert.match(protocol, /does not invoke .*:grade`/);
   assert.match(protocol, /pairwise judge swarms/);
+  // The critic is not the only judge: the local grade's ladder is a second one at final verification.
+  assert.match(protocol, /second, separate judge at final-site verification/);
+  const live = read('references/live-build.md');
+  assert.match(live, /Taste: the second judge, separate from the builder and the critic/);
+  assert.match(live, /node scripts\/palate.mjs facts check/);
+  assert.match(live, /node scripts\/palate.mjs release --input/);
   const grade = read('commands/grade.md');
   assert.ok(grade.indexOf('Their internal scores do not trigger') < grade.indexOf('## A site can always be graded'));
   assert.match(grade, /Preserve an explicit request for this grading instrument as a separate task/);
@@ -109,7 +115,7 @@ test('jury weights, separate motion and unverified core journeys cannot be avera
 });
 
 test('references, product identity, evidence and project-state boundaries survive packaging', () => {
-  for (const text of ['at least three relevant outstanding references', 'Keep the reference set stable', 'selected direction, identity, genuine imagery, factual claims, important URLs and core journeys', 'offline, permission and saved-data-after-refresh', 'validity.sourceFingerprint', 'Never hand-edit `palate.project.json`', 'not runtime verification or a deployment receipt', 'existing issue tracker', 'Do not commission a full rebuild']) {
+  for (const text of ['at least three relevant outstanding references', 'Keep the reference set stable', 'selected direction, identity, genuine imagery, important URLs and core journeys', 'Check factual claims rather than preserving them', 'critical Content defect', 'offline, permission and saved-data-after-refresh', 'validity.sourceFingerprint', 'Never hand-edit `palate.project.json`', 'not runtime verification or a deployment receipt', 'existing issue tracker', 'Do not commission a full rebuild']) {
     assert.ok(protocol.includes(text), text);
   }
   assert.match(read('commands/jury.md'), /preview URL without editable source permits critique only/);

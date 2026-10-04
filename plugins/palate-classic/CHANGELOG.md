@@ -2,8 +2,15 @@
 
 What changed in the Palate website builder, and why it matters to a build you are about to run.
 
-Update from a terminal with `claude plugin marketplace update palate`, then restart Claude Code.
-No reinstall is needed.
+Update from a terminal with `claude plugin marketplace update palate`, then
+`claude plugin update palate-classic@palate`, then restart Claude Code. No reinstall is needed.
+
+## 1.16.3 (Palate classic)
+
+A security fix. The capture engine's image library, `sharp`, carried a high-severity advisory in
+its bundled libvips (GHSA-f88m-g3jw-g9cj). It now resolves to `sharp` 0.35.5, through
+`@huggingface/transformers` 4.3. The capture engine processes images on your own machine only, and
+nothing else in the builder changes.
 
 ## 1.16.2 (Palate classic)
 

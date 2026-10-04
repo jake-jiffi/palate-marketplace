@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "track": "prod",
-  "sourceCommit": "cb4d61069804840e07bc4fdf73eead9b279eb5fe",
-  "sourceVersion": "2.0.0",
-  "version": "2.0.0",
+  "sourceCommit": "9d54103d6fd6af09cd1f94b6018be4ce3833d652",
+  "sourceVersion": "2.1.0",
+  "version": "2.1.0",
   "rollback": false,
-  "sourceDigest": "c554fcc40209e78e3fbaa5832e06aa958eb105caee763a44377773ea98bd4ff3",
-  "contentDigest": "9cd0b8c4c51d5d0fa1d166033b81d5d105444d9d3944200110fd45818816d5c5",
+  "sourceDigest": "b7805748dd7af637795675f7dba71c4ccc2c61f082aabb2dca6ecc0c2278ad54",
+  "contentDigest": "ff545248e27f4053a28f110580de2772a37b6df3aed95228f398f8e65022e11e",
   "entry": "skills/palate-website-builder/SKILL.md",
   "rebasedLinks": [
     "commands/jury.md",

@@ -13,3 +13,4 @@ dist/
 .palate/cart/
 .palate/media/raw/
 .palate/media/work/
+.vercel/

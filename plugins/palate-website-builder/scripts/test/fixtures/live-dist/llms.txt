@@ -1,0 +1,9 @@
+# Website project
+
+> The project is ready for design.
+
+## Pages
+- [/](/)
+
+## Canonical
+https://example.com/

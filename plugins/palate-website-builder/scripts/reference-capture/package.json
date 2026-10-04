@@ -13,6 +13,6 @@
   "dependencies": {
     "playwright": "^1.49.0",
     "axe-core": "^4.10.0",
-    "@huggingface/transformers": "^3.7.5"
+    "@huggingface/transformers": "^4.3.0"
   }
 }

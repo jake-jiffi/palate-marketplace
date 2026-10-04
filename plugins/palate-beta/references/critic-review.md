@@ -2,7 +2,7 @@
 
 Improve the visitor's experience while preserving the project's identity. Act as an experienced website juror, using named Palate references and direct browser observations. Scores are internal simulated jury judgements, not Awwwards accreditation or a certified Palate grade.
 
-This protocol does not invoke `/palate-beta:grade`, `grade-local.mjs`, pairwise judge swarms or the legacy `palate-verifier` gate list. A separately requested grading instrument remains a separate task. Do not commission both workflows merely because this critique includes scores.
+The critic does not invoke `/palate-beta:grade`, run `grade-local.mjs`, pairwise judge swarms or the legacy `palate-verifier` gate list. The local grade's ladder is a second, separate judge at final-site verification ([live-build.md](live-build.md#select-continue-and-verify-the-site)). When its result exists, read it: a ladder below comparable is a Design gap to escalate, not a number to argue with.
 
 ## Choose the scope
 
@@ -41,7 +41,7 @@ If agent tools are unavailable, report that independence was unavailable. A tran
 
 ## Establish and keep the benchmark
 
-Read the conversation and source profile first. Distinguish confirmed requirements, reasonable assumptions, proposed identity and unknowns. A website, supplied brand material, an idea or no prepared assets are all valid inputs. Preserve the user's selected direction, identity, genuine imagery, factual claims, important URLs and core journeys. Use commerce requirements only where the product needs them. Never trade product accuracy or usability for resemblance to a reference.
+Read the conversation and source profile first. Distinguish confirmed requirements, reasonable assumptions, proposed identity and unknowns. A website, supplied brand material, an idea or no prepared assets are all valid inputs. Preserve the user's selected direction, identity, genuine imagery, important URLs and core journeys. Check factual claims rather than preserving them: a year, count, rating, price, specification, guarantee or testimonial that the source profile and the client's own site do not state is a critical Content defect, and the brief says to correct or remove it. Use commerce requirements only where the product needs them. Never trade product accuracy or usability for resemblance to a reference.
 
 Reuse the actual Palate MCP results and captures from exploration. Identify which named reference supports each comparison and why it fits the audience or technique. In jury mode, study **at least three relevant outstanding references**, including available mobile views and relevant inner pages. Normal passes reuse sufficient inspected evidence without another donor quota. Keep the reference set stable across rounds; explain any necessary replacement and mark affected comparisons as not comparable.
 

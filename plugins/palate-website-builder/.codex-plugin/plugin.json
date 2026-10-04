@@ -1,6 +1,6 @@
 {
   "name": "palate-website-builder",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Build source-aware Astro websites with live design choices, real Palate references and interactive motion. Continue existing sites and add Shopify buying journeys when the product needs them.",
   "author": {
     "name": "Jiffi",

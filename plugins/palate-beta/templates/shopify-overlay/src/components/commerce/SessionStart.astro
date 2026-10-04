@@ -1,4 +1,7 @@
 ---
-const { returnTo = Astro.url.pathname + Astro.url.search } = Astro.props;
+// The bootstrap script returns here once with this marker. Still no session means the cookie did not
+// stick, so render a notice with no bootstrap form: nothing retries and no further sessions are created.
+const here = new URL(Astro.url); const cookiesRefused = here.searchParams.has('shop_session'); here.searchParams.delete('shop_session');
+const { returnTo = here.pathname + here.search } = Astro.props;
 ---
-<form method="post" action="/api/shopify/session" data-commerce-bootstrap><input type="hidden" name="returnTo" value={returnTo} /><p>Establish your shopping session to add items and keep your cart across pages.</p><button>Start shopping</button></form>
+{cookiesRefused ? <p data-commerce-cookies>The cart needs cookies. This browser did not keep the shopping session, so items cannot be added yet. Allow cookies for this site, then <a href={returnTo}>try again</a>.</p> : <form method="post" action="/api/shopify/session" data-commerce-bootstrap><input type="hidden" name="returnTo" value={returnTo} /><p>Establish your shopping session to add items and keep your cart across pages.</p><button>Start shopping</button></form>}

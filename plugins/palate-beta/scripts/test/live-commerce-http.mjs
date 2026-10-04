@@ -20,7 +20,7 @@ r = await post('/api/shopify/cart', { token: second, quantity: '1' }); assert.eq
 r = await request('/cart'); html = await r.text(); assert.match(html, /value="2"/); assert.match(html, /\$50\.00/); assert.doesNotMatch(html, /gid:\/\/shopify\/Cart\//);
 r = await post('/api/shopify/cart', { token: second, quantity: '2' }); assert.equal(r.status, 409);
 r = await post('/api/shopify/cart', { token: second, quantity: '1' }, { Origin: 'https://untrusted.invalid' }); assert.equal(r.status, 403);
-const retainedCookie = cookie; cookie = ''; r = await post('/api/shopify/cart', { token: second, quantity: '1' }); assert.equal(r.status, 409); assert.match(await r.text(), /Continue with this tab/); cookie = retainedCookie;
+const retainedCookie = cookie; cookie = ''; r = await post('/api/shopify/cart', { token: second, quantity: '1' }); assert.equal(r.status, 409); html = await r.text(); assert.match(html, /Reload the page/); assert.ok(!html.includes(second)); cookie = retainedCookie;
 r = await request('/cart'); html = await r.text(); const checkout = token(html, 'checkout'); r = await post('/api/shopify/cart', { token: checkout }); assert.equal(r.status, 303); assert.equal(new URL(r.headers.get('location')).hostname, env.SHOPIFY_STORE_DOMAIN); assert.equal(r.headers.get('set-cookie'), null);
 r = await request('/products/filter-papers-sample?variant=47389098049709'); assert.match(await r.text(), /\$0\.00/);
 r = await request('/products/the-out-of-stock-snowboard'); html = await r.text(); assert.match(html, /sold out/); assert.doesNotMatch(html, /data-kind="add"/);

@@ -103,7 +103,7 @@ test('real Astro gallery progresses, isolates failures, preserves motion and sta
     const sha256 = createHash('sha256').update(pixels).digest('hex');
     writeFileSync(join(project, '.palate/previews/a.png'), pixels);
     writeFileSync(join(project, '.palate/previews/unrecorded.png'), pixels);
-    await call('option', { id: 'a', status: 'ready', previewUrl: `${preview.url}/_palate/directions/a`, thumbnail: { path: '.palate/previews/a.png', sha256 } });
+    await call('option', { id: 'a', status: 'ready', referenceDecisions: [{ slug: 'aesop' }], previewUrl: `${preview.url}/_palate/directions/a`, thumbnail: { path: '.palate/previews/a.png', sha256 } });
     const beforeTraversal = readFileSync(marker, 'utf8');
     const tampered = JSON.parse(beforeTraversal);
     tampered.directions.find(direction => direction.id === 'a').thumbnail.path = '.palate/previews/../previews/unrecorded.png';

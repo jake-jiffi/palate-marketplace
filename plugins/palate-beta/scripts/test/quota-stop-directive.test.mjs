@@ -136,3 +136,17 @@ test("an ordinary successful call is not blocked", () => {
   const d = reasonFor(ok);
   assert.ok(d === null || d.decision !== "block", "a good call must never be walled");
 });
+
+test("a refused deep read also stops a live-design project, with the upgrade link", () => {
+  const cwd = tmp();
+  fs.mkdirSync(path.join(cwd, "src/pages"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "palate.project.json"), JSON.stringify({ schema: 1, workflow: "live-design", stage: "designing", projectId: "live-quota", revision: 1, runtime: { version: "2.1.0", digest: "0".repeat(64) }, directions: [], selection: null, verification: [], operations: [], profile: null }));
+  const out = execFileSync("node", [HOOK], {
+    input: JSON.stringify({ cwd, tool_name: "mcp__palate__refs_get", tool_input: { slug: "aesop" }, tool_response: denial() }),
+    encoding: "utf8", env: { ...process.env, PALATE_PROJECT_DIR: "" }, stdio: ["pipe", "pipe", "pipe"],
+  });
+  const d = out.trim() ? JSON.parse(out.trim().split("\n").pop()) : null;
+  assert.equal(d?.decision, "block", "the monthly limit belongs to the person, not the project, so a live build must stop too");
+  assert.match(d.reason, /app\.palatemcp\.com\/u\//);
+  assert.equal(fs.existsSync(path.join(cwd, "build-manifest.json")), false, "a live project still gets no legacy manifest");
+});

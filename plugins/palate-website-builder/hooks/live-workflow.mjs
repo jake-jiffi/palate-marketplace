@@ -34,6 +34,15 @@ export function handleLiveWorkflow(payload, event, additional = []) {
         recordedAt: new Date().toISOString(),
         paths: result.files.map(file => path.relative(result.root, file)),
       };
+      // Which references a Palate call read, and whether it answered. This is what lets the
+      // runtime refuse a "ready" option whose reference decisions name nothing actually read.
+      if (String(payload.tool_name || "").startsWith("mcp__palate__")) {
+        const input = payload.tool_input || {};
+        record.slugs = [...new Set([input.slug, ...(Array.isArray(input.slugs) ? input.slugs : [])].filter(s => typeof s === "string" && s))];
+        const response = payload.tool_response ?? payload.tool_output ?? null;
+        const text = typeof response === "string" ? response : JSON.stringify(response ?? "");
+        record.ok = Boolean(response) && !/"isError"\s*:\s*true|quota_exceeded/.test(text);
+      }
       fs.writeFileSync(path.join(folder, `${id}.json`), JSON.stringify(record) + "\n", { flag: "wx", mode: 0o600 });
     } catch (error) {
       if (error.code !== "EEXIST") process.stderr.write("[palate] Optional hook evidence could not be saved; project commands remain available.\n");

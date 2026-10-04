@@ -3,21 +3,49 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import * as nodeModule from 'node:module';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { installShopifyOverlay } from '../install-shopify-overlay.mjs';
 import { sourceFiles } from '../live/project.mjs';
-import { SessionStore } from '../../templates/shopify-overlay/src/lib/shopify/session.mjs';
+import { SessionStore, SESSION_SECONDS } from '../../templates/shopify-overlay/src/lib/shopify/session.mjs';
 import { Commerce, variantQuote, cartQuote, checkoutLocation } from '../../templates/shopify-overlay/src/lib/shopify/commerce.mjs';
 import { Storefront, money } from '../../templates/shopify-overlay/src/lib/shopify/storefront.mjs';
 
 const clientModule = process.env.PALATE_TEST_REDIS_MODULE || 'redis';
-const { createClient } = await import(clientModule.startsWith('/') ? pathToFileURL(clientModule).href : clientModule);
-const redis = createClient({ url: process.env.PALATE_TEST_REDIS_URL || 'redis://127.0.0.1:16379', socket: { reconnectStrategy: false } });
+const clientURL = clientModule.startsWith('/') ? pathToFileURL(clientModule).href : clientModule;
+const { createClient } = await import(clientURL);
+const redisURL = process.env.PALATE_TEST_REDIS_URL || 'redis://127.0.0.1:16379';
+const redis = createClient({ url: redisURL, socket: { reconnectStrategy: false } });
 redis.on('error', () => {}); await redis.connect();
 const prefix = `palate-test:${randomUUID()}`;
+let routeModules;
+after(async () => { await routeModules?.store.redis.close(); });
 after(async () => { for await (const keys of redis.scanIterator({ MATCH: `${prefix}*`, COUNT: 100 })) if (keys.length) await redis.del(keys); await redis.close(); });
+// The API routes are TypeScript bound to Astro's server env. Run the real handlers against Redis
+// with a stub for astro:env/server and the extensionless imports Astro's bundler resolves.
+// Older Node 22 releases lack in-thread hooks or type stripping; the route test is skipped there.
+const routeSupport = typeof nodeModule.registerHooks === 'function' && Boolean(process.features.typescript);
+if (routeSupport) nodeModule.registerHooks({ resolve(specifier, context, next) {
+  if (specifier === 'astro:env/server') return { url: 'data:text/javascript,export const getSecret = name => globalThis.__palateTestSecrets[name];', shortCircuit: true };
+  if (specifier === 'redis' && clientURL !== 'redis') return next(clientURL, context);
+  try { return next(specifier, context); } catch (error) { if (specifier.startsWith('.') && !path.extname(specifier)) return next(`${specifier}.ts`, context); throw error; }
+} });
+async function routes() {
+  if (!routeModules) {
+    globalThis.__palateTestSecrets = { SHOPIFY_STORE_DOMAIN: 'test.myshopify.com', SHOPIFY_STOREFRONT_TOKEN: 'fixture', SHOPIFY_COUNTRY: 'AU', SHOPIFY_REDIS_URL: redisURL, SHOPIFY_REDIS_NAMESPACE: `${prefix}:api` };
+    const load = file => import(new URL(`../../templates/shopify-overlay/src/${file}`, import.meta.url).href);
+    const [server, session, cart] = await Promise.all([load('lib/shopify/server.ts'), load('pages/api/shopify/session.ts'), load('pages/api/shopify/cart.ts')]);
+    routeModules = { server, session, cart, store: (await server.services()).store };
+  }
+  return routeModules;
+}
+function routeContext(pathname, fields, sid, accept = 'application/json') {
+  const url = new URL(pathname, 'http://localhost'); const jar = { issued: undefined };
+  return Object.assign(jar, { url, request: new Request(url, { method: 'POST', headers: { Origin: url.origin, 'Content-Type': 'application/x-www-form-urlencoded', Accept: accept }, body: new URLSearchParams(fields) }),
+    cookies: { get: name => name === 'palate_shop_sid' && sid ? { value: sid } : undefined, set: (_name, value) => { jar.issued = value; } } });
+}
 const price = { amount: '25.0', currencyCode: 'AUD' };
 const variant = { id: 'gid://shopify/ProductVariant/1', title: 'Exact option', availableForSale: true, price, product: { title: 'Test product', handle: 'test', requiresSellingPlan: false } };
 function fixture() {
@@ -199,4 +227,37 @@ test('cart line pagination is complete and every mutation emits balanced GraphQL
   } });
   const cart = await api.cart('fixture-capability'); assert.equal(cart.lines.nodes.length, 2); assert.equal(seen[1].cursor, 'cursor-1');
   for (const kind of ['create', 'add', 'update', 'remove', 'discount']) await api.mutate(kind, 'fixture-capability', { lines: [], ids: [], codes: [] });
+});
+test('a new session lives briefly until its cookie returns; reading it extends the full lifetime', async () => {
+  const store = new SessionStore(redis, { namespace: `${prefix}:ttl` }); const { sid } = await store.create('AU', 'AUD');
+  const fresh = await redis.ttl(store.key(sid)); assert.ok(fresh > 0 && fresh <= 900, `a new session must expire quickly, TTL was ${fresh}`);
+  assert.ok(await store.read(sid)); const returned = await redis.ttl(store.key(sid)); assert.ok(returned > 900 && returned <= SESSION_SECONDS, `a returning session must slide to the full lifetime, TTL was ${returned}`);
+});
+test('a leaked form token cannot move another shopper’s session into this browser', { skip: !routeSupport && 'needs node:module registerHooks and TypeScript stripping (Node 22.18 or newer)' }, async () => {
+  const { session, cart, store } = await routes();
+  const victim = await store.create('AU', 'AUD'); const token = (await store.form(victim.sid, await store.read(victim.sid), 'add', variantQuote(variant, 'AU'))).token;
+  const attacker = await store.create('AU', 'AUD'); await store.read(attacker.sid);
+  const original = globalThis.fetch; globalThis.fetch = async () => Response.json({ data: { localization: { country: { isoCode: 'AU', currency: { isoCode: 'AUD' } } } } });
+  try {
+    for (const cookie of [undefined, attacker.sid]) {
+      const c = routeContext('/api/shopify/session', { restore: token, returnTo: '/cart' }, cookie); const res = await session.POST(c);
+      assert.equal(res.status, 200); assert.ok(c.issued); assert.notEqual(c.issued, victim.sid, 'a form token must never select the session cookie');
+      if (cookie) assert.equal(c.issued, cookie); else { const ttl = await redis.ttl(store.key(c.issued)); assert.ok(ttl > 0 && ttl <= 900, `a session created here must expire quickly, TTL was ${ttl}`); }
+    }
+  } finally { globalThis.fetch = original; }
+  // The conflict page tells the person to reload; it never hands the token back as a way in.
+  const c = routeContext('/api/shopify/cart', { token, quantity: '1' }, attacker.sid, 'text/html'); const res = await cart.POST(c); const html = await res.text();
+  assert.equal(res.status, 409); assert.match(html, /Reload/); assert.ok(!html.includes(token), 'the conflict page must not echo the form token'); assert.doesNotMatch(html, /api\/shopify\/session/);
+  const layout = await fs.readFile(new URL('../../templates/shopify-overlay/src/layouts/CommerceLayout.astro', import.meta.url), 'utf8');
+  assert.ok(!/['"]restore['"]/.test(layout), 'the layout must not offer to restore a session from a form token');
+});
+test('session bootstrap navigates once with a marker; a browser refusing cookies gets a notice, not a loop', async () => {
+  const read = file => fs.readFile(new URL(`../../templates/shopify-overlay/src/${file}`, import.meta.url), 'utf8');
+  const layout = await read('layouts/CommerceLayout.astro'); const start = await read('components/commerce/SessionStart.astro');
+  assert.ok(!/location\.reload\(/.test(layout), 'the layout must not reload after establishing a session');
+  assert.ok(/searchParams\.set\('shop_session', '1'\)/.test(layout) && /location\.replace\(/.test(layout), 'the layout must navigate once with the shop_session marker');
+  const [, marker, notice, form] = start.match(/\{\s*(\w+)\s*\?\s*([\s\S]*?)\s*:\s*(<form[\s\S]*?<\/form>)\s*\}/) || [];
+  assert.ok(marker && new RegExp(`${marker}\\s*=\\s*\\w+\\.searchParams\\.has\\('shop_session'\\)`).test(start), 'SessionStart must branch on the shop_session marker');
+  assert.doesNotMatch(notice, /data-commerce-bootstrap/); assert.match(notice, /cookies/); assert.match(form, /data-commerce-bootstrap/);
+  assert.equal(start.match(/data-commerce-bootstrap/g).length, 1);
 });
