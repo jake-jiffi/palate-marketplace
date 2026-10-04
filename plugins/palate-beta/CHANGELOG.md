@@ -2,8 +2,9 @@
 
 What changed in the Palate website builder, and why it matters to a build you are about to run.
 
-Update from a terminal with `claude plugin marketplace update palate`, then restart Claude Code.
-No reinstall is needed.
+Update from a terminal with `claude plugin marketplace update palate`, then
+`claude plugin update palate-website-builder@palate`, then restart Claude Code. The first command only
+refreshes the list of versions; the second installs the new one. No reinstall is needed.
 
 ## 2.0.0
 

@@ -49,7 +49,8 @@ choosing **Authenticate**, and clicking **Allow**.
 
 Finally, fully quit and reopen Claude Code (in the desktop app, start a new session): the plugin and the
 connection only load at start. Run `/mcp` to confirm `palate` is connected. Update later with
-`claude plugin marketplace update palate`, then restart Claude Code so the refreshed plugin loads.
+`claude plugin marketplace update palate` then `claude plugin update palate-website-builder@palate`,
+then restart Claude Code so the new version loads. The first command only refreshes the list.
 
 ## What you get
 

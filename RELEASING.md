@@ -81,7 +81,9 @@ Only when the beta track has been used in earnest and you are satisfied.
    to a customer asking what they are running, and it has drifted four times.
    Step 5 fails if you skip this, which is the point of it existing.
 5. `./scripts/check-tracks.sh`, then commit and push.
-6. Customers get it with `claude plugin marketplace update palate`. **No reinstall,
+6. Customers get it with `claude plugin marketplace update palate` then
+   `claude plugin update palate-website-builder@palate` (the first alone does not move an
+   installed plugin; measured 4 October 2026). **No reinstall,
    and no change to any documented command**, which is the whole reason beta is
    a separate plugin rather than a rename.
 
@@ -95,7 +97,8 @@ Only when the beta track has been used in earnest and you are satisfied.
 3. Bump `metadata.version` in `.claude-plugin/marketplace.json` to match.
 4. Bump the MCP's `PLUGIN_VERSION` and deploy it.
 5. `./scripts/check-tracks.sh`, commit and push. Users get it with
-   `claude plugin marketplace update palate` then a Claude Code restart.
+   `claude plugin marketplace update palate`, `claude plugin update palate-website-builder@palate`,
+   then a Claude Code restart.
 
 ## A classic fix
 

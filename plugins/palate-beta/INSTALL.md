@@ -100,11 +100,11 @@ A website build calls the brand build in-process when the client has no brand pa
 
 ```bash
 claude plugin marketplace update palate
+claude plugin update palate-website-builder@palate
 ```
-Then restart Claude Code (or run `/mcp` and reconnect) so the new tools load. Until you do, you may
-see an `MCP server palate skipped` warning, especially when upgrading from an older bundled version.
-The update picks up the new plugin version (or enable per-marketplace auto-update). No re-running an
-installer.
+The first command refreshes the marketplace's list of versions; the second installs the new one (the
+first alone leaves the installed plugin where it was). Then restart Claude Code so the new version
+loads. No re-running an installer.
 
 ### Going back to the previous builder
 
