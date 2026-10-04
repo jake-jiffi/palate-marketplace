@@ -3,6 +3,11 @@ description: Add a new page or a substantial section, grounded in the reference 
 argument-hint: "[the page or section, e.g. \"a services page\" or \"a pricing table on /pricing\"]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Add the requested route to the selected site, reusing its selected components and source profile. Identify the actual page type and preserve existing integrations. Verify that route and affected navigation. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 A new page or a substantial new section. This is a STRUCTURAL diff: it changes what the site
 looks like, not only what it says, so the full lane set runs including tokens, geometry and the
 taste ladder.

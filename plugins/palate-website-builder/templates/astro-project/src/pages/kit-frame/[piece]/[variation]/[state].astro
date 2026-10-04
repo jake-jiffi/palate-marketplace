@@ -1,0 +1,231 @@
+---
+/**
+ * THE PIECE, ALONE, IN ONE STATE. No chrome, nothing else in the document.
+ *
+ * This is what the state browser puts inside its frame, and it is also a perfectly good URL on
+ * its own: it is what a screenshot wants, and what you send a colleague who is going to open it
+ * on a phone. Because the frame is the viewport, a piece whose small-screen behaviour only exists
+ * below a breakpoint can finally be looked at without resizing the whole browser.
+ *
+ * It renders the REAL component with the REAL sample content, plus whatever the state's fixture
+ * overrides. A piece that will not compile, will not render, or throws on its own defaults fails
+ * the build here rather than on a client's site, which is the same guarantee the resting page has
+ * always given, now extended across every state the manifest declares.
+ *
+ * noindex, and gate-shipready removes the whole kit surface at handover.
+ */
+import BaseLayout from "../../../../layouts/BaseLayout.astro";
+import StateDriver from "../../../../components/kitdemo/StateDriver.astro";
+import { kit } from "../../../../lib/kit";
+import { kitSamples } from "../../../../lib/kit-sample";
+import { statePropsFor, STATE_KIND, OPEN_TARGET, type KitDemoState, MOBILE_ONLY } from "../../../../lib/kit-states";
+
+export function getStaticPaths() {
+  return kit.flatMap((piece) =>
+    piece.variations.flatMap((v) =>
+      // "rest" is always offered, so the frame URL exists for a piece that declares no states.
+      ["rest", ...v.states].map((state) => ({
+        params: { piece: piece.id, variation: v.id, state },
+        props: { piece, variation: v, state },
+      })),
+    ),
+  );
+}
+
+const { piece, variation, state } = Astro.props;
+
+const modules = import.meta.glob("../../../../components/kit/**/*.astro", { eager: true });
+const key = Object.keys(modules).find((k) => k.endsWith(`/${piece.id}/${variation.id}.astro`));
+const Component = key ? (modules[key] as any).default : null;
+
+const isRest = state === "rest";
+const props = isRest
+  ? kitSamples[variation.id] ?? {}
+  : { ...(kitSamples[variation.id] ?? {}), ...statePropsFor(variation.id, state as KitDemoState) };
+
+// Only a driven state gets a driver. `hover` deliberately gets none: it renders at rest, and the
+// chrome around the frame says why, because a hovered-looking render nobody hovered is a lie.
+//
+// ONE CONTENT STATE IS DRIVEN TOO. A mobile-only sheet's `long` links live inside a closed sheet,
+// so on a real phone that page rendered the word "Menu" and demonstrated nothing; the fixture gate
+// passed it because it reads the built markup rather than what renders. The long content is still
+// the fixture's, and the sheet is opened through its own control so the content can be seen.
+const driven = !isRest && STATE_KIND[state as KitDemoState] === "driven";
+const driveState = driven ? state : state === "long" && MOBILE_ONLY.has(variation.id) ? "open" : "";
+const drive = driveState !== "";
+---
+<BaseLayout
+  title={`${variation.name}, ${isRest ? "at rest" : state}`}
+  description={variation.when}
+  noindex={true}
+  chrome={false}
+>
+  {/*
+    A REAL DOCUMENT NEEDS A TOP-LEVEL HEADING, even one holding a single section.
+    Without it every one of these pages failed axe `page-has-heading-one`, so an accessibility
+    sweep of the kit returned 166 findings of noise at each width, which is how a team learns to
+    stop reading the tool. It is visually hidden because the piece owns everything visible here,
+    and it names the piece and the state so a screen reader arriving at the bare URL is told what
+    it has landed on.
+  */}
+  {!variation.ownsPageHeading && (
+    <h1 class="kit-visually-hidden" data-kit-frame-heading>{variation.name}, {isRest ? "at rest" : state}</h1>
+  )}
+  {Component ? <Component {...props} /> : (
+    <div class="kit-container" style="padding-block: var(--kit-space-3xl)">
+      <p class="kit-empty">This variation is declared in the manifest and has no component.</p>
+    </div>
+  )}
+  {drive && <StateDriver state={driveState} openTarget={OPEN_TARGET[variation.id] ?? ""} />}
+  <p class="frame-status" data-kit-driver-status role="status" aria-live="polite"></p>
+</BaseLayout>
+<style is:global>
+  /**
+   * THE PIECE, AND NOTHING ELSE IN THE DOCUMENT.
+   *
+   * A build that has grown a real site header renders it from the layout on every page, and a
+   * navigation piece shown underneath the client's actual navigation is not the piece anybody is
+   * reviewing. `chrome={false}` above is the polite way of asking; this is the guarantee, because
+   * a layout that never learned about that prop would otherwise put the whole site around a
+   * single section. The layout is still BaseLayout on purpose: the kit has to be demonstrated in
+   * the configuration it ships in, view transitions included, since the one defect that made
+   * every form in the kit dead was caused by exactly that router and would have been invisible in
+   * a stripped-down demo harness.
+   */
+  body > header,
+  body > footer,
+  body > nav { display: none !important; }
+</style>
+<style>
+  /* Only ever seen when this URL is opened on its own; inside the viewer the parent shows it. */
+  .frame-status:empty { display: none; }
+  .frame-status {
+    max-width: var(--kit-page-max);
+    margin: var(--kit-space-lg) auto 0;
+    padding-inline: var(--kit-page-pad);
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+  }
+</style>
+<script>
+  /**
+   * Tells the parent how tall this document actually is, so the frame around it has no scrollbar
+   * and no gap. Reported on load, on resize, and whenever the parent asks after changing width,
+   * because a width change re-lays the document and invalidates the last answer.
+   */
+  (() => {
+    if (window.parent === window) return;
+    /**
+     * ONLY WHEN IT ACTUALLY MOVED, and by more than a pixel of rounding.
+     *
+     * The parent answers a height by resizing the frame, which changes this document's viewport,
+     * which changes what an observer measures. Reporting every measurement would put the two
+     * documents in a loop that never settles and looks like a flickering page. Reporting only a
+     * real change ends it after one round.
+     */
+    let last = -1;
+    /**
+     * THE BODY'S OWN BOX, NEVER scrollHeight.
+     *
+     * `documentElement.scrollHeight` can never be smaller than the iframe's own viewport, and the
+     * parent sets that viewport from this very measurement, so the number could grow and could
+     * never shrink. A 77px navigation sat in a 600px white box on every page, and opening five
+     * accordion answers and closing them again left 524px of nothing. The body's border box is
+     * content height and is not floored by the viewport, which breaks the ratchet.
+     */
+    /**
+     * PLUS WHATEVER RENDERS OUTSIDE THE FLOW. The body's box cannot see a fixed panel, an
+     * absolutely positioned dropdown or a dialog in the top layer, and those are exactly what the
+     * three navigation `open` states render: the frame was sized to the closed bar and the opened
+     * menu had nowhere to go, so the chrome said "opened" over a 48px sliver with 0 of 6 links
+     * visible. Every rendered element's bottom edge now counts, and a fixed panel with `inset: 0`
+     * (exactly as tall as the viewport being decided, which is circular) counts by its CONTENT
+     * height, which is what the reader needs to see. Off-canvas elements, hidden ones and anything
+     * outside the horizontal viewport are skipped so a closed drawer parked at translateX(100%)
+     * does not inflate the frame.
+     */
+    const extent = () => {
+      const body = document.body;
+      if (!body) return 0;
+      let height = Math.ceil(body.getBoundingClientRect().height);
+      const vw = window.innerWidth;
+      body.querySelectorAll<HTMLElement>("*").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return;
+        if (r.right <= 0 || r.left >= vw) return;
+        const cs = getComputedStyle(el);
+        if (cs.visibility === "hidden" || cs.opacity === "0") return;
+        /**
+         * THE LIST INSIDE THE PANEL, NOT THE PANEL. A fixed panel with `inset: 0` is exactly as
+         * tall as the viewport being decided, so its scrollHeight is circular and the first fix
+         * measured nothing: the scrolling happens one level down, in the sheet's own list and the
+         * dropdown's card (scrollHeight 205 in a 117px box at 293px). Any box that scrolls counts
+         * by its CONTENT, so the frame grows until nothing inside it has to scroll.
+         */
+        const inner = cs.position === "fixed" ? Math.max(r.height, el.scrollHeight) : r.height;
+        height = Math.max(height, Math.ceil(r.top + window.scrollY + inner));
+        /**
+         * A SCROLLING BOX THAT WOULD GROW WITH THE FRAME. The sheet's list sits inside a fixed
+         * panel with other things above and below it, so "the list's top plus its content" still
+         * left the frame short by whatever sat under the list; what the frame needs is its current
+         * height plus the amount the list is hiding, because giving the panel that much more room
+         * lets the list grow by exactly that. Only boxes inside a fixed or absolute ancestor count,
+         * which is the sheet and the dropdown card: a fixed-height scroll region in the flow does not
+         * grow with the viewport and would otherwise grow the frame without end. Converges in one
+         * round: once the box no longer hides anything it adds nothing.
+         */
+        const scrolls = /(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1;
+        if (scrolls && (el.closest("[data-kit-sheet], [data-kit-dd], dialog") !== null || cs.position === "fixed" || cs.position === "absolute")) {
+          height = Math.max(height, Math.ceil(window.innerHeight + (el.scrollHeight - el.clientHeight)));
+        }
+      });
+      return height;
+    };
+    const measure = () => {
+      const height = extent();
+      if (!height || Math.abs(height - last) < 2) return;
+      last = height;
+      window.parent.postMessage({ kitFrameHeight: height }, window.location.origin);
+    };
+    let queued = 0;
+    const schedule = () => {
+      if (queued) return;
+      queued = requestAnimationFrame(() => {
+        queued = 0;
+        measure();
+      });
+    };
+    window.addEventListener("load", measure);
+    window.addEventListener("resize", measure);
+    // The viewer announces itself when it binds, which may be after this frame first reported; a
+    // height nobody heard is re-sent rather than assumed delivered.
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      if ((event.data as { kitViewerReady?: boolean })?.kitViewerReady) {
+        last = -1;
+        measure();
+      }
+    });
+    // A panel that animates open is measured mid-transition by the observer below and never again,
+    // so the settled layout is measured once more when the transition ends and, for pieces that
+    // animate with no transition event, a beat later.
+    document.addEventListener("transitionend", schedule, true);
+    document.addEventListener("animationend", schedule, true);
+    const settle = () => window.setTimeout(measure, 450);
+
+    // A driven state changes the height after the driver runs, and an accordion changes it when
+    // the reader presses something, so watch rather than measure once. A fixed panel opening does
+    // not change the document's size, so attribute changes (hidden, open, class, style,
+    // aria-expanded) are watched as well.
+    if ("ResizeObserver" in window) new ResizeObserver(schedule).observe(document.documentElement);
+    if ("MutationObserver" in window) {
+      new MutationObserver(() => { schedule(); settle(); }).observe(document.documentElement, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: ["hidden", "open", "class", "style", "aria-expanded", "aria-hidden"],
+      });
+    }
+    measure();
+  })();
+</script>

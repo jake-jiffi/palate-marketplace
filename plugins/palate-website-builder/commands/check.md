@@ -3,12 +3,24 @@ description: Run the contribution contract over what changed, heal what is mecha
 argument-hint: "[files...] (defaults to the working tree diff)"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Use the live-build verification contract and the project runtime. `node scripts/palate.mjs verify --check --project <site>` only checks whether current accepted evidence exists; it does not run missing browser checks. Execute the missing checks before recording verification. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 Run the contract over the changed routes and return a verdict. This is the gate that runs on
 every contribution, so it is scoped to the diff and nothing else.
 
 **Paths.** `$PALATE` is `${CLAUDE_PLUGIN_ROOT}`; if that variable is unset you are in a skill
 checkout, so use the checkout root. `$SITE` is the project directory (the first argument if it
 is a directory, else the current directory).
+
+**`$SITE` must be a site, and the plugin is not one.** If no directory was given and the working
+directory holds no `package.json` plus `src/pages`, and no `build-manifest.json` whose `project`
+is this directory, stop and ask for the site path. Do not run the gates against the current
+directory to see what happens: run from a plugin checkout they measure the plugin, whose doctrine
+QUOTES the tells the lint hunts and whose templates carry `{{PLACEHOLDER}}` tokens on purpose.
+The gates refuse it themselves now (`refused:`, exit 2); this is so you never ask them to.
 
 ## 1. Work out what changed
 
@@ -202,5 +214,15 @@ can say what was caught rather than only what shipped:
 ```json
 {"at":"<iso>","verdict":"review","grounding":"grounded","class":"content","routes":["/blog"],"caught":[{"lane":"a11y","route":"/blog/welcome","what":"contrast 4.1:1"}],"healed":["voice/em-dash"]}
 ```
+
+**Say when the gates were off.** If `build-manifest.json` carries `gates.state == "off"`, print
+this line above the verdict, every time:
+
+```
+Gates were OFF for this build at <gates.at>. Nothing below was enforced.
+```
+
+`PALATE_GATE_OFF=1` is a legitimate bypass and the hooks record it when they take it. A verdict
+computed with the gates disabled must never read like one computed with them on.
 
 Never print a taste percentile here. This command did not compute one.

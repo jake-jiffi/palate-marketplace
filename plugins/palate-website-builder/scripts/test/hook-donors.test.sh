@@ -17,6 +17,11 @@ HOOK="$DIR/../../hooks/palate-stop.mjs"
 DEEP="$DIR/fixtures/manifest-deep.json"
 TMP="$(mktemp -d)"; pass=0; fail=0
 trap 'rm -rf "$TMP"' EXIT
+# HOME is redirected: recordBuild appends to ~/.config/palate/builds.log.json, and a suite
+# that drives the Stop hook must not write into the operator's real cross-build log. It lives
+# under this suite's own temp dir so the existing trap cleans it up; a second trap on EXIT would
+# REPLACE that one rather than add to it.
+LOG_HOME="$TMP/palate-home"; mkdir -p "$LOG_HOME"
 
 check() {
   local desc="$1" got="$2" want="$3"
@@ -30,7 +35,7 @@ scaffold() { # dir
   printf -- '---\n---\n<h1>x</h1>\n' > "$1/src/pages/index.astro"
 }
 run_hook() { # dir
-  printf '{"cwd":"%s","stop_hook_active":false}' "$1" | node "$HOOK" >/dev/null 2>&1
+  printf '{"cwd":"%s","stop_hook_active":false}' "$1" | env HOME="$LOG_HOME" node "$HOOK" >/dev/null 2>&1
 }
 
 # 1. deep build, hero picked from v3 whose donor is gitbook -> spine = gitbook

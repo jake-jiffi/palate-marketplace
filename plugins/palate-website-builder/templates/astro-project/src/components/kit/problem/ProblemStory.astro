@@ -1,0 +1,218 @@
+---
+/**
+ * ProblemStory: one customer's arc, told in two to four short paragraphs.
+ *
+ * Reach for this when a list would flatten what actually happened. A comparison table is better
+ * at "here are six differences"; this is better at "here is what it cost them, and what changed".
+ *
+ * The paragraphs stay inside the reading measure even when there is no image, because a story set
+ * across a full 1440px page is a story nobody finishes. When there is an image it takes the
+ * narrower of the two columns: the words are doing the work here and the picture is corroboration.
+ *
+ * The attribution is a plain paragraph rather than a blockquote footer. These paragraphs are the
+ * business describing a job, not the customer being quoted, and marking them as a quotation would
+ * put words in someone's mouth.
+ */
+export interface StoryAttribution {
+  /** Who the story is about, or who told it. */
+  name: string;
+  /** Their role, if it matters to the story. */
+  role?: string;
+  /** Their business or organisation. */
+  org?: string;
+}
+
+export interface Props {
+  /** Section heading. Pass an empty string to keep it for assistive technology only. */
+  heading?: string;
+  /** Two to four short paragraphs. */
+  paragraphs?: string[];
+  image?: {
+    src?: string;
+    alt?: string;
+    ratio?: "wide" | "photo" | "portrait";
+    /** A line under the picture saying what it shows. */
+    caption?: string;
+  };
+  attribution?: StoryAttribution;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  /**
+   * Which ground this section sits on. One name and one vocabulary across the whole kit, so a
+   * page can alternate grounds without having to remember which piece calls it what. Every
+   * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  emptyMessage?: string;
+}
+
+const {
+  /* No default heading or paragraphs. Both named a specific dairy, which is a claim about a firm
+     rather than sample copy: forget the prop and a real client's site publishes a case study
+     about a business that does not exist. With none, the piece renders its empty message and the
+     demo page passes the sample from src/lib/kit-sample.ts. */
+  heading = "",
+  paragraphs = [],
+  /* The ratio box with no caption. The caption named the same dairy the paragraphs did, so it
+     travelled with them into the sample module. */
+  image = { ratio: "photo", alt: "" },
+  /* No default. An attribution is the one thing a build must never receive by accident: the
+     paragraphs are plainly sample copy, an attributed name is a claim about a real business. */
+  attribution,
+  id,
+  tone = "default",
+  emptyMessage = "This customer's story is being written up, with their permission.",
+} = Astro.props;
+
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `pst-${Math.random().toString(36).slice(2, 8)}`;
+const titleId = `${uid}-title`;
+const headingText = heading?.trim() || "One customer's story";
+const headingHidden = !heading?.trim();
+
+const body = (Array.isArray(paragraphs) ? paragraphs : []).filter((p) => typeof p === "string" && p.trim());
+const hasMedia = Boolean(image);
+const ratioClass = `kit-media--${image?.ratio ?? "photo"}`;
+
+const attributionLine = attribution
+  ? [attribution.role, attribution.org].filter(Boolean).join(", ")
+  : "";
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+  ]}
+  aria-labelledby={titleId}
+>
+  <div class="kit-container">
+    <div class:list={["ps__grid", hasMedia && "ps__grid--with-media"]}>
+      <div class="ps__body">
+        <h2 id={titleId} class:list={["kit-h2", headingHidden && "kit-visually-hidden"]}>{headingText}</h2>
+
+        {body.length === 0 ? (
+          <p class="kit-empty ps__empty">{emptyMessage}</p>
+        ) : (
+          <div class="ps__prose">
+            {body.map((paragraph) => (
+              <p class="kit-body">{paragraph}</p>
+            ))}
+          </div>
+        )}
+
+        {attribution?.name && (
+          <p class="ps__attrib">
+            <span class="ps__attrib-name">{attribution.name}</span>
+            {attributionLine && <span class="ps__attrib-role kit-muted">{attributionLine}</span>}
+          </p>
+        )}
+      </div>
+
+      {hasMedia && (
+        <figure class="ps__figure">
+          <span class:list={["kit-media", ratioClass]}>
+            {image.src && <img src={image.src} alt={image.alt ?? ""} loading="lazy" decoding="async" />}
+          </span>
+          {image.caption && <figcaption class="ps__figcaption kit-muted">{image.caption}</figcaption>}
+        </figure>
+      )}
+    </div>
+  </div>
+</section>
+
+<style>
+  /* --kit-accent-lift is the variant meant for dark grounds, but its fallback chain ends at
+     --kit-accent, which is near-black by default and therefore invisible on --kit-bg-inverse.
+     That takes the accent text, the stars and every focus ring down with it. Re-resolving it
+     here reads the brand's own lifted accent when there is one and falls back to the inverse
+     text colour, which the same ground already guarantees. Delete this once foundations gives
+     the token a fallback suited to the ground it exists for. */
+  .kit-section--inverse {
+  }
+
+  /* Same token, opposite failure: --kit-media-placeholder is --kit-bg-subtle, so a media box
+     waiting for its image disappears completely on a subtle section and glares on an inverse one.
+     The reserved space has to stay visible on whichever ground the piece is standing on. */
+  .kit-section--subtle {
+  }
+
+  .ps__grid {
+    display: grid;
+    gap: var(--kit-gutter);
+    align-items: start;
+  }
+
+  .ps__body {
+    min-width: 0;
+    display: grid;
+    gap: var(--kit-space-lg);
+    align-content: start;
+  }
+
+  .ps__prose {
+    display: grid;
+    gap: var(--kit-space-md);
+  }
+
+  .ps__prose .kit-body {
+    text-wrap: pretty;
+  }
+
+  .ps__empty {
+    max-width: var(--kit-measure);
+  }
+
+  .ps__attrib {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--kit-space-2xs) var(--kit-space-sm);
+    margin: 0;
+    padding-block-start: var(--kit-space-md);
+    border-block-start: var(--kit-border-width) solid var(--kit-border);
+    max-width: var(--kit-measure);
+  }
+
+  .kit-section--inverse .ps__attrib {
+    border-block-start-color: color-mix(in srgb, var(--kit-text-inverse) 30%, transparent);
+  }
+
+  .ps__attrib-name {
+    font-size: var(--kit-text-base);
+    font-weight: var(--kit-weight-strong);
+  }
+
+  .ps__attrib-role {
+    font-size: var(--kit-text-sm);
+  }
+
+  .ps__figure {
+    margin: 0;
+    min-width: 0;
+  }
+
+  .ps__figcaption {
+    font-size: var(--kit-text-xs);
+    line-height: var(--kit-leading-body);
+    margin-block-start: var(--kit-space-sm);
+    max-width: var(--kit-measure);
+    text-wrap: pretty;
+  }
+
+  @media (min-width: 48rem) {
+    /* The words get the wider column. The picture corroborates, it does not carry. */
+    .ps__grid--with-media {
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: var(--kit-space-2xl);
+    }
+  }
+</style>

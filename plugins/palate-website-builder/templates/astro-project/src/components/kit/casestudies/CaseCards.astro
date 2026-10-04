@@ -1,0 +1,180 @@
+---
+/**
+ * CaseCards: an index of customer stories, each worth its own page.
+ *
+ * Use this when there are several stories and the visitor should choose which one resembles their
+ * own situation. It is a routing section, not a proof section: the card carries just enough for
+ * somebody to recognise themselves, and the page it links to does the arguing.
+ *
+ * Each card is one link, not several. The heading holds the anchor and the anchor's ::after covers
+ * the card, so the whole card is clickable but there is exactly one tab stop and the accessible
+ * name is the study's title rather than "read more". Adding a second link inside the card would
+ * put a nested target under the overlay, which is why there is no separate "read more" anchor.
+ *
+ * Cards align to the top rather than stretching. A one-line outcome padded out to match a
+ * three-line one reads as a layout fault, and outcomes vary more than titles do.
+ *
+ * The customer's name sits UNDER the title rather than over it. Above the heading it is the
+ * eyebrow pattern this kit refuses, and under it the card still reads in the right order.
+ *
+ * The lists carry an explicit `role="list"` beside `list-style: none`. A strict validator calls
+ * that redundant, and it is not: Safari with VoiceOver drops list semantics from a list whose
+ * markers have been removed, so without it the items stop being announced as a list at all. Do
+ * not strip it to quieten a linter.
+ */
+interface Study {
+  title: string;
+  /** Whose story it is, as they have agreed to be named. */
+  customer: string;
+  /** One line. The result, not the process. */
+  outcome: string;
+  image?: { src: string; alt: string };
+  href: string;
+  /** Optional sector or service tag, shown under the outcome. */
+  tag?: string;
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  studies?: Study[];
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "Recent work",
+  lede,
+  /* Empty by default. These name real people and real firms, so an omitted prop must render the empty state rather than an invented one; the demo pages pass samples from src/lib/kit-sample.ts. */
+  studies = [],
+  emptyMessage = "Case studies will be listed here as they are written up and approved by the customers involved.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `cc-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const items = (studies ?? []).filter((s) => s?.title && s?.customer && s?.href);
+/* Three across unless the count divides evenly into two, so a row never ends with one lone card. */
+const three = items.length % 3 === 0 || items.length > 4;
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container cc">
+    <div class="cc__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {items.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ul class:list={["cc__grid", three ? "cc__grid--three" : "cc__grid--two"]} role="list">
+        {items.map((s) => (
+          <li class="cc__item">
+            <article class="cc__card">
+              {s.image?.src && (
+                <div class="cc__media kit-media kit-media--photo">
+                  <img src={s.image.src} alt={s.image.alt} loading="lazy" decoding="async" />
+                </div>
+              )}
+              <div class="cc__text">
+                <h3 class="cc__title">
+                  <a class="cc__link" href={s.href}>{s.title}</a>
+                </h3>
+                <p class="cc__customer kit-muted">{s.customer}</p>
+                <p class="cc__outcome">{s.outcome}</p>
+                {s.tag && <p class="cc__tag kit-muted">{s.tag}</p>}
+              </div>
+            </article>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  .cc__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
+
+  .cc__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-space-2xl) var(--kit-gutter);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 26ch), 1fr));
+    align-items: start;
+  }
+
+  .cc__item { display: flex; min-width: 0; }
+
+  .cc__card {
+    position: relative;
+    display: grid;
+    gap: var(--kit-space-md);
+    align-content: start;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cc__media { transition: opacity var(--kit-duration) var(--kit-ease); }
+  .cc__card:hover .cc__media { opacity: 0.88; }
+
+  .cc__text { display: grid; gap: var(--kit-space-xs); min-width: 0; }
+
+  .cc__title {
+    margin: 0;
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-strong);
+    font-size: var(--kit-text-lg);
+    line-height: var(--kit-leading-snug);
+    text-wrap: pretty;
+  }
+
+  /* One anchor, covering the card. The underline appears on hover and focus rather than resting,
+     because a card whose whole surface is a link does not need a permanent underline to read as
+     one, and three underlined titles in a row is noise. */
+  .cc__link {
+    color: inherit;
+    text-decoration: none;
+    text-underline-offset: var(--kit-space-2xs);
+  }
+  .cc__link::after { content: ""; position: absolute; inset: 0; }
+  .cc__card:hover .cc__link { text-decoration: underline; }
+  .cc__link:focus-visible { text-decoration: underline; }
+
+  .cc__customer {
+    margin: 0;
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-medium);
+    line-height: var(--kit-leading-snug);
+  }
+
+  .cc__outcome {
+    margin: 0;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    text-wrap: pretty;
+  }
+
+  .cc__tag {
+    margin: 0;
+    margin-block-start: var(--kit-space-2xs);
+    font-size: var(--kit-text-xs);
+    letter-spacing: var(--kit-tracking-label);
+    text-transform: uppercase;
+  }
+</style>

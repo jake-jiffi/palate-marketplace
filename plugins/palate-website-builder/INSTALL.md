@@ -106,6 +106,18 @@ see an `MCP server palate skipped` warning, especially when upgrading from an ol
 The update picks up the new plugin version (or enable per-marketplace auto-update). No re-running an
 installer.
 
+### Going back to the previous builder
+
+Palate 2.0 replaced the 1.16 builder. If you prefer 1.16, it stays installable as `palate-classic`:
+
+```bash
+claude plugin uninstall palate-website-builder@palate
+claude plugin install palate-classic@palate
+```
+
+Then restart Claude Code. Its slash commands carry the palate-classic prefix. Use one Palate plugin at a time:
+both register the same hooks, so two installed together double-count a build's library calls.
+
 ### Uninstalling
 
 ```bash

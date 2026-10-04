@@ -1,0 +1,392 @@
+---
+/**
+ * COVERAGE CHECKER. The smallest possible ask, a postcode or a suburb, answered on the spot, then
+ * the visitor is sent to the quote already knowing they are covered.
+ *
+ * This is greenwise's "Check Service Availability" exactly: an input-then-personalise step that
+ * confirms coverage and routes to a quote, placed after the service-area cards and before the
+ * close. re-bath's locator does the same job for a national brand made local, and block's
+ * "see contractors and costs near you" is the same move for a marketplace. The survey's rule for
+ * forms is to ask the smallest thing first (mercury's inline email, pilot's capture) and this is
+ * that rule applied to place.
+ *
+ * NO NETWORK. The covered list is baked into the page, so the answer is instant and there is
+ * nothing to fail on the way; a build that needs a live lookup can point `href` at its own route.
+ * The states are real: `success` and `error` are what the piece's own script renders for a
+ * covered and an uncovered answer, and the demo drives them through the same input.
+ *
+ * NO COVERAGE IS DEFAULTED. A default list of postcodes is a promise to come to places the client
+ * never named.
+ */
+export interface Props {
+  heading?: string;
+  lede?: string;
+  /** Postcodes and suburb names, in any case, in one flat list. A four-digit postcode is ground
+   *  truth: a typed postcode on the list answers yes whatever suburb was typed beside it, because
+   *  the piece carries no postcode-to-suburb table and answers on what it can verify. A typed NAME
+   *  must be the whole place, so "Manly Vale" is never read as "Manly"; a name with a postcode the
+   *  list does not carry is refused as a contradiction; a names-only list answers on the name alone
+   *  and ignores a typed postcode. */
+  covered?: string[];
+  /**
+   * The state the list is in ("NSW"), so "Marrickville NSW" is accepted and "Manly, Queensland" is
+   * refused. Without it, a typed state is treated as a place the list does not name.
+   */
+  state?: string;
+  /** The city or region the list sits in ("Sydney"), stripped from what is typed the way `state` is;
+   *  a listed name that contains it ("North Sydney") still matches whole. */
+  city?: string;
+  inputLabel?: string;
+  placeholder?: string;
+  submitLabel?: string;
+  /** Where a covered visitor is sent, and what the button there says. */
+  nextHref?: string;
+  nextLabel?: string;
+  /** What a covered visitor reads. `{place}` is replaced with what they typed. */
+  successText?: string;
+  /** What an uncovered visitor reads, and the way through that still exists for them. */
+  errorText?: string;
+  errorHref?: string;
+  errorLabel?: string;
+  requiredMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  id?: string;
+  class?: string;
+  emptyMessage?: string;
+}
+
+const {
+  heading = "Do we come to you?",
+  lede = "",
+  covered = [],
+  inputLabel = "Your postcode or suburb",
+  placeholder = "e.g. 2204 or Marrickville",
+  submitLabel = "Check",
+  nextHref = "",
+  nextLabel = "Ask for a quote",
+  successText = "Yes, we cover {place}.",
+  errorText = "We do not usually cover {place}, but it is worth asking: we make exceptions for the right job.",
+  errorHref = "",
+  errorLabel = "Ask anyway",
+  requiredMessage = "Type a postcode or a suburb first.",
+  state = "",
+  city = "",
+  tone = "subtle",
+  id,
+  class: className,
+  emptyMessage = "The areas we cover are being confirmed. Ring us and we will tell you straight away.",
+} = Astro.props as Props;
+
+// Kept in the list's own casing: the answer echoes "Mona Vale", not whatever the visitor typed.
+const list = (Array.isArray(covered) ? covered : [])
+  .map((c) => String(c).trim())
+  .filter(Boolean);
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+const uid = id || `cov-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const inputId = `${uid}-place`;
+const errorId = `${uid}-place-error`;
+const resultId = `${uid}-result`;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", "kit-section--tight", toneClass, "kit-cov", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container kit-cov__inner">
+    <div class="kit-cov__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {list.length === 0 ? (
+      <p class="kit-empty kit-cov__empty">{emptyMessage}</p>
+    ) : (
+      <div
+        class="kit-cov__box"
+        data-kit-coverage
+        data-kit-covered={list.join("|")}
+        data-kit-state={state.trim()}
+        data-kit-city={city.trim()}
+        data-kit-success-text={successText}
+        data-kit-error-text={errorText}
+      >
+        <form class="kit-cov__form" data-kit-coverage-form novalidate>
+          <div class="kit-field kit-cov__field">
+            <label class="kit-field__label" for={inputId}>{inputLabel}</label>
+            <input
+              class="kit-input"
+              id={inputId}
+              name="place"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              placeholder={placeholder}
+              aria-describedby={errorId}
+              data-kit-coverage-input
+              data-kit-required-message={requiredMessage}
+            />
+            <p class="kit-field__error" id={errorId} role="alert" hidden></p>
+          </div>
+          <button type="submit" class="kit-btn kit-btn--primary kit-cov__submit">
+            <span class="kit-btn__label">{submitLabel}</span>
+          </button>
+        </form>
+
+        {/* Both answers are in the document from the start, hidden, so a screen reader hears a
+            change to text that already exists rather than a freshly revealed node, and so the
+            markup, not the script, owns the copy. */}
+        <div class="kit-cov__result" id={resultId} role="status" aria-live="polite">
+          <div class="kit-cov__yes" data-kit-coverage-yes hidden>
+            <p class="kit-body kit-cov__answer" data-kit-coverage-yes-text></p>
+            {nextHref && (
+              <a class="kit-btn kit-btn--primary" href={nextHref} data-kit-coverage-next>
+                <span class="kit-btn__label">{nextLabel}</span>
+              </a>
+            )}
+          </div>
+          <div class="kit-cov__no" data-kit-coverage-no hidden>
+            <p class="kit-body kit-cov__answer" data-kit-coverage-no-text></p>
+            {errorHref && (
+              <a class="kit-btn kit-btn--secondary" href={errorHref}>
+                <span class="kit-btn__label">{errorLabel}</span>
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</section>
+
+<script>
+  /**
+   * Bound once on document by delegation, so it survives ClientRouter swaps and two checkers on a
+   * page share one listener. The answer is decided from the list the markup carries; nothing is
+   * fetched, so there is no loading state to have and none is claimed.
+   */
+  type CovWindow = Window & { __kitCoverageBound?: boolean };
+  const scope = window as CovWindow;
+  if (!scope.__kitCoverageBound) {
+    scope.__kitCoverageBound = true;
+
+    const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    /**
+     * A PLACE IS RARELY TYPED BARE, AND A LOOSE MATCH IS THE EXPENSIVE ERROR. "Marrickville NSW",
+     * "2204, Marrickville" and "Marrickville 2204" have to be accepted; the first fix accepted them
+     * by treating any covered name found as a whole-word run inside the typed value as a hit, and
+     * so promised coverage to "Manly Vale 2093" (Manly), "Chatswood 2000" (the postcode ignored)
+     * and "Manly, Queensland" (every state stripped). Now the pieces of what was typed are read
+     * separately: a four-digit token is a postcode and must be on the list; whatever remains after
+     * the postcode and the business's own state are removed is the place, and must equal a covered
+     * name whole; any other state refuses. Nothing is answered yes on a partial match.
+     */
+    const STATE_FORMS: Record<string, string[]> = {
+      nsw: ["nsw", "new south wales"], vic: ["vic", "victoria"], qld: ["qld", "queensland"],
+      sa: ["sa", "south australia"], wa: ["wa", "western australia"], tas: ["tas", "tasmania"],
+      nt: ["nt", "northern territory"], act: ["act", "australian capital territory"],
+    };
+    const ALL_STATE_FORMS = Object.values(STATE_FORMS).flat().sort((a, b) => b.length - a.length);
+    /**
+     * THE RULE, AFTER FIVE ROUNDS: a four-digit POSTCODE is the only thing this piece can verify,
+     * so it answers on the postcode and never guesses a suburb it does not list. `decide` returns
+     * a covered place or null; the submit handler turns null into a NO (a postcode the list does
+     * not carry) or a REFINE (a name it cannot confirm, or the whole city).
+     *
+     *  1. The typed words, postcode aside, are matched WHOLE against the listed names, most literal
+     *     first (raw, then the business's own state removed, then its city and the country removed),
+     *     so a name that contains the city or a state ("North Sydney", "Port Victoria") is found
+     *     before that qualifier strips, and "Marrickville NSW" / "Coogee, Sydney" read correctly.
+     *  2. A listed name decides YES, unless a typed postcode is one the list does not carry while
+     *     the list carries postcodes at all ("Chatswood 2000" against a list that says 2067): a
+     *     covered suburb with a contradicting postcode is refused. A names-only list has no
+     *     postcode to be contradicted by.
+     *  3. Otherwise a LISTED POSTCODE is authoritative: if any typed postcode is on the list the
+     *     area is covered, even beside an unlisted postcode ("2026 2000") or a state word ("2026
+     *     Victoria"); the echo is a whole-matched name where one exists, else the listed postcode,
+     *     never the visitor's raw words.
+     *  4. With no listed name and no listed postcode, `decide` returns null and the handler decides:
+     *     a postcode the list COULD have carried but does not is a NO; a name the piece cannot
+     *     confirm (or the whole city) is sent to its postcode, the certain path, never refused,
+     *     because a covered suburb the list happens not to spell out must not be told "we do not
+     *     work there". Nothing is answered YES on a partial match.
+     */
+    const decide = (raw: string, covered: string[], ownState: string, ownCity: string): string | null => {
+      const typed = normalise(raw);
+      if (!typed) return null;
+      const collapse = (value: string) => value.replace(/\s+/g, " ").trim();
+      const dropWord = (value: string, word: string) =>
+        collapse(value.replace(new RegExp(`(^|\\s)${word}(\\s|$)`, "g"), " "));
+      const names = covered.filter((c) => !/^\d{4}$/.test(c.trim()));
+      const postcodes = new Set(covered.filter((c) => /^\d{4}$/.test(c.trim())).map((c) => c.trim()));
+      const codesTyped = typed.match(/\b\d{4}\b/g) || [];
+      const words = collapse(typed.replace(/\b\d{4}\b/g, " "));
+      const own = STATE_FORMS[normalise(ownState)] || [];
+      const byName = (place: string) => (place ? names.find((n) => normalise(n) === place) : undefined);
+      // Progressive forms, most-literal first, so a listed name that CONTAINS the city or a state
+      // ("North Sydney", "Port Victoria") matches before that qualifier is ever removed. Only when
+      // the raw words and the state-stripped words both miss is the city and country removed, which
+      // is what reads "Coogee, Sydney" as Coogee.
+      const noState = own.reduce((v, w) => dropWord(v, w), words);
+      const stripped = ["australia", "au", normalise(ownCity)].filter(Boolean).reduce((v, w) => dropWord(v, w), noState);
+      const name = byName(words) || byName(noState) || byName(stripped);
+      // 2: A LISTED POSTCODE IS GROUND TRUTH, and this is checked FIRST, before the name
+      // contradiction below, so a covered postcode is never overruled by an unlisted one typed
+      // beside it: "Bondi 2026 2000" is covered on 2026 (echoing Bondi), not refused on 2000. If
+      // any typed postcode is on the list the area is covered, whatever else was typed; the echo is
+      // a whole-matched name where one exists, else the listed postcode, never the visitor's words.
+      const listedCode = codesTyped.find((c) => postcodes.has(c));
+      if (listedCode) return name || listedCode;
+      // 3: a listed NAME with no listed postcode. A name matched and no typed postcode is on the
+      // list. It contradicts ONLY when the list carries postcodes at all (so a typed one could have
+      // been listed but is not, "Chatswood 2000") -> refuse; a names-only list has no postcode to
+      // be contradicted by, so it ignores a typed postcode and the name covers ("Marrickville 2204"
+      // on a names-only list).
+      if (name) return (postcodes.size && codesTyped.length) ? null : name;
+      // 4: a postcode was typed and none are on the list -> we do not cover that postcode. With no
+      // postcode at all the caller decides whether to refuse (an unlisted name) or ask for a
+      // postcode (a name it cannot confirm, or the whole city); decide() returns null either way.
+      return null;
+    };
+
+    document.addEventListener(
+      "submit",
+      (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-kit-coverage-form")) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        const box = form.closest<HTMLElement>("[data-kit-coverage]");
+        const input = form.querySelector<HTMLInputElement>("[data-kit-coverage-input]");
+        if (!box || !input) return;
+        const error = document.getElementById(input.getAttribute("aria-describedby") || "");
+        const yes = box.querySelector<HTMLElement>("[data-kit-coverage-yes]");
+        const no = box.querySelector<HTMLElement>("[data-kit-coverage-no]");
+        const yesText = box.querySelector<HTMLElement>("[data-kit-coverage-yes-text]");
+        const noText = box.querySelector<HTMLElement>("[data-kit-coverage-no-text]");
+
+        const typed = normalise(input.value);
+        if (!typed) {
+          if (error) {
+            error.textContent = input.getAttribute("data-kit-required-message") || "Type a postcode or a suburb first.";
+            error.hidden = false;
+          }
+          input.setAttribute("aria-invalid", "true");
+          input.focus();
+          if (yes) yes.hidden = true;
+          if (no) no.hidden = true;
+          return;
+        }
+        if (error) {
+          error.textContent = "";
+          error.hidden = true;
+        }
+        input.removeAttribute("aria-invalid");
+
+        const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
+        const hit = decide(input.value, covered, box.dataset.kitState || "", box.dataset.kitCity || "");
+
+        // A WHOLE CITY IS TOO BROAD TO ANSWER, so ask for a suburb or postcode rather than refuse
+        // it: a suburb-level list cannot say yes or no to "Sydney", and "we do not work in Sydney"
+        // is misleading for a business that works across it. Triggers only when nothing matched and
+        // the typed value IS the business's own city (with or without its state or the country).
+        const cityNorm = normalise(box.dataset.kitCity || "");
+        if (!hit && cityNorm) {
+          const ownForms = STATE_FORMS[normalise(box.dataset.kitState || "")] || [];
+          let cityProbe = normalise(input.value);
+          for (const w of [...ownForms, "australia", "au"]) cityProbe = cityProbe.replace(new RegExp(`(^|\\s)${w}(\\s|$)`, "g"), " ").replace(/\s+/g, " ").trim();
+          if (cityProbe === cityNorm) {
+            if (error) {
+              error.textContent = `We cover parts of ${box.dataset.kitCity}. Which suburb or postcode?`;
+              error.hidden = false;
+            }
+            input.setAttribute("aria-invalid", "true");
+            input.focus();
+            if (yes) yes.hidden = true;
+            if (no) no.hidden = true;
+            box.dataset.kitCoverageState = "refine";
+            return;
+          }
+        }
+
+        // A NAME THE LIST DOES NOT CARRY IS NOT A NO, IT IS AN ASK-FOR-THE-POSTCODE. The piece
+        // holds no postcode-to-suburb table, so it cannot tell a covered suburb it happens not to
+        // list ("Bondi Beach", when the area is covered by postcode) from one it does not serve.
+        // Refusing the first states a falsehood and loses a real lead. So a NO answer is only ever
+        // given when a postcode was typed and is not on the list (which the piece CAN verify); a
+        // bare name it cannot match is sent to the certain path, its own postcode.
+        const codes = (input.value.match(/\b\d{4}\b/g) || []);
+        const hasPostcodes = covered.some((c) => /^\d{4}$/.test(c.trim()));
+        // A NO is only ever given to a postcode the list COULD carry but does not. Anything else the
+        // piece cannot verify is a refine: a name it does not list, or a bare postcode against a
+        // names-only list (which has nothing to check it against), sent to the path it can answer.
+        if (!hit && !(codes.length > 0 && hasPostcodes)) {
+          const digitsOnly = !/[a-z]/i.test(input.value);
+          if (error) {
+            error.textContent = digitsOnly
+              ? "We check coverage by suburb here. Which suburb are you in?"
+              : `We cannot confirm ${input.value.trim()} by name. Pop your postcode in and we will tell you for certain.`;
+            error.hidden = false;
+          }
+          input.setAttribute("aria-invalid", "true");
+          input.focus();
+          if (yes) yes.hidden = true;
+          if (no) no.hidden = true;
+          box.dataset.kitCoverageState = "refine";
+          return;
+        }
+
+        // The list's own casing when a name matched, else the postcode the list does NOT carry that
+        // made this a no (never a covered postcode, and never the visitor's raw words).
+        const shown = hit ?? (codes.find((c) => !covered.includes(c)) || codes[0] || input.value.trim());
+        const fill = (template: string) => template.replace(/\{place\}/g, shown);
+
+        if (hit) {
+          if (yesText) yesText.textContent = fill(box.dataset.kitSuccessText || "Yes, we cover {place}.");
+          if (no) no.hidden = true;
+          if (yes) yes.hidden = false;
+          box.dataset.kitCoverageState = "covered";
+        } else {
+          if (noText) noText.textContent = fill(box.dataset.kitErrorText || "We do not usually cover {place}.");
+          if (yes) yes.hidden = true;
+          if (no) no.hidden = false;
+          box.dataset.kitCoverageState = "uncovered";
+        }
+      },
+      { capture: true },
+    );
+  }
+</script>
+
+<style>
+  .kit-cov__inner { display: grid; gap: var(--kit-space-lg); max-width: var(--kit-measure); }
+  .kit-cov__head { display: grid; gap: var(--kit-space-sm); }
+  .kit-cov__form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-sm);
+    align-items: end;
+  }
+  .kit-cov__field { flex: 1 1 14rem; }
+  .kit-cov__submit { flex: none; }
+  .kit-cov__result { display: grid; gap: var(--kit-space-sm); }
+  .kit-cov__yes, .kit-cov__no {
+    display: grid;
+    gap: var(--kit-space-sm);
+    justify-items: start;
+    margin-top: var(--kit-space-md);
+    padding: var(--kit-space-md) var(--kit-space-lg);
+    border-radius: var(--kit-radius);
+    border: var(--kit-border-width) solid var(--kit-border);
+    background: var(--kit-bg);
+  }
+  .kit-cov__yes { border-color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-border)); }
+  .kit-cov__no { border-color: color-mix(in srgb, var(--kit-warning) 45%, var(--kit-border)); }
+  .kit-section--inverse .kit-cov__yes, .kit-section--inverse .kit-cov__no {
+    background: color-mix(in srgb, var(--kit-text-inverse) 6%, transparent);
+  }
+  .kit-cov__answer { margin: 0; }
+</style>

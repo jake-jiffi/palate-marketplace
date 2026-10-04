@@ -3,6 +3,8 @@
 # Usage: state-update.sh phase <phaseName> <status>
 #        state-update.sh set '<jq-path>' '<json-value>'   e.g. set '.brand.packageVersion' '"2.0.0"'
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow writer state-update "$PWD"
 [ -f .palate-skill-state.json ] || { echo "no state file here" >&2; exit 1; }
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ); tmp=$(mktemp)
 if [ "${1:?}" = "phase" ]; then

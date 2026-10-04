@@ -37,7 +37,11 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveBuildContext } from "./project-dir.mjs";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
+import { inspectWorkflow } from "../scripts/lib/workflow-route.mjs";
+import { pluginRootRefusal } from "./project-dir.mjs";
 
 function readStdin() {
   try {
@@ -119,6 +123,21 @@ function blank() {
     project_resolved_by: null,
     business: null,
     signature_move: null,
+    // WHAT THIS BUILD WAS BUILT WITH. The same brief run twice can produce two different
+    // sites because the plugin, the MCP or the library underneath moved, and until these
+    // fields existed nothing in the record said so. Three are read locally; the library's
+    // stamp can only come from the server, which is the one party that knows what its
+    // catalogue currently holds.
+    plugin_version: null,
+    mcp_version: null,
+    library: null,            // { references, catalogue_stamp } from the MCP's own answer
+    library_unverified: true, // until the MCP sends a stamp. A missing one is never a verified one
+    rubric_version: null,
+    // TRUE until the vendored rubric exports a version. It does not yet: rubric.mjs is
+    // byte-identical to the grader's copy and hash-pinned in both repos, so the constant has
+    // to be added grader-side and read from here. Recording the absence is the point; a
+    // manifest that simply had no field would read as a build nobody thought about.
+    rubric_unverified: true,
     mcp_calls: [],
     // Palate calls that were REFUSED or came back empty. They are not grounding (the depth
     // gate counts mcp_calls, and a call that returned nothing taught the build nothing), but
@@ -169,7 +188,7 @@ function blank() {
     // pick) + the accept/edit signal, with the surface context propensity correction
     // needs. Agent-set DESCRIPTIVE block (like variants[]); persisted to builds.log.json
     // by palate-stop.mjs. Nullable + additive: absence never blocks (calm/edit builds).
-    explore: null, // { ran, shown:[{ id, name, donor_slug, hero_pattern, position }], picks:[{ surface, variant_id }], edits:[{ surface, variant_id, note }] }
+    explore: null, // { ran, shown:[{ id, name, donor_slug, position }], picks:[{ surface, variant_id }], edits:[{ surface, variant_id, note }] }
     visual: null, // { ran, pass, iterations:[{i, shots:{desktop_full,mobile_full,sections:{}}, axes:{philosophy..variety}, defects:[{type,location}], score}], console_errors:int }
     novelty: null, // { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
     verifier: null, // { ran, pass, verdict, report_path }
@@ -188,6 +207,89 @@ function blank() {
   };
 }
 
+/**
+ * THE VERSION STAMPS. A rebuild that quietly differs is the failure these close.
+ *
+ * The plugin root is where VERSION and the vendored rubric live. `CLAUDE_PLUGIN_ROOT` is what
+ * Claude Code sets when it runs this hook, and it wins when it actually points at a plugin;
+ * otherwise this file's own directory is the root by construction (hooks/ sits beside VERSION),
+ * which keeps the stamps working when the hook is run directly, as the tests do.
+ */
+function pluginRoot() {
+  const env = process.env.CLAUDE_PLUGIN_ROOT;
+  if (env) {
+    try {
+      if (fs.existsSync(path.join(env, "VERSION"))) return env;
+    } catch {
+      /* an unreadable env root is not a root */
+    }
+  }
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+function readPluginVersion(root) {
+  try {
+    const v = fs.readFileSync(path.join(root, "VERSION"), "utf8").trim();
+    return v || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The rubric's own version, READ rather than added.
+ *
+ * rubric.mjs is vendored byte-identical from the grader and hash-pinned in both repos, so
+ * writing a constant into this copy would fail the grader's own sync test. The plugin reads
+ * the export if the grader ever adds one and records null otherwise: an absent version is a
+ * fact, and guessing one would put a number on a manifest that nothing measured.
+ */
+function readRubricVersion(root) {
+  try {
+    const src = fs.readFileSync(path.join(root, "scripts", "reference-capture", "rubric.mjs"), "utf8");
+    const m = src.match(/export\s+const\s+RUBRIC_VERSION\s*=\s*["'`]([^"'`]+)["'`]/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The library's stamp, in the MCP's own words.
+ *
+ * Only the server knows what its catalogue holds, so `refs_list_verticals` carries `total`,
+ * `catalogue_stamp` (the newest `updated_at` across the catalogue) and `mcp_version`. An older
+ * MCP sends none of it; that returns null here and leaves `library_unverified` standing, which
+ * is the honest record of a connection that could not say.
+ */
+function readLibraryStamp(result) {
+  const bodies = [];
+  if (result && typeof result === "object") {
+    if (result.structuredContent && typeof result.structuredContent === "object") bodies.push(result.structuredContent);
+    for (const b of Array.isArray(result.content) ? result.content : []) {
+      if (b && b.type === "text" && typeof b.text === "string") {
+        try {
+          bodies.push(JSON.parse(b.text));
+        } catch {
+          /* not JSON; nothing to read */
+        }
+      }
+    }
+  }
+  for (const j of bodies) {
+    if (!j || typeof j !== "object") continue;
+    const total = Number(j.total);
+    if (typeof j.catalogue_stamp === "string" && j.catalogue_stamp.trim() && Number.isFinite(total)) {
+      return {
+        references: total,
+        catalogue_stamp: j.catalogue_stamp,
+        mcp_version: typeof j.mcp_version === "string" && j.mcp_version.trim() ? j.mcp_version : null,
+      };
+    }
+  }
+  return null;
+}
+
 // Walk an arbitrary tool result and collect every `slug` string it contains.
 function collectSlugs(node, out) {
   if (!node || typeof node !== "object") return;
@@ -199,6 +301,31 @@ function collectSlugs(node, out) {
     if (k === "slug" && typeof v === "string") out.add(v);
     else collectSlugs(v, out);
   }
+}
+
+/**
+ * THE HOOK DOES NOT ALWAYS RECEIVE AN OBJECT. On a real build every one of 23 survey calls was
+ * journaled with `returned: []` and `refs_search` contributed no slugs, because `tool_response`
+ * arrived as the result's JSON TEXT (or as a bare array of content blocks), not as
+ * `{ content: [...] }`. `resultEvidence` already called a non-empty string "ok", so the survey
+ * counted as grounded while nothing it returned was ever read. Normalise once, before anything
+ * looks inside: a string is parsed as JSON where it can be, else kept as one text block; an array
+ * is the content list.
+ */
+function normaliseResult(result) {
+  if (typeof result === "string") {
+    const t = result.trim();
+    if (!t) return result;
+    try {
+      const parsed = JSON.parse(t);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (Array.isArray(parsed.content) || parsed.structuredContent)) return parsed;
+      return { content: [{ type: "text", text: t }], structuredContent: parsed && typeof parsed === "object" ? parsed : undefined };
+    } catch {
+      return { content: [{ type: "text", text: t }] };
+    }
+  }
+  if (Array.isArray(result)) return { content: result };
+  return result;
 }
 
 // MCP results often arrive as { content: [{ type:'text', text:'<json>' }] }; the
@@ -215,6 +342,49 @@ function collectFromMcpResult(result, out) {
       }
     }
   }
+}
+
+// WHAT A DEEP READ ACTUALLY CARRIED, per reference and note section. A record the library answers
+// for can still hold an untouched template on the section that was asked for (headings and HTML
+// comments, no notes), and three of the kit's forty-two cited references did exactly that while
+// `returned` said they had been read. Only the substantive character count of each section is
+// kept, never the notes themselves, so the survey can tell a read that found notes from a read
+// that found a stub.
+function substantiveLength(text) {
+  return String(text)
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/^\s*#+.*$/gm, " ")
+    .replace(/\s+/g, " ")
+    .trim().length;
+}
+function readContent(result) {
+  const bodies = [];
+  if (result && typeof result === "object") {
+    if (result.structuredContent && typeof result.structuredContent === "object") bodies.push(result.structuredContent);
+    for (const b of Array.isArray(result.content) ? result.content : []) {
+      if (b && b.type === "text" && typeof b.text === "string") {
+        try {
+          bodies.push(JSON.parse(b.text));
+        } catch {
+          /* not JSON; nothing to read */
+        }
+      }
+    }
+  }
+  const out = {};
+  const take = (rec) => {
+    if (!rec || typeof rec !== "object") return;
+    const slug = rec.record && typeof rec.record.slug === "string" ? rec.record.slug : null;
+    if (!slug || !rec.sections || typeof rec.sections !== "object") return;
+    const per = out[slug] || (out[slug] = {});
+    for (const [section, text] of Object.entries(rec.sections)) per[section] = substantiveLength(text);
+  };
+  for (const j of bodies) {
+    if (!j || typeof j !== "object") continue;
+    if (Array.isArray(j.records)) j.records.forEach(take);
+    else take(j);
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 // A parsed JSON body that carried nothing to read. `{"results":[]}` and `{"ok":true}` are
@@ -533,22 +703,89 @@ function adoptStaleManifest(ctx) {
   return target;
 }
 
+// An explicit legacy entry preserves surveys that start before a scaffold.
+// A generic MCP call in an uninitialised directory does not establish that intent.
+function initialiseLegacy() {
+  const args = process.argv.slice(2);
+  if (args[0] !== "--init-legacy") return false;
+  try {
+    if (args.length !== 3 || args[1] !== "--project") throw new Error("Use --init-legacy --project <existing directory>");
+    const requested = path.resolve(args[2]);
+    const dir = fs.realpathSync(requested);
+    if (!fs.statSync(dir).isDirectory()) throw new Error("Legacy project must be a directory");
+    const route = inspectWorkflow([requested, dir]);
+    if (route.kind !== "legacy") throw new Error(route.error || "A live-design project cannot acquire legacy state");
+    const refusal = pluginRootRefusal(requested) || pluginRootRefusal(dir);
+    if (refusal) throw new Error(refusal);
+    const target = path.join(dir, "build-manifest.json");
+    try {
+      const existing = fs.lstatSync(target);
+      if (!existing.isFile() || existing.isSymbolicLink()) throw new Error("Existing legacy manifest must be a normal file");
+      JSON.parse(fs.readFileSync(target, "utf8"));
+      return true;
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+    const state = blank();
+    state.project = dir;
+    state.project_resolved_by = "explicit-legacy";
+    const fd = fs.openSync(target, "wx", 0o600);
+    const owned = fs.fstatSync(fd);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(state, null, 2) + "\n");
+      // Live init activates by replacing an empty directory. If it won after the
+      // preflight, remove only our new file from its directory and refuse.
+      const current = inspectWorkflow([requested, dir]);
+      if (current.kind !== "legacy") throw new Error(current.error || "A live-design project cannot acquire legacy state");
+    } catch (error) {
+      try {
+        const current = fs.lstatSync(target);
+        if (current.dev === owned.dev && current.ino === owned.ino) fs.unlinkSync(target);
+      } catch { /* Never remove an unproven or replaced record. */ }
+      throw error;
+    } finally { fs.closeSync(fd); }
+  } catch (error) {
+    process.stderr.write(`[palate] Legacy start refused: ${error.message}\n`);
+    process.exitCode = 2;
+  }
+  return true;
+}
+
 function main() {
+  if (initialiseLegacy()) return;
   const p = readStdin();
   if (!p) return;
+  if (handleLiveWorkflow(p, "PostToolUse")) return;
   const tool = p.tool_name || "";
   const input = p.tool_input || {};
-  const result = p.tool_response ?? p.tool_output ?? p.toolResponse ?? null;
+  const result = normaliseResult(p.tool_response ?? p.tool_output ?? p.toolResponse ?? null);
   const written = input.file_path || input.filePath || input.path;
 
   // ONE answer to "which project is this", shared with palate-stop.mjs and palate-pretooluse.mjs.
   // The file being written is the strongest hint available: a write into src/pages/index.astro
   // names its project even when the session cwd sits two levels above it.
   const ctx = resolveBuildContext(p.cwd || process.cwd(), { hint: written });
+  if (handleLiveWorkflow(p, "PostToolUse", [ctx.dir, ctx.manifest])) return;
+  // NEVER RECORD A BUILD INTO THE PLUGIN. This wrote five stray build-manifest.json files into
+  // the skill repo, one of them recording 188 files_written across three unrelated
+  // repositories, because the resolver fell back to whatever directory the session sat in.
+  if (ctx.how === "refused" || !ctx.manifest) return;
+  if (ctx.how === "fallback" && !fs.existsSync(ctx.manifest) &&
+      !fs.existsSync(path.join(ctx.dir, JOURNAL_REL))) {
+    // Do not pollute an empty/source-only destination before new init. Known legacy
+    // projects, explicit starts, environment targets and journals still record.
+    const quota = detectQuota(result);
+    if (quota) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(quota, result) }) + "\n");
+    return;
+  }
   const MANIFEST = adoptStaleManifest(ctx);
   const projectDir = ctx.dir;
 
   let m = load(MANIFEST) ?? blank();
+  // A manifest somebody hand-shaped, or one written by an older recorder, can be missing the
+  // list fields. Missing lists threw on every call, so the hook exited 1 and the survey was
+  // silently unrecorded: normalise rather than trust the shape.
+  for (const k of ["mcp_calls", "mcp_failures", "references_surveyed", "inner_pages_viewed", "layers_read", "files_written", "files_written_outside", "sections", "variants"]) {
+    if (!Array.isArray(m[k])) m[k] = [];
+  }
   // A manifest belongs to ONE build, so telemetry from an unrelated repo must not keep
   // accumulating into one file. But the first version of this check compared the two paths for
   // EQUALITY, and that destroyed the survey of very nearly every build.
@@ -631,6 +868,23 @@ function main() {
   if (!("grounding" in m)) m.grounding = null; // additive third-state label (script-set)
   if (!Array.isArray(m.mcp_failures)) m.mcp_failures = []; // additive: refused/empty calls
   if (!Array.isArray(m.files_written_outside)) m.files_written_outside = [];
+  // Additive version stamps. `library_unverified` defaults TRUE on an older manifest: it
+  // predates the stamp, so nothing verified its library, and defaulting the other way would
+  // quietly certify a build nobody measured.
+  if (!("plugin_version" in m)) m.plugin_version = null;
+  if (!("mcp_version" in m)) m.mcp_version = null;
+  if (!("library" in m)) m.library = null;
+  if (!("library_unverified" in m)) m.library_unverified = true;
+  if (!("rubric_version" in m)) m.rubric_version = null;
+  if (!("rubric_unverified" in m)) m.rubric_unverified = true;
+  // Read once and kept: these are what the build STARTED on, and re-reading them every call
+  // would let a mid-build plugin update rewrite history.
+  if (m.plugin_version == null || m.rubric_version == null) {
+    const root = pluginRoot();
+    if (m.plugin_version == null) m.plugin_version = readPluginVersion(root);
+    if (m.rubric_version == null) m.rubric_version = readRubricVersion(root);
+  }
+  if (m.rubric_version != null) m.rubric_unverified = false;
 
   if (tool.startsWith("mcp__palate__")) {
     const evidence = resultEvidence(result);
@@ -655,12 +909,29 @@ function main() {
       return;
     }
 
+    // The library stamp, first answer wins. A re-seed mid-build must not rewrite what the
+    // survey actually read.
+    if (tool === "mcp__palate__refs_list_verticals" && m.library == null) {
+      const stamp = readLibraryStamp(result);
+      if (stamp) {
+        m.library = { references: stamp.references, catalogue_stamp: stamp.catalogue_stamp };
+        m.library_unverified = false;
+        if (stamp.mcp_version && m.mcp_version == null) m.mcp_version = stamp.mcp_version;
+      }
+    }
+
     const slugs = new Set();
     collectFromMcpResult(result, slugs);
+    // What the library actually ANSWERED WITH, kept apart from what was asked for: a batched read
+    // under a shared token budget can return fewer references than it was asked for, and a slug
+    // that was requested and never came back was not read. The survey snapshot reads `returned`
+    // where it exists and falls back to `slugs` on older entries.
+    const returned = [...slugs];
+    const content = readContent(result);
     if (typeof input.slug === "string") slugs.add(input.slug);
     if (Array.isArray(input.slugs)) for (const s of input.slugs) if (typeof s === "string") slugs.add(s);
     const slugList = [...slugs];
-    const entry = { tool, args: input, slugs: slugList, evidence, ts: new Date().toISOString() };
+    const entry = { tool, args: input, slugs: slugList, returned, ...(content ? { content } : {}), evidence, ts: new Date().toISOString() };
     m.mcp_calls.push(entry);
     // The journal is written FIRST-class, beside the manifest, on the same call. If the manifest
     // write below fails, or the file is later blanked, moved or symlinked away, this line is
@@ -724,4 +995,4 @@ function main() {
 }
 
 main();
-process.exit(0);
+process.exit(process.exitCode || 0);

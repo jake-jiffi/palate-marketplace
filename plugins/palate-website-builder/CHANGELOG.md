@@ -5,6 +5,38 @@ What changed in the Palate website builder, and why it matters to a build you ar
 Update from a terminal with `claude plugin marketplace update palate`, then restart Claude Code.
 No reinstall is needed.
 
+## 2.0.0
+
+**New sites start with working design options.** Palate used to research, write concepts and build a
+set of home pages before you saw anything. Now it shows a first working option in about ten minutes,
+motion included, and gives you three distinct options by default, or as many as you ask for. You pick
+one in chat, and the whole site is built from it in the same project.
+
+**One design system per site.** Once you pick, the direction is written into a single system file:
+type scale, colours and page structure. A style guide only you can see runs at `/_palate/style-guide`
+in the local preview and updates whenever the system changes. A check fails any page that sets its own
+type sizes or colours, unless the page says why.
+
+**Generated images and scroll films, if you use Higgsfield.** With the Higgsfield CLI installed and
+signed in, Palate asks once whether it may use it and how many credits it may spend (300 is the
+recommended cap). It can then generate stills while you compare options and, after you pick, a scroll
+film for the opening, one section or the whole page when the design calls for one. It never spends past
+the cap you set or half your balance, and it never adds a film by default. Without Higgsfield nothing
+changes, and you are never asked.
+
+**Existing sites carry on.** A site you started before 2.0 is not restarted: Palate continues it with
+its earlier workflow. Your token, the library and every command stay the same. `/jury` and `/pick` are
+new.
+
+**Prefer the previous builder?** It stays available as `palate-classic`. In a terminal:
+
+```bash
+claude plugin uninstall palate-website-builder@palate
+claude plugin install palate-classic@palate
+```
+
+Then restart Claude Code. Use one Palate plugin at a time.
+
 ## 1.16.1
 
 **Install and update from the terminal.** Typed into the Claude Code desktop app's chat box,

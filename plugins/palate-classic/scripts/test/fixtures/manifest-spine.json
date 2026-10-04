@@ -1,0 +1,82 @@
+{
+  "schema": 3,
+  "business": "a suburban tide-and-bait shop",
+  "signature_move": {
+    "source_slug": "tide-co",
+    "name": "tide-as-time scroll"
+  },
+  "references_surveyed": [
+    "tide-co",
+    "harbour-supply",
+    "north-ortho",
+    "lumen-clinic",
+    "atelier-skin",
+    "form-studio",
+    "ridgeline-co",
+    "salt-cafe"
+  ],
+  "inner_pages_viewed": [
+    { "slug": "tide-co", "page": "pricing" },
+    { "slug": "harbour-supply", "page": "shop" },
+    { "slug": "north-ortho", "page": "contact" }
+  ],
+  "mcp_calls": [
+    {
+      "tool": "mcp__palate__refs_search",
+      "args": { "query": "coastal supply shop", "device": "scroll" },
+      "slugs": ["tide-co", "harbour-supply", "north-ortho", "lumen-clinic"]
+    },
+    {
+      "tool": "mcp__palate__refs_get",
+      "args": { "slugs": ["tide-co", "harbour-supply"], "layer": ["do_dont", "component_prompts", "signature_moves"] },
+      "slugs": ["tide-co", "harbour-supply"]
+    },
+    {
+      "tool": "mcp__palate__refs_get_screenshot",
+      "args": { "slug": "tide-co", "page": "pricing" },
+      "slugs": ["tide-co"]
+    },
+    {
+      "tool": "mcp__palate__refs_get_astro_recipe",
+      "args": { "slug": "tide-co" },
+      "slugs": ["tide-co"]
+    },
+    {
+      "tool": "mcp__palate__refs_similar",
+      "args": { "slug": "tide-co" },
+      "slugs": ["atelier-skin", "form-studio", "ridgeline-co", "salt-cafe"]
+    }
+  ],
+  "files_written": ["src/pages/index.astro"],
+  "diverge": {
+    "ran": true,
+    "n": 6,
+    "concepts": [
+      { "id": "c1", "mechanic": "hero + three cards + CTA", "lens": "the customer's worst moment", "analogical_seed": "a standard storefront", "conventionality": 0.85, "self_tag": "safe-warm anchor" },
+      { "id": "c2", "mechanic": "carried-timeline of the daily catch", "lens": "the founder's obsession", "analogical_seed": "a tide chart", "conventionality": 0.45, "self_tag": "bold" },
+      { "id": "c3", "mechanic": "tide-as-time scroll: the page level rises and falls with the tide table", "lens": "the physical object/space", "analogical_seed": "a flight tracker", "conventionality": 0.2, "self_tag": "one-of-a-kind" },
+      { "id": "c4", "mechanic": "pull-of-the-coast pressure dial that fills as you scroll", "lens": "the customer's worst moment", "analogical_seed": "a relay baton", "conventionality": 0.18, "self_tag": "one-of-a-kind" },
+      { "id": "c5", "mechanic": "bait grid with hover-to-decode species cards", "lens": "the physical object/space", "analogical_seed": "tap-to-decode", "conventionality": 0.55, "self_tag": "bold" },
+      { "id": "c6", "mechanic": "absence-as-argument empty harbour at 6pm Friday", "lens": "the founder's obsession", "analogical_seed": "absence-as-argument", "conventionality": 0.3, "self_tag": "bold" }
+    ]
+  },
+  "converge": {
+    "ran": true,
+    "scored": [
+      { "id": "c1", "originality": 0.8, "craft_feasibility": 5, "combined": 2.5 },
+      { "id": "c2", "originality": 2.8, "craft_feasibility": 4.5, "combined": 3.5 },
+      { "id": "c3", "originality": 4.0, "craft_feasibility": 4.0, "combined": 4.0 },
+      { "id": "c4", "originality": 4.1, "craft_feasibility": 3.0, "combined": 3.66 },
+      { "id": "c5", "originality": 2.3, "craft_feasibility": 4.5, "combined": 3.18 },
+      { "id": "c6", "originality": 3.5, "craft_feasibility": 4.0, "combined": 3.7 }
+    ],
+    "advanced": ["c3", "c6"]
+  },
+  "buildability": {
+    "ran": true,
+    "mechanics": [
+      { "name": "tide-as-time scroll", "precedent_slug": "tide-co", "astro_recipe_pulled": true, "feasible": true, "fallback": null },
+      { "name": "absence-as-argument reveal", "precedent_slug": "salt-cafe", "astro_recipe_pulled": true, "feasible": true, "fallback": "GSAP ScrollTrigger fade per references/motion-and-3d.md" }
+    ]
+  }
+}

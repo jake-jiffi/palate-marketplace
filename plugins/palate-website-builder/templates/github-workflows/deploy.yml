@@ -28,6 +28,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          PUBLIC_SITE_ENV: production
           SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
           SANITY_DATASET: production
           SANITY_API_READ_TOKEN: ${{ secrets.SANITY_API_READ_TOKEN }}

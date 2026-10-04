@@ -39,13 +39,36 @@ check "shallow but CONNECTED build is still blocked (floor intact)" 2 "$DIR/fixt
 # manifest is not a tracked build, and a missing jq is a tooling gap, neither of which
 # says anything about whether the MCP was used. (missing manifest is asserted above.)
 BASH_BIN="$(command -v bash)"
-PATH="/nonexistent" "$BASH_BIN" "$GATE" "$DIR/fixtures/manifest-ungrounded.json" >/dev/null 2>&1
+# Isolate jq absence while retaining the runtime needed to identify the project first.
+# Removing every executable also removes Node/dirname and never reaches the jq check.
+NOJQ_GATE="$(mktemp -d)"
+for command_name in node dirname; do
+  ln -s "$(command -v "$command_name")" "$NOJQ_GATE/$command_name"
+done
+PATH="$NOJQ_GATE" "$BASH_BIN" "$GATE" "$DIR/fixtures/manifest-ungrounded.json" >/dev/null 2>&1
 ec=$?
+rm -rf "$NOJQ_GATE"
 if [ "$ec" -eq 0 ]; then
   echo "ok   - missing jq still skips (exit 0), never UNGROUNDED"; pass=$((pass + 1))
 else
   echo "FAIL - missing jq still skips (exit 0), never UNGROUNDED (exit $ec, want 0)"; fail=$((fail + 1))
 fi
+
+# Missing Node is a separate routing failure. It must never masquerade as a jq skip,
+# an UNGROUNDED verdict or a successful guard, and it must leave the project untouched.
+NONODE_BIN="$(mktemp -d)"; NONODE_PROJECT="$(mktemp -d)"
+ln -s "$(command -v dirname)" "$NONODE_BIN/dirname"
+cp "$DIR/fixtures/manifest-ungrounded.json" "$NONODE_PROJECT/build-manifest.json"
+node_missing_output="$(PATH="$NONODE_BIN" "$BASH_BIN" "$GATE" "$NONODE_PROJECT/build-manifest.json" 2>&1)"
+ec=$?
+if [ "$ec" -eq 127 ] && printf '%s' "$node_missing_output" | grep -q 'node: command not found' \
+  && cmp -s "$DIR/fixtures/manifest-ungrounded.json" "$NONODE_PROJECT/build-manifest.json" \
+  && [ "$(find "$NONODE_PROJECT" -mindepth 1 | wc -l | tr -d ' ')" -eq 1 ]; then
+  echo "ok   - missing Node refuses routing (127) without changing project state"; pass=$((pass + 1))
+else
+  echo "FAIL - missing Node did not refuse routing without state changes (exit $ec, want 127)"; fail=$((fail + 1))
+fi
+rm -rf "$NONODE_BIN" "$NONODE_PROJECT"
 
 # An UNREADABLE manifest is a tooling/corruption problem, not evidence of anything. It must
 # SKIP (exit 0), never be mislabelled UNGROUNDED: `jq length` on a corrupt file yields 0 the

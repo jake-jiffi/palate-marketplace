@@ -33,6 +33,7 @@
  * then write the record). Prints DIVERGE_FREE_AXES=<csv|none> on success. No deps.
  */
 import { readFileSync } from "node:fs";
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 const MOTION_BANDS = ["still", "calm", "confident", "bold", "spectacle"];
 const LOCKABLE_AXES = ["colour", "type"];
@@ -96,7 +97,7 @@ export function validateBrandRecord(rec) {
 }
 
 // CLI
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (invokedDirectly(import.meta.url)) {
   const path = process.argv[2];
   if (!path) {
     console.error("usage: node scripts/verify-brand-record.mjs <record.json>");

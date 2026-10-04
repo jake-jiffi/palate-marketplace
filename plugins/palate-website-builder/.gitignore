@@ -4,6 +4,10 @@ node_modules/
 .vercel/
 dist/
 .astro/
+# BOTH FORMS, deliberately. The trailing slash ignores a DIRECTORY only, and this path is a
+# symlink on a development machine (linked to a clone that has run setup.sh), which the slash
+# form does not match. One got committed that way.
+scripts/reference-capture/node_modules
 scripts/reference-capture/node_modules/
 # Per-build artefacts the gates write into a build's project dir; never the skill's source.
 build-manifest.json

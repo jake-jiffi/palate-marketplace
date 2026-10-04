@@ -1,0 +1,13 @@
+---
+import CommerceLayout from '../layouts/CommerceLayout.astro';
+import ProductGrid from '../components/commerce/ProductGrid.astro';
+import ListingControls from '../components/commerce/ListingControls.astro';
+import { privatePage, services, listingParams } from '../lib/shopify/server';
+export const prerender = false;
+privatePage(Astro);
+const q = Astro.url.searchParams.get('q') || '';
+let data: any, error = '', parameters;
+try { parameters = listingParams(Astro.url); if (q.length > 200) throw new Error(); } catch { error = 'These search choices are invalid. Clear them to continue.'; Astro.response.status = 400; }
+if (q && !error) try { const { api } = await services(); data = await api.search(q, parameters); } catch { error = 'Search could not be loaded. Please retry.'; Astro.response.status = 503; }
+---
+<CommerceLayout title={q === '*' ? 'All products' : 'Search products'}><h1>{q === '*' ? 'All products' : 'Search products'}</h1><ListingControls filters={data?.productFilters} connection={data} />{error ? <p role="alert">{error}</p> : data ? <ProductGrid products={data.nodes} /> : <p>Enter a product name to search the current catalogue.</p>}</CommerceLayout>

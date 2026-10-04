@@ -71,15 +71,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { resolveBuildContext } from "./project-dir.mjs";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
-const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$/i;
+const MERGE = path.join(HERE, "..", "scripts", "manifest-merge.mjs");
+const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$|\.dc\.html$/i;
 const CONFIG = /(^|\/)(astro|tailwind|vite|postcss|package|tsconfig|eslint)\.[a-z.]+$/i;
 // Page/section source: the files the model HAND-AUTHORS to compose the site. A NEW one
 // (or overwriting one) is the act the DIVERGE wall guards; everything else (config,
 // layout chrome, lib, the manifest/state files) is exempt so the scaffold is free.
-const PAGE_OR_SECTION = /(^|\/)src\/(pages|components)\//i;
+// Canvas-first Explore: an artboard under .palate/explore/seed/ IS the first design write of a
+// build (a drawn hero and section), so it is page-and-section source for every wall.
+const PAGE_OR_SECTION = /(^|\/)src\/(pages|components)\/|(^|\/)\.palate\/explore\/seed\/[^/]+\.dc\.html$/i;
 
 // Thresholds for the divergeValid predicate (env-tunable, documented; defaults echo
 // references/story-engine.md's own numbers, N=6-8 sampled with >=2 concepts at
@@ -152,6 +156,125 @@ function DIVERGE_REQUIRED_MESSAGE(mode) {
 // The survey deny copy. It has to hand back the exact calls that clear the bar, because the
 // agent is mid-build and a vague "survey more" costs a round trip to work out what is missing.
 // House rules: Australian English, no em dashes, no AI-tell vocabulary.
+// ---------------------------------------------------------------------------------------
+// THE PLAN CHECKPOINT WALL. The doctrine has always said "before Phase A, show a short plan
+// and get a go-ahead": the pages, the brand source, the references, the host (ALWAYS asked),
+// whether Explore runs and at what count, the stage, who edits the copy. It was prose, and a
+// live client build skipped it whole: one sentence to the user in twenty-eight minutes, then
+// host, variant count and CMS decided alone. Every other rule that mattered here got a gate
+// after it was skipped silently. This is that gate.
+//
+// It reads manifest.plan_checkpoint and refuses the first page/section source write until the
+// block records WHAT was shown, the EXPLORE DECISION and a GO. Three Explore decisions are
+// valid, because not everyone wants variations: a LADDER of N boards (N >= 3), a NAMED
+// DIRECTION ("build it like the Northwind site"), or a SUPPLIED EXAMPLE (an HTML file, a
+// mock-up or a URL the client wants rebuilt in Astro as it is). The last two skip Explore and
+// must also be recorded on commission.explore_skip so the done gate agrees.
+//
+// A skip is allowed, and it is RECORDED, never silent: tiny reversible work, or a brief that
+// named its direction, writes { exempt, reason }. What the hook cannot verify is that a human
+// actually said yes: go.quote carries their words (or the clause of the brief that
+// pre-authorised the build) so the claim is visible in the manifest and the Stop summary.
+// PALATE_GATE_CHECKPOINT=0 releases it for a session that genuinely cannot ask.
+// ---------------------------------------------------------------------------------------
+const EXPLORE_MODES = ["ladder", "named-direction", "supplied-example"];
+const CHECKPOINT_EXEMPTIONS = ["tiny-work", "named-direction"];
+const nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
+const nonEmptyList = (v, min, max) =>
+  Array.isArray(v) && v.length >= min && v.length <= max && v.every(nonEmpty);
+
+// THE INTAKE. A ladder Explore is the one mode that DRAWS a range, and until now nothing about
+// that range came from the person: the v3 run asked the calibration question after the boards
+// were already on the canvas, so the answer arrived too late to steer the research it was for,
+// and the checkpoint was satisfied by a brief that named none of this. These six answers are
+// what the deep survey is steered by (the intensity facet, the sites to search, the donors ruled
+// out, the conversion spine), so they are recorded BEFORE the survey or they steer nothing.
+// Named directions and supplied examples draw no ladder and are not asked.
+function intakeValid(intake) {
+  if (!intake || typeof intake !== "object") return false;
+  const cal = intake.calibration;
+  if (!cal || typeof cal !== "object") return false;
+  if (!Number.isInteger(cal.position) || cal.position < 1 || cal.position > 4) return false;
+  if (!nonEmpty(cal.why)) return false;
+  // 1 to 20: one named site is enough to steer a search, and a list past twenty is a dump of
+  // somebody's bookmarks rather than an answer. The bound is stated in the deny message and in
+  // SKILL.md's checkpoint, so it refuses nothing an agent was not told about.
+  if (!nonEmptyList(intake.admired, 1, 20)) return false;
+  if (!nonEmptyList(intake.disliked, 1, 20)) return false;
+  if (!nonEmpty(intake.primary_action)) return false;
+  if (!nonEmpty(intake.wow)) return false;
+  // 3 to 5, the range the doctrine asks for: fewer is too thin to rule a donor out, more is a
+  // list nobody held to and the drawing quietly ignores.
+  return nonEmptyList(intake.avoid, 3, 5);
+}
+
+function checkpointValid(m) {
+  const c = m && m.plan_checkpoint;
+  if (!c || typeof c !== "object") return false;
+  if (c.exempt != null) {
+    return CHECKPOINT_EXEMPTIONS.includes(c.exempt) && nonEmpty(c.reason);
+  }
+  const shown = c.shown, go = c.go;
+  if (!shown || typeof shown !== "object" || !go || typeof go !== "object") return false;
+  if (!nonEmpty(shown.host) || !nonEmpty(shown.stage)) return false;
+  if (shown.cms === undefined || shown.cms === null) return false;
+  const ex = shown.explore;
+  if (!ex || typeof ex !== "object" || !EXPLORE_MODES.includes(ex.mode)) return false;
+  if (ex.mode === "ladder") {
+    if (!Number.isInteger(ex.count) || ex.count < 3) return false;
+    if (!intakeValid(shown.intake)) return false;
+  } else if (!nonEmpty(ex.source)) {
+    return false; // what was named, or what was supplied (a path or a URL)
+  }
+  if (go.given !== true) return false;
+  if (!["asked", "brief"].includes(go.how)) return false;
+  // A BRIEF PRE-AUTHORISES ONLY A NAMED DIRECTION OR A SUPPLIED EXAMPLE. The first live build
+  // after this wall shipped recorded how:"brief" quoting its opening prompt and asked nothing:
+  // host, CMS and rung count decided alone, on a ladder Explore, which is the case the doctrine
+  // says is ALWAYS asked. A ladder on a new site needs the person's own answer.
+  if (go.how === "brief" && ex.mode === "ladder") return false;
+  return nonEmpty(go.quote);
+}
+
+const CHECKPOINT_REQUIRED_MESSAGE =
+  "PLAN CHECKPOINT REQUIRED before any page or section source is written (SKILL.md, \"The plan\n" +
+  "checkpoint\", moment 1). Show the person a short plan and get a go, then record it:\n" +
+  "  manifest.plan_checkpoint = {\n" +
+  "    shown_at: ISO time,\n" +
+  "    shown: { pages:[...], brand_source, references:[...], industry,\n" +
+  "             host: \"vercel\"|\"cloudflare\" (ALWAYS asked, Vercel the default), stage: \"preview\"|\"production\",\n" +
+  "             cms: false | \"sanity\" (ask: who edits this copy in six months?),\n" +
+  "             explore: { mode: \"ladder\", count: N>=3 }\n" +
+  "                   | { mode: \"named-direction\", source: \"the site or direction they named\" }\n" +
+  "                   | { mode: \"supplied-example\", source: \"path or URL of the HTML / mock-up to rebuild in Astro\" },\n" +
+  "             intake: { ... } (a LADDER only, see below) },\n" +
+  "    go: { given: true, how: \"asked\"|\"brief\", quote: \"their words, or the brief clause that pre-authorised it\" } }\n" +
+  "  how: \"brief\" is accepted ONLY for named-direction and supplied-example; a ladder Explore must be ASKED.\n" +
+  "Not everyone wants variations: named-direction and supplied-example SKIP Explore (record the same\n" +
+  "reason on commission.explore_skip). Tiny reversible work, or a brief that names its direction, may\n" +
+  "record the skip instead: plan_checkpoint = { exempt: \"tiny-work\"|\"named-direction\", reason }.\n" +
+  "\n" +
+  "A LADDER ALSO NEEDS THE INTAKE, ASKED BEFORE THE DEEP SURVEY AND IN ONE ROUND. A ladder is\n" +
+  "the one decision that draws a RANGE, and until these are answered nothing about that range\n" +
+  "came from the person. The surveyor's first act is the calibration row only (3 or 4 real sites\n" +
+  "from their vertical, restrained to bold); show it, then ask all six in ONE round, in their own\n" +
+  "words, through AskUserQuestion where the harness has it and four questions to a call (SKILL.md,\n" +
+  "\"Asking the person\"):\n" +
+  "  1. Which of these is closest to how bold you want to be, and what do you dislike about it?\n" +
+  "  2. Two or three sites in your field you admire, and one you do not.\n" +
+  "  3. What is the one thing you want a visitor to do: call, fill in a form, book, or buy?\n" +
+  "  4. What should this site do that nothing else in your field does? (the wow moment)\n" +
+  "  5. Three to five things we must not do (\"no purple\", \"no stock people photos\").\n" +
+  "  6. Host, who edits the copy in six months, and how many directions you want to see.\n" +
+  "Then record their answers and run the deep survey with them:\n" +
+  "  shown.intake = { calibration: { position: 1..4, why },\n" +
+  "                   admired: [\"...\"] (1 to 20), disliked: [\"...\"] (1 to 20),\n" +
+  "                   primary_action: \"call\"|\"form\"|\"booking\"|\"buy\",\n" +
+  "                   wow: \"one sentence\", avoid: [\"...\"] (3 to 5) }\n" +
+  "Every field is required and none may be blank. named-direction and supplied-example draw no\n" +
+  "ladder, so neither is asked for an intake.\n" +
+  "PALATE_GATE_CHECKPOINT=0 releases this wall for a session that genuinely cannot ask.";
+
 function SURVEY_REQUIRED_MESSAGE(gateReason, calls) {
   return (
     "Palate BUILD SITE gate: the SURVEY is not deep enough to start writing code.\n" +
@@ -193,6 +316,28 @@ function readStdin() {
 
 function allow() {
   process.exit(0);
+}
+
+/**
+ * PALATE_GATE_OFF=1 IS RECORDED, NEVER SILENT.
+ *
+ * This hook read the variable as its first act and allowed the write before touching anything,
+ * so a build run with the wall disabled left no trace. Weeks later the manifest read exactly
+ * like a build that had cleared it. The bypass is legitimate and stays; it just goes on the
+ * record. Written through manifest-merge.mjs so the stamp cannot clobber a concurrent hook
+ * write, and best-effort: a recording failure must never wedge the bypass it is recording.
+ */
+function recordGatesOff(startDir, hint) {
+  try {
+    const manifestPath = resolveBuildContext(startDir, { hint }).manifest;
+    if (!manifestPath || !fs.existsSync(manifestPath)) return;
+    execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
+      cwd: path.dirname(manifestPath),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch {
+    /* the bypass must work even when the record cannot be written */
+  }
 }
 
 function deny(reason) {
@@ -302,7 +447,14 @@ function divergeValid(m, mode = "brand-creation") {
 }
 
 const p = readStdin();
-if (!p || process.env.PALATE_GATE_OFF === "1") allow();
+if (!p) allow();
+if (handleLiveWorkflow(p, "PreToolUse", [resolveBuildContext(p.cwd || process.cwd(), {
+  hint: p.tool_input?.file_path || p.tool_input?.filePath || p.tool_input?.path,
+}).dir])) process.exit(0);
+if (process.env.PALATE_GATE_OFF === "1") {
+  recordGatesOff(p.cwd || process.cwd(), p.tool_input && p.tool_input.file_path);
+  allow();
+}
 
 const tool = p.tool_name || "";
 
@@ -433,6 +585,9 @@ const cwd = p.cwd || process.cwd();
 // The MARKER lookup below deliberately stays on the cwd. It decides WHETHER the wall applies at
 // all, and widening where it is looked for would widen the set of sessions that get walled.
 const buildCtx = resolveBuildContext(cwd, { hint: fp });
+// The Palate plugin is not a site under construction. A refusal means there is no build here to
+// gate, so allow the write rather than judge the tool's own files against a client's contract.
+if (buildCtx.how === "refused" || !buildCtx.manifest) allow();
 
 // BUILD-SITE SCOPE: the DIVERGE wall only applies inside an active build-site flow.
 // state-init.sh writes .palate-skill-state.json before scaffold and before any source
@@ -471,6 +626,13 @@ try {
       // A build site is active, this is a NEW (or page/section) source write, and DIVERGE
       // has not validly run FOR THIS MODE. Block it and tell the model to diverge first.
       deny(DIVERGE_REQUIRED_MESSAGE(mode));
+    }
+
+    // THE PLAN CHECKPOINT WALL (see checkpointValid above): a build site, new or page/section
+    // source, and nobody was shown a plan or asked. Sits after DIVERGE because the plan names
+    // the references and the Explore count, which DIVERGE produces.
+    if (process.env.PALATE_GATE_CHECKPOINT !== "0" && !checkpointValid(manifest)) {
+      deny(CHECKPOINT_REQUIRED_MESSAGE);
     }
 
     // ---------------------------------------------------------------------------------

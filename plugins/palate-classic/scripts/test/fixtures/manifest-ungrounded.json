@@ -1,0 +1,9 @@
+{
+  "schema": 3,
+  "business": "a dentist",
+  "references_surveyed": [],
+  "inner_pages_viewed": [],
+  "mcp_calls": [],
+  "files_written": ["src/pages/index.astro"],
+  "grounding": null
+}

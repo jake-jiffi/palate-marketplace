@@ -93,6 +93,19 @@ test('a blog post plans a narrow scope', () => {
   assert.ok(p.routes.length <= 3);
 });
 
+test('a blog post never plans a route that cannot read a blog post', () => {
+  // The template carries dynamic routes that render section demos from a manifest, and a post
+  // cannot change one. Substituting the post's id into EVERY dynamic route planned
+  // /kit/[piece]/welcome and /kit-frame/[piece]/[variation]/welcome, which do not exist, and
+  // pushed a one-line content edit from narrow to moderate. The rule is that a dynamic route is
+  // a content route only when it reads content.
+  const p = plan(TEMPLATE, ['src/content/posts/welcome.md']);
+  for (const route of p.routes) {
+    assert.ok(!route.startsWith('/kit'), `a post planned the section-demo route ${route}`);
+    assert.ok(!route.includes('['), `a post planned an unresolved dynamic route ${route}`);
+  }
+});
+
 test('a fact change is content class but reaches wide, and the plan says so', () => {
   // This is propagation showing up in the plan: cheap lanes, many routes. The
   // distinction matters because the cost driver is route count, not class.

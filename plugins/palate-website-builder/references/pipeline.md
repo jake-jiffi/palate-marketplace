@@ -11,11 +11,11 @@ exceptions; a CMS is opt-in and most builds have none (see `build-stages.md`).
 |-------|--------|--------|----------|
 | 0 brand | detect-brand-repo.sh | verify-brand-exports.sh | brand package + exact version, or vendored assets. For a redesign, also extract real tokens from the existing site (see phase-0-brand-detection.md). |
 | A.1 scaffold | (template copy + npm install + optional `switch-host-cloudflare.sh` on `--host cloudflare`) | (continues into A.4) | building SSR Astro site, Sanity data layer wired, draft-mode endpoints + visual-editing in place; ready for Explore |
-| A.4 EXPLORE *(default: ON)* | (generate `/v1`..`/vN` + `/lp1`..`/lpN`, update `src/lib/variants.ts`, `PUBLIC_EXPLORE_MODE=true`) | PAUSE - client picks sections | 8-10 genuinely-different home-page variants, switcher live, section labels visible. See `explore-stage.md`. |
+| A.4 EXPLORE *(default: ON)* | (draw FOUR artboards per direction at `.palate/explore/seed/{B,I,M,S}<rung>.dc.html`, register them in `src/lib/variants.ts`, `boards-render.mjs`, publish the canvas, `PUBLIC_EXPLORE_MODE=true`) | PAUSE - client picks on the canvas or `/explore` | four artboards per direction: the home page, the inner page, the phone and the detail sheet, on a ladder from restrained to bold; the canvas published (or declined with a reason) and `/explore` shipped with the stills. See `explore-stage.md`. |
 | A.6 COMPOSE | (build canonical pages from picks, adopt dominant tokens, archive variants, `PUBLIC_EXPLORE_MODE=false`) | PAUSE - client confirms direction | canonical `index.astro` + remaining pages in the chosen direction; project shape normalised |
 | A.8 finalise | (fill content.ts, rename bracket-free templates, init git) | verify-scaffold.sh + verify-is-real-astro.sh | preview-ready: content.ts filled, git initialised, anti-freestyle gate passed |
 | B sanity | provision-sanity.sh | verify-sanity.sh | project, dataset, two tokens, schemas, **seeded from content.ts** (Studio embedded at /studio, ships with the site) |
-| C cloudflare | provision-cloudflare.sh | verify-cloudflare.sh | secrets set, SSR worker deployed, workers.dev live |
+| C cloudflare | provision-cloudflare.sh | verify-cloudflare.sh | secrets set, SSR worker deployed, workers.dev live, contact form round trip proven (see testing.md) |
 | D github | provision-github.sh | verify-github.sh | repo, secrets, branch protection, CI building + deploying |
 | E domain | attach-domain.sh | verify-domain.sh | custom domain attached or manual instructions |
 | F optional | optional-services.sh / install-cro.sh | (non-blocking) | analytics, forms, search, IndexNow, CRO dormant |

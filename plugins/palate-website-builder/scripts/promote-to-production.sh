@@ -4,6 +4,8 @@
 # pipeline runs phases B-F on the SAME project. No rebuild.
 # Run from the project directory. Usage: promote-to-production.sh
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow writer promote-to-production "$PWD"
 [ -f .palate-skill-state.json ] || { echo "no project state here; run a preview build first" >&2; exit 1; }
 
 stage=$(jq -r '.stage' .palate-skill-state.json)

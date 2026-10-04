@@ -132,11 +132,26 @@ export function score(results, capIds = []) {
   let weighted = 0, weightUsed = 0, lowConfWeight = 0;
 
   const dimensions = DIMENSIONS.map((d) => {
+    // Anything that leaves the denominator is KEPT, with its reason. The reasons were
+    // built at grade time and dropped here, so a report could say "5 of 11" and never
+    // which six or why; the not-measured page of the report reads this list.
+    const unmeasured = [];
     const rows = d.checks
       .map((c) => {
         const r = results.get(c.id);
-        if (!r || r.applicable === false) return null;
-        return { ...r, id: c.id, label: c.label, points: c.points, fix: c.fix };
+        if (!r) { unmeasured.push({ id: c.id, label: c.label, reason: "Not switched on in this version of the grader." }); return null; }
+        if (r.applicable === false) { unmeasured.push({ id: c.id, label: c.label, reason: r.detail || "Not measured on this page." }); return null; }
+        // A NaN raw (interp with equal bounds, an empty bot list) would poison the whole
+        // overall and land in band G "Broken" with no error; it is an absence, not a score.
+        if (!Number.isFinite(Number(r.raw))) { unmeasured.push({ id: c.id, label: c.label, reason: "Not measured: the check returned no usable number." }); return null; }
+        // A CHECK MAY CARRY ITS OWN FIX, and the static one is the fallback.
+        //
+        // Most fixes are rightly identical for everybody: "raise contrast to 4.5:1" is the same
+        // instruction on every site. The design checks are not like that. Measured across 60
+        // floor-pinned grades, all 60 received the SAME two design sentences, so the one part of
+        // the report that is supposed to carry the library said nothing about the site in front
+        // of it. A check that knows something specific can now say it.
+        return { ...r, id: c.id, label: c.label, points: c.points, fix: r.fix ?? c.fix };
       })
       .filter(Boolean);
 
@@ -152,10 +167,16 @@ export function score(results, capIds = []) {
       id: d.id, label: d.label, weight: d.weight,
       score: Math.round(dScore), measured: rows.length, total: d.checks.length,
       checks: rows.sort((a, b) => a.raw - b.raw),
+      unmeasured,
     };
   });
 
-  let overall = weightUsed > 0 ? Math.round(weighted / weightUsed) : 0;
+  // `merit` is the weighted sum before any cap or ceiling, rounded ONCE from the unrounded
+  // dimension scores. The report prints it beside the headline ("those six add up to N");
+  // recomputing it from the rounded per-dimension scores disagreed with `overall` by a
+  // point on about one grade in nine, which read as an unexplained adjustment.
+  const merit = weightUsed > 0 ? Math.round(weighted / weightUsed) : 0;
+  let overall = merit;
   const caps = CAPS.filter((c) => capIds.includes(c.id)).map((c) => ({ reason: c.reason, cap: c.cap }));
   for (const c of caps) overall = Math.min(overall, c.cap);
 
@@ -197,5 +218,5 @@ export function score(results, capIds = []) {
     .filter((c) => c.raw < 0.75)
     .sort((a, b) => b.recoverable - a.recoverable);
 
-  return { overall, band: bandFor(overall), confidence, dimensions, caps, findings, measuredWeight };
+  return { overall, merit, band: bandFor(overall), confidence, dimensions, caps, findings, measuredWeight };
 }

@@ -8,10 +8,22 @@
 // Turnstile renders only when PUBLIC_TURNSTILE_SITE_KEY is set (provisioned by
 // scripts/optional-services.sh); without it the widget is absent and the token blank.
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+
+// STYLED FROM THE TOKEN CONTRACT, NOT FROM TAILWIND UTILITY NAMES.
+//
+// This form used to be written in `bg-brand-accent`, `rounded-brand`, `text-brand-text` and
+// friends, which exist only if the generated brand package's Tailwind preset happens to define
+// utilities by those exact names. A build whose preset names its colours differently, or which
+// vendors its own preset because the package was never published, rendered the WHOLE FORM
+// unstyled with no error anywhere: every input, label and the submit button came out as browser
+// defaults on an otherwise finished site, on the one page that has to convert. Measured on a
+// real client build. globals.css already reads --brand-bg / --brand-text / --brand-accent /
+// --brand-font-body WITH FALLBACKS, so those custom properties are the only thing every build
+// guarantees, and the scoped block below reads them with a literal fallback behind each one.
 ---
-<form id="contact-form" class="mt-10 grid gap-6" novalidate>
-  <div class="grid gap-2">
-    <label for="cf-name" class="text-brand-text text-sm font-medium">Name</label>
+<form id="contact-form" class="cf" novalidate>
+  <div class="cf__f">
+    <label for="cf-name">Name</label>
     <input
       id="cf-name"
       name="name"
@@ -19,13 +31,12 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
       autocomplete="name"
       required
       aria-describedby="cf-name-error"
-      class="rounded-brand border-brand-border bg-brand-bg text-brand-text border px-4 py-3"
     />
-    <p id="cf-name-error" class="cf-error text-sm" role="alert" hidden></p>
+    <p id="cf-name-error" class="cf__err" role="alert" hidden></p>
   </div>
 
-  <div class="grid gap-2">
-    <label for="cf-email" class="text-brand-text text-sm font-medium">Email</label>
+  <div class="cf__f">
+    <label for="cf-email">Email</label>
     <input
       id="cf-email"
       name="email"
@@ -34,34 +45,31 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
       autocomplete="email"
       required
       aria-describedby="cf-email-error"
-      class="rounded-brand border-brand-border bg-brand-bg text-brand-text border px-4 py-3"
     />
-    <p id="cf-email-error" class="cf-error text-sm" role="alert" hidden></p>
+    <p id="cf-email-error" class="cf__err" role="alert" hidden></p>
   </div>
 
-  <div class="grid gap-2">
-    <label for="cf-message" class="text-brand-text text-sm font-medium">Message</label>
+  <div class="cf__f">
+    <label for="cf-message">Message</label>
     <textarea
       id="cf-message"
       name="message"
       rows="5"
       required
       aria-describedby="cf-message-error"
-      class="rounded-brand border-brand-border bg-brand-bg text-brand-text border px-4 py-3"
     ></textarea>
-    <p id="cf-message-error" class="cf-error text-sm" role="alert" hidden></p>
+    <p id="cf-message-error" class="cf__err" role="alert" hidden></p>
   </div>
 
   {turnstileSiteKey && <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>}
 
   <button
-    type="submit"
-    class="rounded-brand bg-brand-accent text-brand-inverse inline-flex items-center justify-center px-6 py-3 font-semibold disabled:opacity-40"
+    type="submit" class="cf__btn"
   >
     Send message
   </button>
 
-  <p id="cf-status" class="text-brand-muted text-sm" role="status" aria-live="polite"></p>
+  <p id="cf-status" class="cf__status" role="status" aria-live="polite"></p>
 </form>
 
 {turnstileSiteKey && (
@@ -69,9 +77,34 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
 )}
 
 <style>
-  .cf-error {
-    color: var(--brand-error, var(--brand-accent));
+  /* Every value below reads a token with a literal fallback, so the form is styled on a build
+     with a full brand package, a partial one, or none at all. See the note in the frontmatter. */
+  .cf { display: grid; gap: 1.5rem; margin-top: 2.5rem;
+        font-family: var(--brand-font-body, system-ui, sans-serif); }
+  .cf__f { display: grid; gap: 0.5rem; }
+  .cf label { color: var(--brand-text, #111); font-size: 0.875rem; font-weight: 500; }
+  .cf input, .cf textarea, .cf select {
+    font: inherit; font-size: 1rem; width: 100%; padding: 0.75rem 1rem;
+    color: var(--brand-text, #111); background: var(--brand-bg, #fff);
+    border: 1px solid var(--brand-border, var(--brand-rule, #d4d4d4));
+    border-radius: var(--brand-radius, 0);
   }
+  .cf input:focus-visible, .cf textarea:focus-visible, .cf select:focus-visible {
+    outline: 2px solid var(--brand-accent, currentColor); outline-offset: 2px;
+  }
+  .cf [aria-invalid="true"] { border-color: var(--brand-error, var(--brand-accent, #b00)); }
+  .cf textarea { resize: vertical; min-height: 8rem; }
+  .cf__err { color: var(--brand-error, var(--brand-accent, #b00)); font-size: 0.875rem; margin: 0; }
+  .cf__status { color: var(--brand-muted, var(--brand-text, #111)); font-size: 0.875rem; margin: 0; }
+  .cf__btn {
+    font: inherit; font-weight: 600; cursor: pointer; border: 0;
+    /* 44px of target, because a submit button is the one control on the page that must be hit. */
+    min-height: 44px; padding: 0.75rem 1.5rem;
+    color: var(--brand-inverse, #fff); background: var(--brand-accent, #111);
+    border-radius: var(--brand-radius, 0);
+  }
+  .cf__btn:disabled { opacity: 0.4; cursor: default; }
+  .cf__btn:focus-visible { outline: 2px solid var(--brand-text, #111); outline-offset: 3px; }
 </style>
 
 <script>

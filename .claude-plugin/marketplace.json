@@ -6,20 +6,26 @@
   },
   "metadata": {
     "description": "Palate: the taste layer for AI website builders. Install the Palate website-builder plugin (skill + MCP-depth hooks; connect the Palate MCP with one claude mcp add --scope user command after install) for Claude Code.",
-    "version": "1.16.1"
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "palate-website-builder",
-      "version": "1.16.1",
+      "version": "2.0.0",
       "source": "./plugins/palate-website-builder",
-      "description": "Builds AND maintains production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites): scaffold a new site, or continue an existing one (add pages, sections and features with the same rigour, CONTINUE mode), plus brand packages. It runs a divergent-to-convergent concept spine, a self-issued build commission held to an awards-grade bar, a screenshot-grounded visual self-review loop, and novelty + buildability gates that block on real evidence rather than a claim. The 1.4.x line adds anti-slop guards that catch generic AI-tell layouts and copy before they ship. After install, connect the Palate MCP with one claude mcp add --scope user command (free token at app.palatemcp.com)."
+      "description": "Builds and maintains production Astro websites grounded by the Palate MCP. New sites start with working design options you can click through within minutes, carry one design system and a local style guide, and can use Higgsfield for generated images and scroll films when you have it. Continues existing sites, and adds Shopify buying journeys when the product needs them. Connect the Palate MCP with one claude mcp add --scope user command (token from app.palatemcp.com)."
     },
     {
       "name": "palate-beta",
-      "version": "1.18.0-beta.9",
+      "version": "2.1.0-beta.1",
       "source": "./plugins/palate-beta",
       "description": "Opt-in tester beta, expected to have bugs. Live Astro design options with real MCP references, interactive motion and optional Shopify commerce. Design speed, visual consistency and complete end-to-end workflows are not yet validated. Use disposable projects, not client production work. Install one Palate plugin at a time. See BETA-TESTING.md."
+    },
+    {
+      "name": "palate-classic",
+      "version": "1.16.2",
+      "source": "./plugins/palate-classic",
+      "description": "The 1.16 Palate builder, kept installable after Palate 2.0 and frozen: security, install and MCP fixes only. Use one Palate plugin at a time: uninstall palate-website-builder first, then restart Claude Code."
     }
   ]
 }

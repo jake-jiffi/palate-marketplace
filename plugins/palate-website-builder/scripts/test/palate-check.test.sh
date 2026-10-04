@@ -6,7 +6,13 @@
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 BOOT="$DIR/../bootstrap.sh"
-FIX="$DIR/fixtures/uxlint"
+# THE FIXTURES ARE COPIED OUT OF THE REPO FIRST. bootstrap.sh drives ux-lint.sh, which refuses
+# any directory inside a Claude Code plugin checkout (this one): run from a plugin it grades the
+# plugin, whose doctrine QUOTES the tells it hunts.
+FIXSRC="$DIR/fixtures/uxlint"
+FIXTMP="$(mktemp -d)"; trap 'rm -rf "$FIXTMP"' EXIT
+cp -R "$FIXSRC" "$FIXTMP/uxlint"
+FIX="$FIXTMP/uxlint"
 pass=0; fail=0
 
 check() { # <desc> <want-rc> <cmd...>

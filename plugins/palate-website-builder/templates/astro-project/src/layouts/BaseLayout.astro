@@ -10,7 +10,6 @@ import "@palate-projects/{{SLUG}}-brand/fonts.css";
 import "../styles/globals.css";
 import { ClientRouter } from "astro:transitions";
 import CmsVisualEditing from "../components/CmsVisualEditing.astro";
-import ExploreSwitcher from "../components/ExploreSwitcher.astro";
 import Motion from "../components/Motion.astro";
 import { business, businessJsonLd } from "../lib/business";
 
@@ -19,9 +18,45 @@ interface Props {
   description?: string;
   image?: string;
   noindex?: boolean;
+  /**
+   * THE HOST CHROME ONLY: the site's own header and footer. False leaves them out, which is what a
+   * section demo, a board and a print view all need: a piece shown underneath the real navigation
+   * is not the piece anybody is reviewing. Everything else about the page is unchanged, view
+   * transitions included, so a demo still runs in the configuration the site ships in.
+   *
+   * IT NEVER SUPPRESSES A HEADER OR FOOTER THE PAGE SUPPLIES ITSELF. The first version gated the
+   * `header` and `footer` slots on this flag as well, so a composed page that passed its own
+   * navigation and footer through the slots AND asked for the host chrome to go away got neither:
+   * three example pages shipped with no navigation and no footer, and a screenshot is what found
+   * it. A slot the page filled is the page's content, and the flag has no say over it.
+   */
+  chrome?: boolean;
 }
-const { title, description = business.description, image = "/og/default.png", noindex = false } = Astro.props;
+const {
+  title,
+  description = business.description,
+  image = "/og/default.png",
+  noindex = false,
+  chrome = true,
+} = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
+
+// Is this build the live site? Everything else is a preview, and a preview is a real,
+// publicly fetchable origin. robots.txt Disallow stops the CRAWL and does not stop the URL
+// being INDEXED when something links to it, so the page says noindex as well. Belt and braces,
+// deliberately: the two mechanisms fail in different ways and neither covers the other.
+//
+// Independent of the `noindex` prop on purpose. A page that asks for noindex gets it in
+// production too, and a preview gets it whether or not the page asked.
+//
+// UNKNOWN FAILS TOWARD NOINDEX, so production has to be DETECTABLE on every host we ship to.
+// Both signals are read because they arrive by different routes: astro.config inlines
+// PUBLIC_SITE_ENV (folding in VERCEL_ENV on Vercel and set by CI on the Cloudflare overlay),
+// and process.env.VERCEL_ENV is the direct read for a build whose config did not do that.
+// gate-seo's live pass catches the case where both are missing on the real origin.
+const isProduction =
+  import.meta.env.PUBLIC_SITE_ENV === "production" ||
+  (typeof process !== "undefined" && process.env?.VERCEL_ENV === "production");
 
 // Visual editing is gated by a build-time env var, set "true" only on the
 // preview deployment. When on: mount the overlay, never edge-cache, noindex.
@@ -38,7 +73,7 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    {(noindex || visualEditing) && <meta name="robots" content="noindex" />}
+    {(noindex || visualEditing || !isProduction) && <meta name="robots" content="noindex" />}
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
@@ -55,15 +90,23 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
          until an audit months later. -->
     <slot name="head" />
     <!-- Analytics: Humblytics (swap for Plausible via flag). Skipped in preview. -->
-    {!visualEditing && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
+    {/* Skipped while the site id is still the scaffold's placeholder: a demo or proof build would
+        otherwise load a live analytics script with a token that reads "{{HUMBLYTICS_SITE_ID}}". */}
+    {!visualEditing && !"{{HUMBLYTICS_SITE_ID}}".startsWith("{{") && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
     <ClientRouter />
   </head>
   <body>
-    <ExploreSwitcher />
+    {/* First in the tab order, so the bypass is reachable before the navigation it bypasses. */}
+    <a class="skip-link" href="#main">Skip to content</a>
     <Motion />
-    <slot name="header" />
-    <main><slot /></main>
-    <slot name="footer" />
+    {/* A slot the page filled always renders; `chrome` governs the host header and footer only,
+        and this template ships none, so a build that adds SiteHeader / SiteFooter renders those
+        under the flag and leaves these two lines alone. */}
+    {Astro.slots.has("header") && <slot name="header" />}
+    {/* The id the skip link points at. Without it the link leads nowhere and axe fails
+        `skip-link` on every page, which is a keyboard user's first control on the site. */}
+    <main id="main"><slot /></main>
+    {Astro.slots.has("footer") && <slot name="footer" />}
     <CmsVisualEditing enabled={visualEditing} />
   </body>
 </html>

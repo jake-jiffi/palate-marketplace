@@ -227,3 +227,40 @@ test('a killed build blocks publication until its dead lock and package/pin mism
   buildBeta({ source, marketplace, version: '1.18.0-beta.1' });
   assert.equal(verifyBeta({ source, marketplace }).ok, true);
 });
+
+test('the prod track keeps the source name, its commands and its version, and still nests the skill', () => {
+  const root = fixture('prod-candidate');
+  const runtime = fs.readFileSync(path.join(root, 'scripts/palate.mjs'));
+  const result = transformBeta(root, { version: '1.18.0', commit, track: 'prod' });
+  const nested = fs.readFileSync(path.join(root, result.entry), 'utf8');
+  assert.match(nested, /\/palate-website-builder:pick/);
+  assert.doesNotMatch(nested, /palate-beta/);
+  assert.equal(fs.readFileSync(path.join(root, 'LEGACY.md'), 'utf8'), 'Use /palate-website-builder:status.\n');
+  const claude = json(path.join(root, '.claude-plugin/plugin.json')), codex = json(path.join(root, '.codex-plugin/plugin.json'));
+  assert.equal(claude.name, 'palate-website-builder'); assert.equal(claude.version, '1.18.0'); assert.equal(claude.description, 'Build sites');
+  assert.equal(codex.interface.displayName, 'Palate');
+  assert.deepEqual(fs.readFileSync(path.join(root, 'scripts/palate.mjs')), runtime);
+  assert.equal(result.track, 'prod');
+});
+
+test('the prod track refuses a prerelease or a version that is not the source version', () => {
+  assert.throws(() => transformBeta(fixture('prod-beta-version'), { version: '1.18.0-beta.1', commit, track: 'prod' }), /release version/);
+  assert.throws(() => transformBeta(fixture('prod-other-version'), { version: '2.0.0', commit, track: 'prod' }), /equal the archived source version/);
+  assert.throws(() => transformBeta(fixture('unknown-track'), { version: '1.18.0', commit, track: 'classic' }), /Unknown track/);
+});
+
+test('a prod build vendors main into the customer entry and leaves its description alone', () => {
+  const { source, marketplace } = repository('prod-build');
+  spawnSync('git', ['-C', source, 'branch', 'main'], { encoding: 'utf8' });
+  const registry = json(path.join(marketplace, '.claude-plugin/marketplace.json'));
+  registry.plugins.unshift({ name: 'palate-website-builder', version: '1.16.1', source: './plugins/palate-website-builder', description: 'Customer description' });
+  write(marketplace, '.claude-plugin/marketplace.json', registry);
+  const result = buildBeta({ source, marketplace, version: '1.18.0', track: 'prod' });
+  assert.equal(result.destination, path.join(fs.realpathSync(marketplace), 'plugins/palate-website-builder'));
+  assert.equal(json(path.join(result.destination, '.claude-plugin/plugin.json')).name, 'palate-website-builder');
+  const after = json(path.join(marketplace, '.claude-plugin/marketplace.json'));
+  const prod = after.plugins.find(p => p.name === 'palate-website-builder'), beta = after.plugins.find(p => p.name === 'palate-beta');
+  assert.equal(prod.version, '1.18.0'); assert.equal(prod.description, 'Customer description');
+  assert.equal(beta.version, '1.17.0-beta.22', 'A prod build must not touch the beta entry');
+  assert.equal(fs.readFileSync(path.join(marketplace, 'plugins/palate-beta/sentinel'), 'utf8'), 'old beta');
+});

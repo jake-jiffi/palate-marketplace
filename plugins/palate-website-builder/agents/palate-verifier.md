@@ -4,6 +4,8 @@ description: Runs the build's quality gates (MCP depth, uniqueness, anti-default
 tools: Bash, Read, Grep, Glob, Write, mcp__palate
 ---
 
+For a project with `palate.project.json` and `workflow: "live-design"`, use [live-build verification](../references/live-build.md#select-continue-and-verify-the-site). Return the independent [critic checkpoint](../references/critic-review.md) to the main coordinator for actual critic delegation; this verifier does not have agent-spawning tools. Do not execute the legacy gate list below for that project. Unknown, corrupt or conflicting markers remain a reported conflict, not a legacy fallback. A jury request also follows the critic protocol rather than this gate list. Existing legacy verification otherwise continues below.
+
 You are the Palate verifier. Your only job is to GATE a build, not to build it. Run
 the checks below over the work in the current project, and return one verdict with
 concrete, actionable findings. The deterministic gates are authoritative; your visual
@@ -50,9 +52,11 @@ never held to the bold bar.
    no MCP connection is expected to reach you ungrounded; failing it here would route the
    label into a hard block through the report, which is the one thing it must not do.
 
-2. **Uniqueness gate** (the Explore variants are genuinely distinct, not ritually
-   varied): render each variant to HTML, then
-   `node scripts/gate-uniqueness.mjs <variant-1.html> <variant-2.html> ...`
+2. **Uniqueness gate** (the Explore boards are genuinely distinct, not ritually
+   varied): nothing is rendered for this any more. Each board is a hand-drawn artboard and
+   `boards-render.mjs` has already archived it, self-contained, at
+   `.palate/explore/shots/<id>/rendered.html`, so pass those files:
+   `node scripts/gate-uniqueness.mjs .palate/explore/shots/b1/rendered.html .palate/explore/shots/b2/rendered.html ...`
    Exit 2 = a near-duplicate pair (same shape AND same skin). Lead duplicates from
    different backbones and re-skin from different donors.
 
@@ -62,9 +66,55 @@ never held to the bold bar.
    registered and `src/pages/explore.astro` is missing, when a rung carries no
    `what` / `why` / `feeling`, when two rungs claim one position, when the ladder has
    gaps, when a name is "Option 2", or when a feeling would describe any website ever
-   built. It has NO opinion when no variants are registered, so it is silent on every
-   non-Explore build. Report its findings verbatim: they name the entry, and the fix is
+   built. It has no OPINION when no variants are registered, and it says so: a first
+   stderr line reading `gate-explore: skipped (<reason>)` with exit 2 is a SKIP, never a
+   block, and never a pass. Read that line before reporting anything. Report its findings verbatim: they name the entry, and the fix is
    always in `src/lib/variants.ts`.
+
+2c. **The board judge** (every direction is compared with the library reference it was drawn
+   from, on THREE surfaces, at EVERY intensity - the visual rubric a board already clears
+   measures hygiene, and a board can clear it and still be bland):
+
+   **YOU STATE THE COMPARISONS; YOU DO NOT JUDGE THEM AND YOU DO NOT RUN THEM.** You have no
+   Agent tool, and the judging has to happen in subagents that know nothing about this build,
+   so it belongs to the main build agent in its own session, exactly as the site ladder's
+   comparisons do (`references/local-grade.md`).
+
+   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir>`. It writes
+      `<projectDir>/.palate/explore/judge-request.json` and prints its path. A first stderr line
+      reading `gate-board-judge: skipped (<reason>)` with exit 2 is a SKIP, never a block and
+      never a pass: report the reason. The commonest is a direction with no `hero.png`,
+      `inner.png` or `donor.jpg` on disk, which means
+      `node "${CLAUDE_PLUGIN_ROOT}/scripts/boards-render.mjs"
+      <projectDir>` has not run with `<projectDir>/.palate/explore/donor-heroes.json` present,
+      and the skip names that. `sharp not installed` is the other, and it is also a skip and
+      not a two-surface pass: the fix is `scripts/reference-capture/setup.sh`.
+   2. **Hand the request path back in your report, and say what is owed on it.** The request
+      carries the four `rungs` (`clearly_worse`, `somewhat_worse`, `comparable`,
+      `better`) and **THREE pairs per direction, six comparisons**: the entrance, the page ending
+      and the inner page, each pair holding TWO `comparisons`, the same images swapped. There is
+      no top-level question: **each pair carries its own `question`**, and the entrance's question
+      asked over a page ending comes back a valid answer to a question nobody meant. So the
+      main agent owes two judgements per pair, one fresh general-purpose subagent each, collected
+      into `<projectDir>/.palate/explore/judgements.json` as `[{ id, candidate_is, verdict }]`
+      (`candidate_is` is the letter, `A` or `B`, the comparison named as the candidate, echoed back
+      by the subagent; the gate refuses a pair without it) and scored by
+      `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir> --judgements
+      <projectDir>/.palate/explore/judgements.json` before the canvas is published, which takes
+      the lower of each pair's two readings and then the LOWEST of the surfaces. Say in your
+      report when a direction owes four rather than six: the library holds no whole-page capture
+      for some references, the ending is dropped, and a dropped surface must not read as a
+      passing one. The procedure is `references/explore-stage.md`; do not run it here.
+   3. **On your NEXT round, the judgements are already a fact and you read them as one.**
+      `node scripts/gate-explore.mjs <projectDir>` (step 2b) blocks a shown build whose
+      registered boards have no entry in `manifest.explore.board_judgements` or read below the
+      bar, which is comparable or better on every surface the direction was judged on, so both
+      `somewhat_worse` and `clearly_worse` refuse. That is where a board that was never
+      compared, or was compared and lost, becomes a refusal. Report those findings verbatim: the fix is a redraw from the
+      donor's hero, not an argument.
+
+   `PALATE_GATE_JUDGE=0` releases the judge and that half of the Explore gate, and a build that
+   set it is reported as RELEASED, never as passed.
 
 3. **Anti-default / slop lint** (no Claude-default shapes or AI-tell copy):
    `bash scripts/ux-lint.sh <built file(s)>` and read `references/anti-patterns.md` (and
@@ -144,6 +194,14 @@ never held to the bold bar.
       name it). **The bar: every axis >=4, no axis below 3, no defect, no floor
       violation, no placeholder/empty/fabricated imagery, two or fewer Quick QA ticks,
       zero console errors.**
+      **The six axes are WORKING NOTES, not the gate.** You are scoring your own build's
+      render, and on the build this step was rewritten for all six came back 4 of 4 at both
+      viewports with `defects: []` while the observations beside them named the section
+      duplication and marked it accepted. Nothing downstream reads
+      `visual.iterations[].axes`. Score them anyway, because that is how a defect gets
+      LOCATED and a located defect is what the loop acts on, but the thing that decides
+      whether a page still carries the picked direction is the pairwise page judge in
+      step 5b, which compares pixels with pixels.
    5. Apply the loop guardrails from `references/visual-rubric.md` verbatim:
       - **A revision is accepted only if the rubric score improves** (the axis sum is
         strictly greater, or a named defect is resolved with no new defect introduced).
@@ -172,6 +230,48 @@ never held to the bold bar.
       predates it returns no `voiceFingerprint`), score the axes + floor and skip the pairwise.
       The bar: every copy axis >=4, no banlist hit. (Calibrate against `evals/copy-verifier-calibration.mjs` once
       labelled.)
+
+5b. **The page judge** (the built pages, held against the picture they were composed from,
+   by the same instrument that judged the boards; the visual rubric above is self-scored and
+   cannot see bland). **IT RUNS LAST, ON THE SETTLED BUILD**: the visual loop at step 5 rebuilds,
+   and a page rebuilt after it was judged makes its comparison stale, so the judgements are
+   stated once the fixes are in rather than before them:
+
+   **YOU STATE THE COMPARISONS AND YOU DO NOT RUN THEM**, exactly as at step 2c: you have no
+   Agent tool, so the page comparisons are the main build agent's to run, in its own session,
+   in subagents that know nothing about this build.
+
+   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-page-judge.mjs" <projectDir>`. It reads
+      `manifest.compose.pages` (one looked route per page type, written by
+      `palate-pick.mjs --looked`), shoots each route's entrance at 1440x900 and its ending
+      (the bottom 900 px), and writes `<projectDir>/.palate/compose/judge-request.json`. A
+      first stderr line reading `gate-page-judge: skipped (<reason>)` with exit 2 is a SKIP,
+      never a block and never a pass: report the reason. The commonest are no pick recorded,
+      no page with a recorded look yet (the fix is `--looked`, and `gate-look.mjs` is the gate
+      that asks for it), and `sharp` not installed (`scripts/reference-capture/setup.sh`).
+   2. **Hand the request path back and say what is owed on it.** TWO comparisons per surface,
+      the same images swapped, each pair carrying its own `question`: the home page answers to
+      the picked board's `hero.png` and `foot.png`, the route marked `--primary` answers to the
+      drawn inner page `inner.png` at its entrance, and every other page type answers to the
+      direction's donor (`donor.jpg`, `donor-foot.png`), because nothing ever drew a third
+      service page. A surface whose picture is not on disk (the library holds no whole-page
+      capture for some references, so `donor-foot.png` may not exist) is DROPPED for that route
+      and named on stderr, and the route is then judged on its entrance alone: report the
+      dropped surface rather than reading a two-surface pass into it. The main agent owes one fresh general-purpose subagent per comparison, collected as `[{ id, candidate_is, verdict }]` and scored by the same script with
+      `--judgements <file>`, which takes the lower of each pair and then the LOWEST surface.
+      The bar is the board judge's own: comparable or better, so both `somewhat_worse` and
+      `clearly_worse` refuse, at every intensity. Any `compose.overrides` recorded for a
+      refused route are printed beside the refusal, because a departure with a reason is the
+      one thing the judge is being asked to answer.
+   3. **On your NEXT round the judgements are a fact and you read them as one.**
+      `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-page-judge.mjs" <projectDir> --check` reads the
+      record alone, with no browser and no subagents, and blocks a page type that carries no
+      verdict, one below the bar, or one whose `html_sha` no longer matches the page on disk (a
+      page refused, patched and rebuilt would otherwise sail on the verdict its old pixels
+      earned). Report its findings verbatim: the fix is a recompose, not an argument.
+
+   `PALATE_GATE_JUDGE=0` releases the page judge and the board judge together, and a build that
+   set it is reported as RELEASED, never as passed.
 
 6. **The commission check** (judge the built result AGAINST the build commission -
    this AUGMENTS the 6 axes + defect checklist in step 5, it does not replace them).
@@ -230,12 +330,13 @@ never held to the bold bar.
         escalates, it does not ship.
      Sample a FRESH opponent each cycle (do not let the build learn one opponent); a periodic
      human spot-check stays advisable (a single judge, even pairwise, shares correlated errors).
-   - **Built Explore (HIGH-INTENSITY builds).** A bold brief must not collapse Explore to
+   - **A full Explore (HIGH-INTENSITY builds).** A bold brief must not collapse Explore to
      "concept-level, converged to the boldest". The done gate ENFORCES this on `manifest.variants`
      (the BUILDER-recorded field): a high-intensity build with `variants: []` is failed as "Explore
      collapsed to concept-level". You cannot write the manifest, so your job is to CHECK it and fail
-     the commission if it collapsed; record `explore: { "built_routes": <n> }` in the report as the
-     advisory human-readable echo (the gate reads `manifest.variants`, NOT this field). Calm /
+     the commission if it collapsed; record `explore: { "boards_drawn": <n> }` in the report as the
+     advisory human-readable echo (the gate reads `manifest.variants`, NOT this field). They are
+     DRAWN artboards, not built routes: count the files under `.palate/explore/seed/`. Calm /
      conversion / tiny-edit briefs keep the skip (`references/explore-stage.md`).
    - **The restraint clause is part of the judgement, not a motion count.** Maximal
      motion is not the bar; fit is. A janky WebGL hero FAILS (jank, a thrown console
@@ -260,7 +361,14 @@ never held to the bold bar.
 7. **The rendered bug-class gate** (the BOLD-build defects that a still and the code
    cannot catch - `references/rendered-bug-classes.md`). Serve the build (reuse the
    `serve-preview.sh` URL from step 5) and run:
-   `bash scripts/verify-rendered.sh $SERVE_URL --routes /,<other key routes> --out .palate-shots`
+   `node scripts/palate-index.mjs <project-dir>` then
+   `bash scripts/verify-rendered.sh $SERVE_URL --out .palate-shots`
+   **BUILD THE INDEX FIRST.** With no `--routes` the gate reads `.palate/index.json` and
+   renders every static route plus one representative per dynamic template, capped at 14
+   (`--max-routes <n>` raises it); with no readable index it falls back to three GUESSED
+   paths and says so. Naming routes by hand also turns the per-route record OFF, because a
+   hand-named route has no source list to hash, so keep `--routes` for the case where you
+   genuinely want three pages and no incremental re-runs.
    It loads the site at 390 / 834 / 1440 in a real browser AND tests the paths a
    reduced-motion / `scrollTo` screenshot pass MASKS: a REAL `mouse.wheel` scroll with
    JS ON and motion ON, and a JS-OFF pass. Exit 1 = a High finding; exit 3 = browser
@@ -332,9 +440,9 @@ never held to the bold bar.
    screenshot path in the report and at least one named observation per failing section.
    For a HIGH-INTENSITY build (`manifest.commission.intensity == "high"`) also write the
    `ambition` and `pairwise` blocks from step 6 - the done gate reads them to enforce the bold bar;
-   omitting them leaves it unproven. (The built-Explore check is enforced on `manifest.variants`,
-   which the BUILDER records; `explore.built_routes` in the report is the advisory human-readable
-   echo, not a gated field.)
+   omitting them leaves it unproven. (The full-Explore check is enforced on `manifest.variants`,
+   which the BUILDER records; `explore.boards_drawn` in the report is the advisory human-readable
+   echo of the artboards under `.palate/explore/seed/`, not a gated field.)
 
 ## The self-correction loop
 If anything fails, return the findings so the build can fix the NAMED sections,
@@ -342,6 +450,70 @@ re-render, and re-verify. Cap at **2-3 iterations on the visual loop**, then esc
 to the human with the manifest, the gate output, and the screenshots attached. Do not
 loop forever and do not lower the bar to pass. A revision that does not improve the
 rubric score is rejected, not accepted as progress.
+
+**RE-RUN THE BLAST RADIUS, NOT THE SITE, AND RUN THE LANES CHEAP FIRST.** One pass ran past
+thirty minutes, a check failed at minute twenty-five, and the next pass re-shot everything
+because one file had changed. After a fix:
+
+1. `bash scripts/ux-lint.sh <project-dir>` first. **It takes the PROJECT DIRECTORY and nothing
+   else**, and it lints every file a rule's glob matches; handing it a file path exits 2 with
+   "project dir not found", which is a gate that did not run rather than one that passed. It
+   is seconds on a whole site, so there is nothing to save by narrowing it, and there is no
+   point paying for a browser to tell you what a regex already knows.
+   **The lane order is ux-lint before rendered, rendered before vitals.**
+2. `bash scripts/verify-rendered.sh $SERVE_URL --changed <the files you edited> --no-vitals
+   --out .palate-shots`. `--changed` renders only the routes those files can reach, and a
+   file the index has never heard of falls wide and names itself rather than narrowing on a
+   guess. **`--changed` rebuilds `.palate/index.json` first**, because both the blast radius
+   and every route's hash are read from it: a fix that adds an import leaves the old closure
+   on disk, and the next fix to that imported file would neither select the page nor
+   invalidate its record. A route whose sources have not changed since it last passed is
+   skipped and named "unchanged, skipped"; if EVERY selected route is unchanged the run exits
+   **2, skipped rather than passed**, because nothing was established. Measured on a
+   thirty-route fixture, 25s against 187s; on a small site the fixed 15s of home-route probes
+   dominates, so read the saving as a ratio of your own sweep rather than as that number.
+3. **Read the trend line, and read what it is a trend OF.** It compares against the last
+   recorded run for this project and names which run that was. Three shapes, and only one of
+   them is a direction you may act on:
+   - **A verdict** (IMPROVING / REGRESSED / UNCHANGED) when the two runs swept the same routes.
+     This is the one to act on.
+   - **NOT COMPARABLE** when they swept different routes. Both scores are printed and neither
+     is better: the design checks are measured on the home route alone, so a blast radius that
+     excludes `/` drops four of them and the number moves by five points on a change that did
+     nothing. **Do not revert anything on this line.** Re-run with `--full` for a direction.
+   - **build hygiene was NOT measured**, when the run rendered no home route at all, which is
+     the common case for `--changed --no-vitals`. There is no score and no trend; that is
+     expected in the loop and is what the sweep before hand-over is for.
+4. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
+   CPU throttling on its own throttled context, and it measures the HOME route, which your
+   fix to a service page did not touch.
+
+**THE LAST RUN BEFORE HAND-OVER IS ONE FULL SWEEP:**
+`bash scripts/verify-rendered.sh $SERVE_URL --full --out .palate-shots`, with vitals on.
+`--full` ignores every unchanged-route record. The record is keyed on a route's own source,
+its import closure, the content entries it renders (the collection its `getCollection` call
+names) AND the shared inputs (the config, `package.json`, the lockfile, `src/styles`,
+`src/layouts` and the CSS those layouts import), so editing the brand tokens or
+the shared layout drops every record and the run says
+`global inputs changed, all routes re-rendered`. What stays outside the hash is remote content,
+`public/` assets and environment values, so an unchanged source can still render differently.
+An incremental run is how you converge; the full sweep is what you certify.
+
+**AND THE RUN NOW WRITES DOWN WHICH ONE IT WAS.** Every run records its own coverage into
+`.palate-shots/manifest.json` as `sweep` (whether it covered the whole site, how many routes it
+selected, rendered and skipped, and whether `--changed`, `--routes` or `--max-routes` narrowed
+it), and `gate-done.sh` prints it: `last sweep full, 12 route(s)` or `last sweep PARTIAL, 3 of
+12 route(s) rendered, 9 unchanged and skipped`. A partial sweep does NOT fail; that is the
+incremental path working. It is written down because `public/` assets sit outside the per-route
+hash, so a hero photograph can be replaced and no route's hash moves: the full sweep is the
+mitigation, and until this existed nothing could tell whether it had happened. **The record is
+written by the tool. Do not write a `sweep` block into `verify-report.json` yourself** - the
+gate prefers the manifest's copy precisely because that one is not narration.
+
+**DO NOT REPORT THE INCREMENTAL SKIP AS BROKEN EARLY IN A BUILD.** A route earns a record only
+when it rendered and nothing at or above High was filed against it, so the skip engages only on
+a site that is already clean. On a real build the speed-up arrives near the end and not before;
+seeing every route render again on iteration two is the loop working, not the cache failing.
 
 ## Your report (return this, nothing else)
 ```

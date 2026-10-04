@@ -1,0 +1,240 @@
+---
+/**
+ * ProblemSideBySide: paired statements, the usual way against your way.
+ *
+ * The pairing is the whole argument, so this is a real table rather than two lists sitting next
+ * to each other. Two lists look identical and lose the pairing entirely for anyone using a screen
+ * reader, who hears six complaints and then six unconnected promises. In a table each statement is
+ * announced with its column heading, and the row keeps the two halves together.
+ *
+ * The table keeps two columns at every width rather than collapsing to a stack, because a
+ * comparison that stacks stops being a comparison. Statements here are short by design (a phrase,
+ * not a paragraph) and two columns of a phrase still read at 390px. The scroll wrapper is the
+ * safety net for content that turns out longer than the piece was chosen for.
+ *
+ * The second column carries the tinted ground and the accent heading. Which column that is does
+ * not change: the outcome sits on the right, so a reader scanning left to right lands on it last.
+ */
+export interface ComparisonPair {
+  /** The statement in the first column: how it goes now. */
+  from: string;
+  /** The statement in the second column: how it goes with you. */
+  to: string;
+}
+
+export interface Props {
+  /** Section heading. Pass an empty string to keep it for assistive technology only. */
+  heading?: string;
+  lede?: string;
+  /** Heading for the first column. */
+  fromLabel?: string;
+  /** Heading for the second column. */
+  toLabel?: string;
+  pairs?: ComparisonPair[];
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  /**
+   * Which ground this section sits on. One name and one vocabulary across the whole kit, so a
+   * page can alternate grounds without having to remember which piece calls it what. Every
+   * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  emptyMessage?: string;
+}
+
+const {
+  heading = "Why a quote takes three weeks, and why it does not have to",
+  lede = "Nothing here is unusual. It is what happens when the person quoting the job is also the person doing it.",
+  fromLabel = "How it usually goes",
+  toLabel = "How we run it",
+  pairs = [
+    {
+      from: "You ring four trades and hear back from one.",
+      to: "One number, answered on the day, by someone who can book the visit.",
+    },
+    {
+      from: "The quote is a figure in a text message with no scope behind it.",
+      to: "A written scope with the materials named and the exclusions listed.",
+    },
+    {
+      from: "The start date moves twice and nobody tells you.",
+      to: "A date confirmed in writing, and a call the moment anything shifts.",
+    },
+    {
+      from: "Variations turn up on the final invoice.",
+      to: "Any variation is priced and approved before the work happens.",
+    },
+    {
+      from: "The site is left for you to sort out.",
+      to: "Rubbish removed, surfaces swept, photographs sent the same afternoon.",
+    },
+  ],
+  id,
+  tone = "default",
+  emptyMessage = "This comparison is being written up.",
+} = Astro.props;
+
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `psb-${Math.random().toString(36).slice(2, 8)}`;
+const titleId = `${uid}-title`;
+const headingText = heading?.trim() || "How it compares";
+const headingHidden = !heading?.trim();
+const rows = (Array.isArray(pairs) ? pairs : []).filter((p) => p && (p.from || p.to));
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+  ]}
+  aria-labelledby={titleId}
+>
+  <div class="kit-container">
+    <div class="pss__head">
+      <h2 id={titleId} class:list={["kit-h2", headingHidden && "kit-visually-hidden"]}>{headingText}</h2>
+      {lede && <p class="kit-lede pss__lede">{lede}</p>}
+    </div>
+
+    {rows.length === 0 ? (
+      <p class="kit-empty pss__empty">{emptyMessage}</p>
+    ) : (
+      <div class="pss__scroll">
+        <table class="pss__table">
+          <caption class="kit-visually-hidden">{headingText}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pss__th pss__th--from">{fromLabel}</th>
+              <th scope="col" class="pss__th pss__th--to">{toLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((pair) => (
+              <tr class="pss__row">
+                <td class="pss__td pss__td--from">{pair.from}</td>
+                <td class="pss__td pss__td--to">{pair.to}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</section>
+
+<style>
+  /* --kit-accent-lift is the variant meant for dark grounds, but its fallback chain ends at
+     --kit-accent, which is near-black by default and therefore invisible on --kit-bg-inverse.
+     That takes the accent text, the stars and every focus ring down with it. Re-resolving it
+     here reads the brand's own lifted accent when there is one and falls back to the inverse
+     text colour, which the same ground already guarantees. Delete this once foundations gives
+     the token a fallback suited to the ground it exists for. */
+  .kit-section--inverse {
+  }
+
+  .pss__head {
+    display: grid;
+    gap: var(--kit-space-md);
+    max-width: var(--kit-measure);
+  }
+
+  .pss__lede {
+    color: var(--kit-text-muted);
+  }
+
+  .kit-section--inverse .pss__lede {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+
+  .pss__empty,
+  .pss__scroll {
+    margin-block-start: var(--kit-space-2xl);
+  }
+
+  .pss__scroll {
+    overflow-x: auto;
+    min-width: 0;
+  }
+
+  .pss__table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .pss__th {
+    text-align: start;
+    vertical-align: bottom;
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-strong);
+    letter-spacing: var(--kit-tracking-label);
+    text-transform: uppercase;
+    padding: 0 var(--kit-space-md) var(--kit-space-sm);
+    border-block-end: var(--kit-border-width) solid var(--kit-border-strong);
+    width: 50%;
+  }
+
+  .pss__th--from {
+    color: var(--kit-text-muted);
+  }
+
+  .pss__th--to {
+    color: var(--kit-accent-ink);
+  }
+
+  .pss__td {
+    vertical-align: top;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    padding: var(--kit-space-md);
+    border-block-end: var(--kit-border-width) solid var(--kit-border);
+    text-wrap: pretty;
+  }
+
+  .pss__td--from {
+    color: var(--kit-text-muted);
+    padding-inline-start: 0;
+  }
+
+  .pss__td--to {
+    background: var(--kit-bg-subtle);
+  }
+
+  .pss__row:last-child .pss__td {
+    border-block-end: 0;
+  }
+
+  /* The tint has to change with the ground it lands on, or the highlighted column disappears on a
+     subtle section and glares on an inverse one. */
+  .kit-section--subtle .pss__td--to {
+    background: var(--kit-bg);
+  }
+
+  .kit-section--inverse .pss__td--to {
+    background: color-mix(in srgb, var(--kit-text-inverse) 8%, transparent);
+  }
+
+  .kit-section--inverse .pss__th--to {
+    color: var(--kit-accent-lift);
+  }
+
+  .kit-section--inverse .pss__th--from,
+  .kit-section--inverse .pss__td--from {
+    color: color-mix(in srgb, var(--kit-text-inverse) 72%, transparent);
+  }
+
+  .kit-section--inverse .pss__td {
+    border-block-end-color: color-mix(in srgb, var(--kit-text-inverse) 22%, transparent);
+  }
+
+  .kit-section--inverse .pss__th {
+    border-block-end-color: color-mix(in srgb, var(--kit-text-inverse) 45%, transparent);
+  }
+</style>

@@ -1,0 +1,266 @@
+---
+/**
+ * /explore - the page the client opens FIRST, and the only one that explains itself.
+ *
+ * ========================== WHY THIS PAGE EXISTS ===========================
+ *
+ * Explore's whole value is that it is a declared RANGE, and a link to eight URLs does not
+ * communicate a range. Handed `/v1` through `/v8` with no framing, a client reads them as
+ * eight guesses, opens two, picks the one nearest what they already had in mind, and the
+ * ladder has bought nothing. Worse, the restrained rung reads as "the boring one" rather than
+ * as one deliberate end of a span the boldest rung defines.
+ *
+ * So this page does four things a list of links cannot:
+ *   1. says what just happened, in the client's language, not the build's,
+ *   2. DRAWS the ladder, so the range is a thing you can see before you click anything,
+ *   3. gives every rung its own argument (what it is, why, the feeling it carries), so the
+ *      conversation can be about intent rather than taste,
+ *   4. says what happens next, which is the step clients most often do not know they have:
+ *      react, combine across rungs, ask for changes, and only then build the whole site.
+ *
+ * ============================ IT IS TEMPORARY =============================
+ *
+ * Explore mode only. It renders nothing unless PUBLIC_EXPLORE_MODE=true and at least one
+ * variant is registered, and it is DELETED at Compose along with the /vN routes. It must
+ * never be linked from the site's own navigation and it carries noindex, because it is a
+ * working document for one client, not a page of the site.
+ *
+ * It is styled from the brand tokens like everything else: the client is looking at their
+ * own brand while they choose, and a picker in some neutral tool-grey would be the one
+ * surface in the preview that does not look like them.
+ */
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { variants, landingVariants, byAmbition } from "../lib/variants";
+
+const exploreMode = import.meta.env.PUBLIC_EXPLORE_MODE === "true";
+const rungs = byAmbition(variants);
+const landings = byAmbition(landingVariants);
+const show = exploreMode && rungs.length > 0;
+
+// The ladder is drawn from the real registry, so a rung that was dropped leaves a real gap
+// rather than a silently renumbered row.
+const maxAmbition = rungs.length ? Math.max(...rungs.map((v) => v.ambition || 1)) : 1;
+const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbition) * 74;
+---
+
+{show && (
+  <BaseLayout title="Directions to choose from" description="Explore preview" noindex={true}>
+    <main class="ex">
+      <header class="ex-head">
+        <p class="ex-tag">Preview</p>
+        <h1>{rungs.length} directions, and they are meant to disagree</h1>
+        <p class="ex-lede">
+          This is not {rungs.length} attempts at the same page. Before anything was designed we
+          sampled a wide set of genuinely different concepts, kept the ones worth building, and
+          put them in order from the most restrained to the boldest. You are looking at a range,
+          not a shortlist. The point is to find out where on it you want to live.
+        </p>
+      </header>
+
+      {/* ---------------- the ladder, drawn ---------------- */}
+      <section class="ex-ladder" aria-labelledby="ladder-h">
+        <h2 id="ladder-h">The range</h2>
+        <p class="ex-note">
+          Rung 1 is restrained on purpose, and it is not the weak one: it carries a real idea,
+          quietly. Rung {maxAmbition} commits hardest. Everything between is a genuine step, so
+          you can point at a place rather than a page.
+        </p>
+        <ol class="ex-rail">
+          {rungs.map((v) => (
+            <li class="ex-rung">
+              <a href={v.href}>
+                {/* The plot has a FIXED height on purpose: a percentage height against an auto
+                    parent resolves to zero, which rendered every bar invisible and left the
+                    page arguing for a range it never drew. */}
+                <span class="ex-plot"><span class="ex-bar" style={`height:${height(v)}%`}></span></span>
+                <span class="ex-rung-n">{v.ambition}</span>
+                <span class="ex-rung-name">{v.name}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+        <p class="ex-ends"><span>more restrained</span><span>bolder</span></p>
+      </section>
+
+      {/* ---------------- one card per rung, each arguing for itself ---------------- */}
+      <section class="ex-list" aria-labelledby="dirs-h">
+        <h2 id="dirs-h">The directions</h2>
+        {rungs.map((v) => (
+          <article class="ex-card">
+            {/* The rung is an ORDINAL ON THE NAME, never a label above it. A small uppercase
+                "Rung 1 of 8" sitting immediately above a heading is the eyebrow/kicker
+                pattern, which is an automatic fail in our own anti-pattern list, and the
+                verifier caught this page shipping eight of them. */}
+            <div class="ex-card-head">
+              <h3>
+                <a href={v.href}><span class="ex-num">{v.ambition}</span>{v.name}</a>
+              </h3>
+              <p class="ex-feeling">{v.feeling} <span class="ex-of">&middot; rung {v.ambition} of {maxAmbition}</span></p>
+            </div>
+            <dl class="ex-dl">
+              <div><dt>What it is</dt><dd>{v.what}</dd></div>
+              <div><dt>Why</dt><dd>{v.why}</dd></div>
+              {v.lookAt && <div><dt>Look at</dt><dd>{v.lookAt}</dd></div>}
+              {v.donor && <div><dt>Craft drawn from</dt><dd><code>{v.donor}</code></dd></div>}
+            </dl>
+            <a class="ex-open" href={v.href}>Open {v.name}</a>
+          </article>
+        ))}
+      </section>
+
+      {landings.length > 0 && (
+        <section class="ex-list" aria-labelledby="lp-h">
+          <h2 id="lp-h">Landing pages</h2>
+          <p class="ex-note">
+            Single-purpose pages for a campaign, judged on one job rather than on carrying the
+            whole business.
+          </p>
+          {landings.map((v) => (
+            <article class="ex-card">
+              <div class="ex-card-head">
+                <h3><a href={v.href}>{v.name}</a></h3>
+                <p class="ex-feeling">{v.feeling}</p>
+              </div>
+              <dl class="ex-dl">
+                <div><dt>What it is</dt><dd>{v.what}</dd></div>
+                <div><dt>Why</dt><dd>{v.why}</dd></div>
+              </dl>
+              <a class="ex-open" href={v.href}>Open {v.name}</a>
+            </article>
+          ))}
+        </section>
+      )}
+
+      {/* ---------------- what to do with it ---------------- */}
+      <section class="ex-next" aria-labelledby="next-h">
+        <h2 id="next-h">What happens next</h2>
+        <ol class="ex-steps">
+          <li>
+            <strong>Open several, including the ends.</strong> Open rung 1 and rung {maxAmbition}{" "}
+            before you form a view. Judging the middle without having seen both ends is how a set
+            like this collapses back to the safe choice.
+          </li>
+          <li>
+            <strong>You can mix.</strong> "Rung 5, but with 8's hero and 2's navigation" is a
+            normal answer and a more useful one than picking a single page. Sections are labelled
+            in this preview so you can point at one by name.
+          </li>
+          <li>
+            <strong>Tell us what to change, then look again.</strong> Reactions are cheap here and
+            expensive later. Anything you want tried gets rebuilt into the preview and you look
+            at the real thing rather than a description of it.
+          </li>
+          <li>
+            <strong>Then the site gets built around it, properly.</strong> Once a direction is
+            settled it becomes the design system, and every remaining page (services, about,
+            contact, the blog, the legal pages) is built on it end to end, with accessibility,
+            performance and mobile checked on every one. This preview is deleted at that point:
+            it is scaffolding, not the building.
+          </li>
+        </ol>
+        <p class="ex-note">
+          Nothing here is final and none of it is wasted: the directions you did not pick are
+          recorded, so "I liked something about number 3" is still answerable later.
+        </p>
+      </section>
+    </main>
+  </BaseLayout>
+)}
+
+<style>
+  /*
+   * Brand tokens only for colour: the client should be looking at their own brand while they
+   * choose. The type scale is set HERE rather than inherited, because this page has to read as
+   * a document with a hierarchy on any brand, including one whose base styles leave headings at
+   * body size.
+   *
+   * THE MEASURE IS THE CONTAINER, not an inner max-width. The first version put a 46rem reading
+   * column inside a 68rem container, left-pinned, which left roughly 450px of void down the
+   * right of every band: the exact one-sided emptiness the verifier's dead-space check exists to
+   * catch, on the page that coaches the client. A single column that IS the measure has
+   * symmetrical emptiness, which reads as a decision rather than an unfinished layout.
+   */
+  .ex { max-width: 54rem; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+  .ex-head { margin-bottom: 4rem; }
+  /*
+   * OPACITY IS A CONTRAST DECISION, not a styling one. Every small label on this page was set
+   * at 0.5, which composites brand ink over paper to roughly #7c7c7c: 4.17:1, and AA wants 4.5
+   * for anything under 18px. Thirty-five nodes failed on the page whose job is to demonstrate
+   * craft. Small text stays at 0.75 or above; only text at 24px and up, and the decorative
+   * bars, are allowed to go lighter.
+   */
+  .ex-tag {
+    font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase;
+    opacity: 0.78; margin: 0 0 1rem;
+  }
+  .ex h1 {
+    font-size: clamp(1.875rem, 4.5vw, 2.75rem); line-height: 1.12; letter-spacing: -0.015em;
+    margin: 0 0 1rem; text-wrap: balance;
+  }
+  .ex-lede { font-size: 1.125rem; line-height: 1.6; opacity: 0.88; margin: 0; }
+  .ex h2 { font-size: 1.375rem; line-height: 1.25; margin: 0 0 0.75rem; }
+  .ex-note { opacity: 0.8; margin: 0 0 2rem; }
+
+  /* The ladder. Bars rise with ambition, so the range is visible before anything is clicked. */
+  .ex-ladder { margin-bottom: 5rem; }
+  .ex-rail {
+    list-style: none; display: grid; gap: 0.5rem; margin: 0; padding: 0;
+    grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+  }
+  .ex-rung a { display: block; text-decoration: none; color: inherit; }
+  /* Definite height: this is what makes the bars' percentage heights resolve. */
+  .ex-plot { display: flex; align-items: flex-end; height: 9rem; }
+  .ex-bar {
+    display: block; width: 100%; background: currentColor; opacity: 0.16;
+    transition: opacity 200ms ease;
+  }
+  .ex-rung a:hover .ex-bar, .ex-rung a:focus-visible .ex-bar { opacity: 0.45; }
+  .ex-rung-n {
+    display: block; font-variant-numeric: tabular-nums; font-size: 0.75rem;
+    padding-top: 0.5rem; border-top: 1px solid currentColor; opacity: 0.78;
+  }
+  .ex-rung-name { display: block; font-size: 0.8125rem; line-height: 1.3; padding-top: 0.25rem; }
+  .ex-ends {
+    display: flex; justify-content: space-between; font-size: 0.75rem;
+    letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.78; margin: 1rem 0 0;
+  }
+
+  /* One card per rung. The label column carries the field names so the band fills its width. */
+  .ex-list { margin-bottom: 5rem; }
+  .ex-card { padding: 2rem 0; border-top: 1px solid currentColor; }
+  .ex-card:first-of-type { border-top-width: 2px; }
+  .ex-card h3 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 0.25rem; }
+  .ex-num {
+    display: inline-block; min-width: 2ch; font-variant-numeric: tabular-nums;
+    opacity: 0.55; margin-right: 0.5rem;
+  }
+  .ex-of { opacity: 0.78; font-style: normal; font-size: 0.875rem; }
+  .ex-card h3 a { color: inherit; text-decoration: none; }
+  .ex-card h3 a:hover, .ex-card h3 a:focus-visible { text-decoration: underline; }
+  .ex-feeling { font-style: italic; opacity: 0.82; margin: 0 0 1.5rem; }
+  .ex-dl { margin: 0 0 1.5rem; display: grid; gap: 1rem; }
+  .ex-dl > div { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; align-items: baseline; }
+  .ex-dl dt {
+    font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.78;
+  }
+  .ex-dl dd { margin: 0; line-height: 1.6; }
+  .ex-open {
+    display: inline-block; padding: 0.625rem 1.25rem; border: 1px solid currentColor;
+    text-decoration: none; color: inherit; font-size: 0.9375rem; min-height: 44px;
+    line-height: 1.6;
+  }
+
+  .ex-steps { padding-left: 1.25rem; display: grid; gap: 1.25rem; margin: 0 0 2rem; }
+  .ex-steps li { line-height: 1.6; }
+
+  @media (max-width: 46rem) {
+    .ex-dl > div { grid-template-columns: 1fr; gap: 0.25rem; }
+  }
+  @media (max-width: 40rem) {
+    .ex { padding: 2.5rem 1.25rem 4rem; }
+    .ex-plot { height: 6rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ex-bar { transition: none; }
+  }
+</style>

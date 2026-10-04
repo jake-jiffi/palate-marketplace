@@ -23,7 +23,7 @@
 import { spawnSync } from 'child_process';
 import { writeFileSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { invokedDirectly } from "../lib/invoked-directly.mjs";
 
 const COLS = 24, ROWS = 16; // ~3:2, the squint resolution
 
@@ -137,4 +137,4 @@ function main() {
   process.exit(0);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();

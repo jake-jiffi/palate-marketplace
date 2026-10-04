@@ -1,6 +1,6 @@
 ---
 // Tier-0 / Tier-1 motion wrapper (see references/motion-and-3d.md).
-// Mount ONCE in BaseLayout.astro right after <ExploreSwitcher />. It boots the
+// Mount ONCE in BaseLayout.astro, right after the skip link. It boots the
 // motion floor (Lenis + GSAP ScrollTrigger reveals + the View-Transitions bridge)
 // from src/lib/motion.ts. initMotion() early-returns under prefers-reduced-motion,
 // so this is safe to mount unconditionally.

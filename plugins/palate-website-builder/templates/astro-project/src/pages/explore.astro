@@ -4,31 +4,42 @@
  *
  * ========================== WHY THIS PAGE EXISTS ===========================
  *
- * Explore's whole value is that it is a declared RANGE, and a link to eight URLs does not
- * communicate a range. Handed `/v1` through `/v8` with no framing, a client reads them as
- * eight guesses, opens two, picks the one nearest what they already had in mind, and the
- * ladder has bought nothing. Worse, the restrained rung reads as "the boring one" rather than
- * as one deliberate end of a span the boldest rung defines.
+ * Explore's whole value is that it is a declared RANGE, and a link to five stills does not
+ * communicate a range. Handed five thumbnails with no framing, a client reads five guesses,
+ * opens two, picks the one nearest what they already had in mind, and the ladder has bought
+ * nothing. Worse, the restrained rung reads as "the boring one" rather than as one deliberate
+ * end of a span the boldest rung defines.
  *
- * So this page does four things a list of links cannot:
+ * So this page does five things a list of links cannot:
  *   1. says what just happened, in the client's language, not the build's,
- *   2. DRAWS the ladder, so the range is a thing you can see before you click anything,
- *   3. gives every rung its own argument (what it is, why, the feeling it carries), so the
- *      conversation can be about intent rather than taste,
- *   4. says what happens next, which is the step clients most often do not know they have:
+ *   2. asks the calibration question against real sites, because "how bold do you want to be"
+ *      is unanswerable in words and obvious in pictures,
+ *   3. DRAWS the ladder, so the range is a thing you can see before you click anything, with
+ *      the calibration answer marked on it,
+ *   4. shows every board inline with its own argument (what it is, why, the feeling, and what
+ *      moves), so the conversation can be about intent rather than taste,
+ *   5. says what happens next, which is the step clients most often do not know they have:
  *      react, combine across rungs, ask for changes, and only then build the whole site.
+ *
+ * ======================= IT IS ALWAYS THE FALLBACK ========================
+ *
+ * When the design canvas is available it is the richer surface and this page links to it
+ * first. When it is not, nothing is lost: every tool can open a URL. A missing canvas is not
+ * an error, and the doctrine says to send the preview URL either way.
  *
  * ============================ IT IS TEMPORARY =============================
  *
- * Explore mode only. It renders nothing unless PUBLIC_EXPLORE_MODE=true and at least one
- * variant is registered, and it is DELETED at Compose along with the /vN routes. It must
- * never be linked from the site's own navigation and it carries noindex, because it is a
- * working document for one client, not a page of the site.
+ * Explore mode only. It renders nothing unless PUBLIC_EXPLORE_MODE=true and at least one board
+ * is registered, and it is DELETED at Compose along with `public/_explore/`. It must never be
+ * linked from the site's own navigation and it carries noindex, because it is a working
+ * document for one client, not a page of the site.
  *
- * It is styled from the brand tokens like everything else: the client is looking at their
- * own brand while they choose, and a picker in some neutral tool-grey would be the one
- * surface in the preview that does not look like them.
+ * It is styled from the brand tokens like everything else: the client is looking at their own
+ * brand while they choose, and a picker in some neutral tool-grey would be the one surface in
+ * the preview that does not look like them.
  */
+import { readFileSync, existsSync } from "node:fs";
+import { join, resolve, dirname } from "node:path";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { variants, landingVariants, byAmbition } from "../lib/variants";
 
@@ -37,13 +48,83 @@ const rungs = byAmbition(variants);
 const landings = byAmbition(landingVariants);
 const show = exploreMode && rungs.length > 0;
 
+/**
+ * Read a build artefact at BUILD TIME, from the project or the repo above it.
+ *
+ * The manifest legitimately lives at a repo root while the Astro site sits one level down, and
+ * every gate in the plugin has already been caught assuming otherwise. Two levels is enough for
+ * the shapes we ship and stops well short of wandering up somebody's home directory.
+ */
+function readArtefact(rel) {
+  let dir = process.cwd();
+  for (let i = 0; i < 3; i++) {
+    const p = join(dir, rel);
+    try { if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return null;
+}
+
+const manifest = readArtefact("build-manifest.json") || {};
+// `explore.canvas.url` is the current shape (Task 2); `explore.canvas_url` is the older one,
+// read as a fallback so a manifest written before the canvas-first change still renders a link.
+const canvasUrl =
+  typeof manifest?.explore?.canvas?.url === "string" ? manifest.explore.canvas.url
+  : typeof manifest?.explore?.canvas_url === "string" ? manifest.explore.canvas_url
+  : null;
+/**
+ * THE ANSWER IS RECORDED IN TWO PLACES AND THE INTAKE IS THE EARLIER ONE.
+ *
+ * The client answers the calibration question in the intake, before the deep survey, and it
+ * lands on `plan_checkpoint.shown.intake.calibration.position`. `commission.intensity_asked` is
+ * written later, by `/pick --intensity <n>`, which the doctrine runs AFTER the boards were seen.
+ * Reading only the later field meant a build that followed the doctrine exactly handed the
+ * client a ladder with no marker on it, missing the one number they had given about the range.
+ * `intensity_asked` still wins where it exists, because it is the confirmation.
+ */
+const asked =
+  Number(manifest?.commission?.intensity_asked)
+  || Number(manifest?.plan_checkpoint?.shown?.intake?.calibration?.position)
+  || null;
+
+/**
+ * DID THE DONOR ROW ACTUALLY RUN? The card used to render `<id>-donor.jpg` on the registry's
+ * `donor` alone, and the registry names a donor on every board, so a build run with
+ * `--no-donors` (or one whose donor row never ran at all) shipped a broken image on the page
+ * the client opens. `boards-render.mjs` records `explore.donor_row = { skipped: true }` for
+ * exactly that run and `{ skipped: false }` when it drew the row; an older manifest records
+ * neither, and those builds DID write the files, so absence reads as present.
+ */
+const donorRow = manifest?.explore?.donor_row;
+const donorsDrawn = !donorRow || donorRow.skipped !== true;
+
+const refs = (readArtefact(".palate/explore/refs.json") || [])
+  .filter((r) => r && r.position && r.name)
+  .sort((a, b) => a.position - b.position);
+
 // The ladder is drawn from the real registry, so a rung that was dropped leaves a real gap
 // rather than a silently renumbered row.
 const maxAmbition = rungs.length ? Math.max(...rungs.map((v) => v.ambition || 1)) : 1;
 const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbition) * 74;
+
+/**
+ * Where the client's calibration answer lands on the ladder.
+ *
+ * The answer is a position on a row of three or four references, and the ladder has N rungs, so
+ * the two scales are different and the mapping has to be stated rather than assumed. It is a
+ * MARKER, never a pick: it says where they said they were aiming, which is the thing worth
+ * having in front of them while they look at what was built.
+ */
+const askedRung = (() => {
+  if (!asked || !rungs.length) return null;
+  const span = Math.max(1, (refs.length || 4) - 1);
+  return Math.min(maxAmbition, Math.max(1, Math.round(((asked - 1) / span) * (maxAmbition - 1)) + 1));
+})();
 ---
 
-{show && (
+{show ? (
   <BaseLayout title="Directions to choose from" description="Explore preview" noindex={true}>
     <main class="ex">
       <header class="ex-head">
@@ -52,29 +133,60 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
         <p class="ex-lede">
           This is not {rungs.length} attempts at the same page. Before anything was designed we
           sampled a wide set of genuinely different concepts, kept the ones worth building, and
-          put them in order from the most restrained to the boldest. You are looking at a range,
-          not a shortlist. The point is to find out where on it you want to live.
+          put them in order from the most restrained to the boldest. Each one below is a board:
+          the entrance, the design system it sets, and one real section, which is everything a
+          direction can be judged on. You are looking at a range, not a shortlist.
         </p>
+        {canvasUrl && (
+          <p class="ex-canvas">
+            <a href={canvasUrl} rel="noreferrer">Open the boards on the design canvas</a>
+            <span class="ex-canvas-note">
+              Everything is side by side there and you can change any of it in place. This page
+              is the same set, in a browser, if you would rather not.
+            </span>
+          </p>
+        )}
       </header>
+
+      {/* ---------------- the calibration question, before the ladder ---------------- */}
+      {refs.length > 0 && (
+        <section class="ex-cal" aria-labelledby="cal-h">
+          <h2 id="cal-h">First: which of these is closest to how bold you want to be?</h2>
+          <p class="ex-note">
+            Real sites in your field, ordered the same way the directions below are. You do not
+            have to like them. Pointing at one tells us where to aim better than any adjective.
+          </p>
+          <ol class="ex-refs">
+            {refs.map((r) => (
+              <li class={`ex-ref${askedRung && asked === r.position ? " is-asked" : ""}`}>
+                <img src={`/_explore/ref${r.position}.jpg`} alt={`${r.name}, a reference at position ${r.position}`} width="720" height="450" loading="lazy" />
+                <p class="ex-ref-name">{r.position}. {r.name}</p>
+                <p class="ex-ref-why">{r.why}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {/* ---------------- the ladder, drawn ---------------- */}
       <section class="ex-ladder" aria-labelledby="ladder-h">
         <h2 id="ladder-h">The range</h2>
         <p class="ex-note">
-          Rung 1 is restrained on purpose, and it is not the weak one: it carries a real idea,
-          quietly. Rung {maxAmbition} commits hardest. Everything between is a genuine step, so
-          you can point at a place rather than a page.
+          Direction 1 is restrained on purpose, and it is not the weak one: it carries a real
+          idea, quietly. Direction {maxAmbition} commits hardest. Everything between is a
+          genuine step, so you can point at a place rather than a page.
         </p>
         <ol class="ex-rail">
           {rungs.map((v) => (
-            <li class="ex-rung">
-              <a href={v.href}>
+            <li class="ex-dir">
+              <a href={`/_explore/${v.id}-full.png`}>
                 {/* The plot has a FIXED height on purpose: a percentage height against an auto
                     parent resolves to zero, which rendered every bar invisible and left the
                     page arguing for a range it never drew. */}
                 <span class="ex-plot"><span class="ex-bar" style={`height:${height(v)}%`}></span></span>
-                <span class="ex-rung-n">{v.ambition}</span>
-                <span class="ex-rung-name">{v.name}</span>
+                <span class="ex-dir-n">{v.ambition}</span>
+                <span class="ex-dir-name">{v.name}</span>
+                {askedRung === v.ambition && <span class="ex-marker" data-asked-direction={v.ambition}>you said about here</span>}
               </a>
             </li>
           ))}
@@ -82,28 +194,73 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
         <p class="ex-ends"><span>more restrained</span><span>bolder</span></p>
       </section>
 
-      {/* ---------------- one card per rung, each arguing for itself ---------------- */}
+      {/* ---------------- one card per board, each arguing for itself ---------------- */}
       <section class="ex-list" aria-labelledby="dirs-h">
         <h2 id="dirs-h">The directions</h2>
         {rungs.map((v) => (
           <article class="ex-card">
             {/* The rung is an ORDINAL ON THE NAME, never a label above it. A small uppercase
-                "Rung 1 of 8" sitting immediately above a heading is the eyebrow/kicker
+                "Rung 1 of 5" sitting immediately above a heading is the eyebrow/kicker
                 pattern, which is an automatic fail in our own anti-pattern list, and the
                 verifier caught this page shipping eight of them. */}
             <div class="ex-card-head">
+              {/* The link opens the WHOLE board (`<id>-full.png`), never the card image.
+                  `<id>.png` is the top 900px, which is what the fidelity gate measures and the
+                  right size for a card; behind a link promising the still at full size it is a
+                  board cut off below the entrance. */}
               <h3>
-                <a href={v.href}><span class="ex-num">{v.ambition}</span>{v.name}</a>
+                <a href={`/_explore/${v.id}-full.png`}><span class="ex-num">{v.ambition}</span>{v.name}</a>
               </h3>
-              <p class="ex-feeling">{v.feeling} <span class="ex-of">&middot; rung {v.ambition} of {maxAmbition}</span></p>
+              <p class="ex-feeling">{v.feeling} <span class="ex-of">&middot; Direction {v.ambition} of {maxAmbition}</span></p>
             </div>
+            {/* THE BOARD AND THE REFERENCE IT REPRODUCES, SIDE BY SIDE. A rung's donor was a
+                slug in a registry the client never opens, so the claim that the direction is
+                drawn from real published work could not be checked by the one person it is
+                made to. boards-render writes `<id>-donor.jpg` beside every board still, for
+                every board that names a donor. */}
+            <div class="ex-shots">
+              <a class="ex-shot" href={`/_explore/${v.id}-full.png`} data-board-shot={v.id}>
+                <img src={`/_explore/${v.id}.png`} alt={`The entrance of ${v.name}`} width="1440" height="900" loading="lazy" />
+              </a>
+              {v.donor && donorsDrawn && (
+                <figure class="ex-donor">
+                  <img src={`/_explore/${v.id}-donor.jpg`} alt={`The entrance of ${v.donor}, the published site this direction is drawn from`} width="720" height="450" loading="lazy" />
+                  <figcaption>Drawn from {v.donor}</figcaption>
+                </figure>
+              )}
+            </div>
+            {/* THE REST OF THE DIRECTION. The entrance above is one board of four, and the
+                three below are what makes this a direction rather than a home page: the inner
+                page the primary action lands on, the same page on a phone, and the sheet of
+                the pieces as used with their states. They are on the canvas beside the board;
+                this row is the same set for every tool that cannot open one. */}
+            {v.presentation && (
+              <ul class="ex-more">
+                {[
+                  ["inner", "Inner page", `The primary service page of ${v.name}`],
+                  ["mobile", "Mobile", `${v.name} on a phone, at 390`],
+                  ["sheet", "The details", `The kit pieces as used in ${v.name}, with their states`],
+                ].map(([key, label, alt]) => (
+                  <li class="ex-more-item">
+                    <a href={`/_explore/${v.id}-${key}.png`} data-board-extra={`${v.id}-${key}`}>
+                      <img src={`/_explore/${v.id}-${key}.png`} alt={alt} width="720" height="450" loading="lazy" />
+                      <span class="ex-more-label">{label}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
             <dl class="ex-dl">
               <div><dt>What it is</dt><dd>{v.what}</dd></div>
               <div><dt>Why</dt><dd>{v.why}</dd></div>
+              {v.motion && <div><dt>What moves</dt><dd>{v.motion}</dd></div>}
+              {v.ctas && v.ctas.length > 0 && (
+                <div><dt>Call to action</dt><dd>{v.ctas.join(" / ")}</dd></div>
+              )}
               {v.lookAt && <div><dt>Look at</dt><dd>{v.lookAt}</dd></div>}
               {v.donor && <div><dt>Craft drawn from</dt><dd><code>{v.donor}</code></dd></div>}
             </dl>
-            <a class="ex-open" href={v.href}>Open {v.name}</a>
+            <a class="ex-open" href={`/_explore/${v.id}-full.png`}>Open the whole board</a>
           </article>
         ))}
       </section>
@@ -115,17 +272,21 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
             Single-purpose pages for a campaign, judged on one job rather than on carrying the
             whole business.
           </p>
+          {/* NO STILL, AND NO LINK TO ONE. boards-render draws the ladder's rungs and nothing
+              else, so a landing board has no `/_explore/<id>.png` behind it: the card used to
+              render its name and its "open the still" link as dead ends. A landing page is
+              shown on the canvas, and this page says so rather than pointing at a 404. */}
           {landings.map((v) => (
             <article class="ex-card">
               <div class="ex-card-head">
-                <h3><a href={v.href}>{v.name}</a></h3>
+                <h3>{v.name}</h3>
                 <p class="ex-feeling">{v.feeling}</p>
               </div>
               <dl class="ex-dl">
                 <div><dt>What it is</dt><dd>{v.what}</dd></div>
                 <div><dt>Why</dt><dd>{v.why}</dd></div>
               </dl>
-              <a class="ex-open" href={v.href}>Open {v.name}</a>
+              <p class="ex-note">Shown on the canvas: landing boards are not drawn as stills here.</p>
             </article>
           ))}
         </section>
@@ -136,14 +297,14 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
         <h2 id="next-h">What happens next</h2>
         <ol class="ex-steps">
           <li>
-            <strong>Open several, including the ends.</strong> Open rung 1 and rung {maxAmbition}{" "}
-            before you form a view. Judging the middle without having seen both ends is how a set
-            like this collapses back to the safe choice.
+            <strong>Open several, including the ends.</strong> Open direction 1 and direction{" "}
+            {maxAmbition} before you form a view. Judging the middle without having seen both ends
+            is how a set like this collapses back to the safe choice.
           </li>
           <li>
-            <strong>You can mix.</strong> "Rung 5, but with 8's hero and 2's navigation" is a
-            normal answer and a more useful one than picking a single page. Sections are labelled
-            in this preview so you can point at one by name.
+            <strong>You can mix.</strong> "Direction 4, but with 5's hero and 2's navigation"
+            is a normal answer and a more useful one than picking a single board. Sections are
+            labelled in this preview so you can point at one by name.
           </li>
           <li>
             <strong>Tell us what to change, then look again.</strong> Reactions are cheap here and
@@ -152,10 +313,11 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
           </li>
           <li>
             <strong>Then the site gets built around it, properly.</strong> Once a direction is
-            settled it becomes the design system, and every remaining page (services, about,
-            contact, the blog, the legal pages) is built on it end to end, with accessibility,
-            performance and mobile checked on every one. This preview is deleted at that point:
-            it is scaffolding, not the building.
+            settled it becomes the design system. The home page is built first and shown to you
+            in full, moving, before anything else is written on top of it; then every remaining
+            page (services, about, contact, the blog, the legal pages) is built end to end, with
+            accessibility, performance and mobile checked on every one. This preview is deleted
+            at that point: it is scaffolding, not the building.
           </li>
         </ol>
         <p class="ex-note">
@@ -164,6 +326,29 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
         </p>
       </section>
     </main>
+  </BaseLayout>
+) : (
+  <BaseLayout
+    title="Preview closed"
+    description="This preview is no longer open."
+    noindex={true}
+  >
+    {/* WHY THIS BRANCH EXISTS: with PUBLIC_EXPLORE_MODE unset the page rendered NOTHING and
+        Astro still wrote the route, so /explore shipped as a ZERO-BYTE 200 on every build that
+        did not turn the picker on. An empty 200 is worse than a 404: a crawler indexes it, a
+        client opening the link they were sent sees a blank tab, and no gate can fail a page
+        with no <head> to read. Measured on a real build by listing dist pages by size. */}
+    <section class="ex-closed">
+      <h1>This preview is closed</h1>
+      <p>The directions that were here have been chosen. The live site is at <a href="/">the home page</a>.</p>
+    </section>
+    <style is:global>
+      .ex-closed { max-width: 40rem; margin: 0 auto; padding: 6rem 1.5rem;
+        font: 400 1rem/1.6 var(--brand-font-body, system-ui, sans-serif);
+        color: var(--brand-text, #111); background: var(--brand-bg, #fff); }
+      .ex-closed h1 { font-size: 1.75rem; font-weight: 400; margin: 0 0 0.75rem; }
+      .ex-closed a { color: var(--brand-accent, currentColor); }
+    </style>
   </BaseLayout>
 )}
 
@@ -200,6 +385,23 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
   .ex-lede { font-size: 1.125rem; line-height: 1.6; opacity: 0.88; margin: 0; }
   .ex h2 { font-size: 1.375rem; line-height: 1.25; margin: 0 0 0.75rem; }
   .ex-note { opacity: 0.8; margin: 0 0 2rem; }
+  .ex-canvas { margin: 2rem 0 0; display: grid; gap: 0.35rem; }
+  .ex-canvas a { font-size: 1.0625rem; }
+  .ex-canvas-note { opacity: 0.8; font-size: 0.9375rem; line-height: 1.6; }
+
+  /* The calibration row: real sites, ordered the same way the ladder is. */
+  .ex-cal { margin-bottom: 5rem; }
+  .ex-refs {
+    list-style: none; margin: 0; padding: 0; display: grid; gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  }
+  .ex-ref img {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
+    object-position: top; border: 1px solid currentColor;
+  }
+  .ex-ref.is-asked img { outline: 3px solid currentColor; outline-offset: 3px; }
+  .ex-ref-name { margin: 0.75rem 0 0.25rem; font-size: 0.9375rem; }
+  .ex-ref-why { margin: 0; font-size: 0.875rem; line-height: 1.5; opacity: 0.8; }
 
   /* The ladder. Bars rise with ambition, so the range is visible before anything is clicked. */
   .ex-ladder { margin-bottom: 5rem; }
@@ -207,25 +409,29 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
     list-style: none; display: grid; gap: 0.5rem; margin: 0; padding: 0;
     grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
   }
-  .ex-rung a { display: block; text-decoration: none; color: inherit; }
+  .ex-dir a { display: block; text-decoration: none; color: inherit; }
   /* Definite height: this is what makes the bars' percentage heights resolve. */
   .ex-plot { display: flex; align-items: flex-end; height: 9rem; }
   .ex-bar {
     display: block; width: 100%; background: currentColor; opacity: 0.16;
     transition: opacity 200ms ease;
   }
-  .ex-rung a:hover .ex-bar, .ex-rung a:focus-visible .ex-bar { opacity: 0.45; }
-  .ex-rung-n {
+  .ex-dir a:hover .ex-bar, .ex-dir a:focus-visible .ex-bar { opacity: 0.45; }
+  .ex-dir-n {
     display: block; font-variant-numeric: tabular-nums; font-size: 0.75rem;
     padding-top: 0.5rem; border-top: 1px solid currentColor; opacity: 0.78;
   }
-  .ex-rung-name { display: block; font-size: 0.8125rem; line-height: 1.3; padding-top: 0.25rem; }
+  .ex-dir-name { display: block; font-size: 0.8125rem; line-height: 1.3; padding-top: 0.25rem; }
+  .ex-marker {
+    display: block; font-size: 0.75rem; line-height: 1.3; padding-top: 0.35rem;
+    border-top: 2px solid currentColor; margin-top: 0.35rem;
+  }
   .ex-ends {
     display: flex; justify-content: space-between; font-size: 0.75rem;
     letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.78; margin: 1rem 0 0;
   }
 
-  /* One card per rung. The label column carries the field names so the band fills its width. */
+  /* One card per board. The label column carries the field names so the band fills its width. */
   .ex-list { margin-bottom: 5rem; }
   .ex-card { padding: 2rem 0; border-top: 1px solid currentColor; }
   .ex-card:first-of-type { border-top-width: 2px; }
@@ -238,6 +444,40 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
   .ex-card h3 a { color: inherit; text-decoration: none; }
   .ex-card h3 a:hover, .ex-card h3 a:focus-visible { text-decoration: underline; }
   .ex-feeling { font-style: italic; opacity: 0.82; margin: 0 0 1.5rem; }
+  .ex-shots {
+    display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: start;
+    margin: 0 0 1.5rem;
+  }
+  .ex-shot { display: block; }
+  .ex-shot img {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
+    object-position: top; border: 1px solid currentColor;
+  }
+  .ex-donor { margin: 0; display: grid; gap: 0.5rem; }
+  .ex-donor img {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
+    object-position: top; border: 1px solid currentColor;
+  }
+  /* 0.78 rather than a lighter grey: opacity is a contrast decision, and brand ink at 0.5 on
+     paper composites to about 4.17:1, which this page has failed before. */
+  .ex-donor figcaption { font-size: 0.8125rem; line-height: 1.5; opacity: 0.78; }
+  /* The other three boards of the direction. Three equal columns, each a link to the still at
+     full size, captioned so the client can point at one by name. The phone sits in the same
+     frame as the other two and is CONTAINED rather than covered: these three are whole boards
+     of wildly different shapes (a 390 by 1600 phone, a 1440 by 2200 sheet), and a cover-crop
+     into a landscape slot shows 15% of the phone, which the rendered gate calls destructive and
+     is right to. Contained, the whole board is on screen, small, and the link opens it. */
+  .ex-more {
+    list-style: none; margin: 0 0 1.5rem; padding: 0; display: grid; gap: 1rem;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .ex-more a { display: grid; gap: 0.5rem; text-decoration: none; color: inherit; }
+  .ex-more img {
+    display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain;
+    object-position: top; border: 1px solid currentColor;
+  }
+  .ex-more-label { font-size: 0.8125rem; line-height: 1.5; opacity: 0.78; min-height: 24px; }
+  .ex-more a:hover .ex-more-label, .ex-more a:focus-visible .ex-more-label { opacity: 1; text-decoration: underline; }
   .ex-dl { margin: 0 0 1.5rem; display: grid; gap: 1rem; }
   .ex-dl > div { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; align-items: baseline; }
   .ex-dl dt {
@@ -255,6 +495,8 @@ const height = (v: { ambition?: number }) => 26 + ((v.ambition || 1) / maxAmbiti
 
   @media (max-width: 46rem) {
     .ex-dl > div { grid-template-columns: 1fr; gap: 0.25rem; }
+    .ex-shots { grid-template-columns: 1fr; }
+    .ex-more { grid-template-columns: 1fr; }
   }
   @media (max-width: 40rem) {
     .ex { padding: 2.5rem 1.25rem 4rem; }

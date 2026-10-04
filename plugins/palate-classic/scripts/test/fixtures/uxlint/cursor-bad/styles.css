@@ -1,0 +1,2 @@
+/* Ungated custom cursor: hides the native cursor everywhere, strands touch/keyboard. */
+.cursor-layer { cursor: none; }

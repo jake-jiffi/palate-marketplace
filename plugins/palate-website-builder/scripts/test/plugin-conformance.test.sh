@@ -65,6 +65,28 @@ ne=$(git ls-files -s | awk '$1!~/100755/ && $4~/\.sh$/ {print $4}')
 [ -z "$ne" ] && ok "every tracked .sh is executable" \
   || bad "non-executable shell scripts: $(echo "$ne" | tr '\n' ' ')"
 
+# --- 4b. NOTHING TRACKED IS A SYMLINK ------------------------------------------------
+# A symlink committed here ships to every tester with its target baked in. One was: a link
+# from scripts/reference-capture/node_modules to an absolute path on one machine, added by a
+# `git add -A` while making the browser suites resolve playwright. sync-beta.sh vendors with
+# `git archive | tar -x`, which carries a link verbatim, so the next beta would have shipped a
+# dangling path everywhere else, and setup.sh's npm install would write into nothing. The
+# plugin has no legitimate symlink, so the rule is simply that there are none.
+sl=$(git ls-files -s | awk '$1=="120000" {print $4}')
+[ -z "$sl" ] && ok "no tracked symlink" \
+  || bad "tracked symlink(s), whose target ships baked in: $(echo "$sl" | tr '\n' ' ')"
+
+# --- 4c. NO BUILD RESIDUE IS TRACKED -------------------------------------------------
+# `.palate/assets.json` was committed here, the residue of running palate-assets.mjs against
+# the plugin root during a guard sweep, and it shipped to every customer through the
+# marketplace vendor. Nothing caught it because .gitignore deliberately KEEPS that file in a
+# CLIENT repo (gitignore-coverage.test.sh pins that), so the rule cannot live in .gitignore:
+# it has to be a rule about THIS repo. The plugin is a source tree, so no artefact a Palate
+# run writes into a site belongs in it.
+residue=$(git ls-files | grep -E '^(\.palate/|\.palate-shots/|dist/|verify-report\.json$)' || true)
+[ -z "$residue" ] && ok "no Palate build residue is tracked in the plugin repo" \
+  || bad "build residue is tracked and ships to customers: $(echo "$residue" | tr '\n' ' ')"
+
 # --- 5. THE MANIFESTS ARE VALID JSON -------------------------------------------------
 for f in .claude-plugin/plugin.json hooks/hooks.json; do
   node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" 2>/dev/null \

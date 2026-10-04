@@ -68,6 +68,11 @@ printf '%s' "$MARKER" > "$SRV/.run-marker"
 (cd "$SRV" && exec "$PY" -m http.server "$PORT" >/dev/null 2>&1) &
 SRV_PID=$!
 trap 'kill $SRV_PID 2>/dev/null; rm -rf "$TMP"' EXIT
+# HOME is redirected: recordBuild appends to ~/.config/palate/builds.log.json, and a suite
+# that drives the Stop hook must not write into the operator's real cross-build log. It lives
+# under this suite's own temp dir so the existing trap cleans it up; a second trap on EXIT would
+# REPLACE that one rather than add to it.
+LOG_HOME="$TMP/palate-home"; mkdir -p "$LOG_HOME"
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   [ "$(curl -fsS "http://localhost:$PORT/.run-marker" 2>/dev/null)" = "$MARKER" ] && break
   sleep 0.5
@@ -147,7 +152,7 @@ check "3. a stalled build STILL blocks" "$stalled_block" "true"
 cp "$FIX/better/index.html" "$SRV/index.html"
 run r4
 has "4. the repaired page reports the gain"        "$TMP/r4.err" "IMPROVING: [0-9]+ -> [0-9]+, UP [0-9]+ \(iteration 4"
-has "4. and now clears the floor"                  "$TMP/r4.err" "CLEARS the 80 floor"
+has "4. and now clears the floor"                  "$TMP/r4.err" "build hygiene: clears the 80 floor at [0-9]+ \(not a grade\)"
 # Repairing the contrast violation removes text_contrast from the scored set. That must not
 # make the run incomparable (the bug this loop was rewritten to avoid), but it must be said.
 has "4. discloses the denominator change"          "$TMP/r4.err" "part of this move is the denominator"
@@ -191,7 +196,7 @@ has "7b. a non-numeric floor is named, not obeyed"  "$TMP/r8.err" 'PALATE_MIN_HY
 has "7b. and the gate still blocks"                 "$TMP/r8.err" "BLOCKED"
 PALATE_MIN_HYGIENE=0 node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r9.err"
 has "7c. an OFF gate says so"                       "$TMP/r9.err" "the build-hygiene gate is OFF"
-hasnt "7c. and never claims a pass"                 "$TMP/r9.err" "CLEARS the"
+hasnt "7c. and never claims a pass"                 "$TMP/r9.err" "clears the"
 hasnt "7c. no spurious deprecation notice"          "$TMP/r9.err" "DEPRECATED"
 # The pre-rename name is still HONOURED, loudly. Silently ignoring it would block at 80 someone
 # who set PALATE_MIN_GRADE=0 expecting the gate off: the same silent-skip class, reintroduced.
@@ -211,7 +216,7 @@ const fs=require('fs');
 const noise=[1,2,3,4,5].map(i=>({route:'/',viewport:'desktop',rule:'color-contrast',check:'text_contrast',msg:'a11y color-contrast violation number '+i}));
 const grade={route:'/',viewport:'all',rule:'hygiene-below-floor',check:'build_hygiene',score:21,stalled:false,msg:'build hygiene 21/100 is below the 80 floor. NOW: fix the gaps above, rebuild, then RE-RUN THIS EXACT COMMAND'};
 fs.writeFileSync('$P/.palate-shots/interaction.json',JSON.stringify({interaction_failures:[...noise,grade]}));"
-out=$(printf '{"cwd":"%s"}' "$P" | PALATE_GATE_OFF= node "$STOP" 2>/dev/null)
+out=$(printf '{"cwd":"%s"}' "$P" | PALATE_GATE_OFF= HOME="$LOG_HOME" node "$STOP" 2>/dev/null)
 echo "$out" | grep -q '"decision":"block"' && d=block || d=allow
 check "8. the stop hook blocks" "$d" "block"
 echo "$out" | grep -q 'build hygiene 21/100' && r=yes || r=no

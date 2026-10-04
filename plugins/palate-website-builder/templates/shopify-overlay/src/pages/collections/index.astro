@@ -1,0 +1,9 @@
+---
+import CommerceLayout from '../../layouts/CommerceLayout.astro';
+import { privatePage, services } from '../../lib/shopify/server';
+export const prerender = false;
+privatePage(Astro);
+let data: any, error = false;
+try { const { api } = await services(); data = await api.collections(Astro.url.searchParams.get('after')); } catch { error = true; Astro.response.status = 503; }
+---
+<CommerceLayout title="Shop collections"><h1>Collections</h1>{error ? <p role="alert">Collections could not be loaded. <a href={Astro.url.pathname}>Retry</a></p> : <><ul class="commerce-grid">{data.nodes.map((c: any) => <li><a href={`/collections/${encodeURIComponent(c.handle)}`}>{c.image && <img src={c.image.url} alt={c.image.altText || ''} width="640" height="720" loading="lazy" />}<h2>{c.title}</h2><p>{c.description}</p></a></li>)}</ul>{!data.nodes.length && <p>No collections are currently published.</p>}{data.pageInfo.hasNextPage && <a href={`?after=${encodeURIComponent(data.pageInfo.endCursor)}`}>Next page</a>}</>}</CommerceLayout>

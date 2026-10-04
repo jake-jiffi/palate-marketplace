@@ -1,0 +1,32 @@
+/* Unified @font-face. One family name per typeface; weights via font-weight.
+   Replace family names and paths per client. Self-hosted, font-display: swap. */
+
+@font-face {
+  font-family: "BrandSans";
+  src: url("./brand-sans/regular.woff2") format("woff2"),
+       url("./brand-sans/regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "BrandSans";
+  src: url("./brand-sans/medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "BrandSans";
+  src: url("./brand-sans/semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "BrandDisplay";
+  src: url("./brand-display/regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

@@ -1,0 +1,154 @@
+---
+/**
+ * FAQ, everything visible.
+ *
+ * Use this when there are six questions or fewer and the answers are genuinely short. A visitor
+ * skim-reading four visible answers gets them all; the same four behind disclosure triangles cost
+ * four clicks and most people make none of them. Reach for FaqAccordion only once the answers are
+ * long enough that showing them would bury whatever comes next on the page.
+ *
+ * It emits FAQPage structured data from the same props it renders, so the questions can be
+ * eligible for a rich result without anyone maintaining a second copy of them. Only when there
+ * are questions: an empty FAQPage is a markup error, not an empty list. If a page somehow carries
+ * both FAQ variations, set `jsonLd={false}` on one, because two FAQPage blocks on one URL is
+ * worse than none.
+ *
+ * The grid is intrinsic rather than breakpoint-driven: it reflows on the width the questions
+ * actually need, which is why a page with two short questions and a page with six long ones both
+ * come out deliberate.
+ */
+export interface FaqItem {
+  /** The question in the visitor's words, not the business's. */
+  question: string;
+  /** Plain text. Under about 60 words, or this is the wrong variation. */
+  answer: string;
+}
+
+export interface Props {
+  title?: string;
+  /** One sentence of framing. Optional, and usually unnecessary. */
+  intro?: string;
+  items?: FaqItem[];
+  tone?: "default" | "subtle" | "inverse";
+  /** Shown instead of the list when there are no questions yet. */
+  emptyMessage?: string;
+  /** Emit FAQPage structured data. Turn off if another block on the page already does. */
+  jsonLd?: boolean;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  title = "Questions we get asked",
+  intro,
+  items = [
+    { question: "Do you charge for a quote?",
+      answer: "No. We quote on site at no cost, and the price we write down holds for 30 days." },
+    { question: "Which areas do you cover?",
+      answer: "Anywhere within about 25 km of the workshop. If you are further out we will tell you before you book, not after." },
+    { question: "How soon can you start?",
+      answer: "Most jobs start within a fortnight. Repairs that cannot wait are usually same day." },
+    { question: "Is the work guaranteed?",
+      answer: "Yes. Our workmanship is covered for six years, and we handle manufacturer warranty claims on your behalf." },
+  ],
+  tone = "default",
+  emptyMessage = "We are still collecting the questions people ask most. Send yours through and we will answer it here.",
+  jsonLd = true,
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const slug = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "faq";
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `faq-${slug(title)}`;
+const headingId = `${uid}-heading`;
+
+// Escaped so an answer containing a closing tag cannot break out of the script element.
+const structuredData = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: items.map((item) => ({
+    "@type": "Question",
+    name: item.question,
+    acceptedAnswer: { "@type": "Answer", text: item.answer },
+  })),
+}).replace(/</g, "\\u003c");
+---
+
+<section class:list={["kit-section", toneClass, "kit-faq", className]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container">
+    <div class="kit-faq__head kit-stack">
+      <h2 class="kit-h2" id={headingId}>{title}</h2>
+      {intro && <p class="kit-lede kit-muted">{intro}</p>}
+    </div>
+
+    {items.length === 0 ? (
+      <p class="kit-empty kit-faq__empty">{emptyMessage}</p>
+    ) : (
+      <ul class="kit-faq__list" role="list">
+        {items.map((item) => (
+          <li class="kit-faq__item">
+            <h3 class="kit-h3 kit-faq__q">{item.question}</h3>
+            <p class="kit-body kit-faq__a">{item.answer}</p>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+{jsonLd && items.length > 0 && (
+  <script type="application/ld+json" set:html={structuredData} is:inline />
+)}
+
+<style>
+  .kit-faq__head { margin-bottom: var(--kit-space-2xl); }
+
+  .kit-faq__list {
+    display: grid;
+    gap: var(--kit-gutter) var(--kit-space-2xl);
+    /* No breakpoints: the column count follows the width a question needs to read well, so two
+       short questions and six long ones both reflow deliberately. */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 34ch), 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .kit-faq__item {
+    display: grid;
+    gap: var(--kit-space-sm);
+    align-content: start;
+    padding-top: var(--kit-space-lg);
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+
+  .kit-section--inverse .kit-faq__item {
+    border-top-color: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent);
+  }
+
+  .kit-faq__q,
+  .kit-faq__a { max-width: var(--kit-measure); }
+  .kit-faq__a { color: var(--kit-text-muted); text-wrap: pretty; }
+  .kit-section--inverse .kit-faq__a {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+
+  .kit-faq__empty { margin: 0; }
+  /* .kit-empty is muted text in a dashed --kit-border, both chosen for a light page. */
+  .kit-section--inverse .kit-faq__empty {
+    color: color-mix(in srgb, var(--kit-text-inverse) 82%, transparent);
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 34%, transparent);
+  }
+</style>

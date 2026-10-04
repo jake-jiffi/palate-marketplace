@@ -81,6 +81,17 @@ for power users, breathing room for narrative / consumer pages.
 
 ### 9. Accessibility (WCAG 2.2 AA minimum)
 
+**What is automated here is a SUBSET, and the standard is the whole thing.**
+`verify-rendered.mjs` runs **eleven axe rules** at three viewports, chosen to mirror the
+checks the public grader scores rather than to cover WCAG: `color-contrast`, `button-name`,
+`link-name`, `input-button-name`, `select-name`, `label`, `form-field-multiple-labels`,
+`html-has-lang`, `document-title`, `image-alt`, `landmark-one-main` and `heading-order`.
+Everything else in this dimension is judged by a person or by another gate. Nothing
+automatically checks `aria-*` correctness on a hand-rolled widget, a keyboard trap, a focus
+order, a live region, or motion against `prefers-reduced-motion`. Clearing the automated pass
+is not a WCAG 2.2 AA pass and must never be reported to a client as one; axe itself finds
+about a third of WCAG issues on a typical page.
+
 Visible focus on every interactive element. Colour contrast >= 4.5:1 for body,
 >= 3:1 for large text. Forms have labels and `aria-describedby` for errors;
 each label sits above its field (a placeholder is never the only label), and

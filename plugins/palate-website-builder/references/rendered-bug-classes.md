@@ -190,6 +190,34 @@ home route, desktop, is driven today.
 
 ---
 
+## (i) REPEATED SILHOUETTE - two consecutive sections drawn as the same shape
+
+**The bug:** a client build shipped service pages carrying two identical five-card grids back
+to back, one for the products and one for the reasons to choose them. Every gate passed it:
+the markup was correct, the copy was correct, the contrast was correct. What was wrong was the
+rhythm, and rhythm was the one thing nothing measured, so the page reached the client reading
+as one long grid with a heading dropped into the middle of it.
+
+**The rule:** no two CONSECUTIVE sections share a silhouette. The same shape returning after
+another band is a motif and is welcome; the same shape twice in a row is a stutter. Change the
+second one: a different column count, a list or a single wide statement, media on one side, or
+another ground.
+
+**The gate:** `verify-rendered.sh` compares each pair of consecutive sections at desktop (top
+level `[data-section-id]` elements, else the top-level `section` / `header` / `footer` children
+of `main`). It reports `repeated silhouette` only when ALL FOUR hold: the section's main
+repeating container (the element with the most direct children of one tag, three at the least)
+has the same child count, the same column count (the `grid-template-columns` track count, else
+the children sharing the first child's top within 4px), the section aspect ratios are within
+ten per cent, and the computed `background-color` is the same. It is desktop only, because at
+390px every grid collapses to one column and every section is the same silhouette by
+definition. The finding is written to `.palate-shots/interaction.json` and BLOCKS through the
+enforce-on-evidence layer in `hooks/palate-stop.mjs`. A section marked
+`data-palate-repeat="deliberate"` is exempt, and the exemption is printed as a note naming the
+section rather than passing in silence.
+
+---
+
 ## How this maps to the gates (one table)
 
 | Class | Deterministic gate | Interpretive gate |
@@ -201,6 +229,7 @@ home route, desktop, is driven today.
 | (e) eyebrow / kicker creep | `ux-lint.sh` `hero-status-pill` + `ai-tell-tracked-eyebrow` | visual-rubric defect |
 | (f) heavy WebGL on mobile | `verify-rendered.sh` (390 canvas / chunk check) | visual-rubric defect (390) |
 | (h) dead interaction / focus / hover-nav | `verify-rendered.sh` (pointer+keyboard pass) to `.palate-shots/interaction.json` to `palate-stop.mjs`; `ux-lint.sh` `custom-cursor-not-gated` | visual-rubric defect |
+| (i) repeated silhouette (two consecutive sections, one shape) | `verify-rendered.sh` (consecutive-section silhouette compare) to `.palate-shots/interaction.json` to `palate-stop.mjs` | visual-rubric defect |
 
 `verify-rendered.sh` is fail-open on a missing browser (exit 3 = BLOCKED, surfaced, never
 a silent pass) exactly like the visual loop, so it never traps a build where a browser

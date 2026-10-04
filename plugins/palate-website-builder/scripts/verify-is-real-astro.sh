@@ -4,6 +4,8 @@
 # Run at the end of Phase A (preview boundary) and before any production phase.
 # Exits 0 only if every required marker of a genuine scaffold is present.
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow gate verify-is-real-astro "$PWD"
 fail() { echo "NOT_A_REAL_ASTRO_BUILD: $1" >&2; echo "  The deliverable must be scaffolded from templates/astro-project, not hand-written." >&2; echo "  Re-run Phase A scaffolding. Do NOT substitute static HTML." >&2; exit 1; }
 
 # 1. Astro is an actual dependency, pinned

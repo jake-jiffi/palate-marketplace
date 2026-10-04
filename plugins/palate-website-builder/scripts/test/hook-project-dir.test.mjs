@@ -85,15 +85,17 @@ test("an MCP call with no file hint finds the same project one level down from t
   assert.deepEqual(m.references_surveyed, ["aesop"]);
 });
 
-test("two candidate projects under the cwd is ambiguous, so the cwd is used rather than a guess", () => {
+test("two candidate projects under the cwd are ambiguous, so the hook writes no guessed state", () => {
   const root = tmp();
   scaffold(path.join(root, "a-site"));
   scaffold(path.join(root, "b-site"));
 
   fire({ cwd: root, tool_name: "mcp__palate__refs_search", tool_input: { query: "x" }, tool_response: textResult({ results: [{ slug: "linear" }] }) });
 
-  assert.equal(exists(path.join(root, "build-manifest.json")), true, "ambiguity falls back, it does not pick");
+  assert.equal(exists(path.join(root, "build-manifest.json")), false, "ambiguity does not start a legacy project");
+  assert.equal(exists(path.join(root, ".palate")), false, "no fallback journal is created");
   assert.equal(exists(path.join(root, "a-site", "build-manifest.json")), false);
+  assert.equal(exists(path.join(root, "b-site", "build-manifest.json")), false);
 });
 
 test("PALATE_PROJECT_DIR overrides detection", () => {
@@ -165,9 +167,9 @@ test("a write outside the detected project is recorded separately, never as part
   assert.deepEqual(m.files_written_outside, [scratch], "recorded, not erased");
 });
 
-test("with NO project detected, every write is still recorded (no silent filtering)", () => {
-  // Filtering on a guess would empty files_written, and the Stop hook uses that to decide a
-  // build happened at all. The gates would go quiet without ever saying why.
+test("with NO project detected, a source write does not implicitly create legacy state", () => {
+  // Source inspection can precede live init. Only an explicit legacy start establishes
+  // pre-scaffold recording; a generic hook call must not contaminate the destination.
   const root = tmp();
   const file = path.join(root, "notes", "thing.astro");
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -175,9 +177,25 @@ test("with NO project detected, every write is still recorded (no silent filteri
 
   fire({ cwd: root, tool_name: "Write", tool_input: { file_path: file }, tool_response: { ok: true } });
 
+  assert.equal(exists(path.join(root, "build-manifest.json")), false);
+  assert.equal(exists(path.join(root, ".palate")), false);
+  assert.equal(fs.readFileSync(file, "utf8"), "x");
+});
+
+test("an explicit legacy start records writes and surveys before a scaffold exists", () => {
+  const root = tmp();
+  execFileSync(process.execPath, [HOOK, "--init-legacy", "--project", root], {
+    env: { ...process.env, PALATE_PROJECT_DIR: "" }, stdio: ["ignore", "pipe", "pipe"],
+  });
+  const file = path.join(root, "notes.astro");
+  fs.writeFileSync(file, "<h1>Early note</h1>");
+  fire({ cwd: root, tool_name: "Write", tool_input: { file_path: file }, tool_response: { ok: true } });
+  fire({ cwd: root, tool_name: "mcp__palate__refs_get", tool_input: { slug: "aesop" }, tool_response: textResult({ slug: "aesop", essence: "one considered idea" }) });
   const m = read(path.join(root, "build-manifest.json"));
-  assert.equal(m.project_resolved_by, "fallback");
   assert.deepEqual(m.files_written, [file]);
+  assert.deepEqual(m.references_surveyed, ["aesop"]);
+  assert.equal(m.mcp_calls.length, 1);
+  assert.equal(exists(path.join(root, ".palate", "mcp-journal.jsonl")), true);
 });
 
 // ------------------------------------------------------------------ grounding from the result

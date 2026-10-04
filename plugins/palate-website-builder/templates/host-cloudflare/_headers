@@ -14,8 +14,47 @@
 # Security headers for every response.
 # X-Frame-Options is SAMEORIGIN (not DENY) so the same-origin Sanity
 # Presentation preview iframe still works; cross-origin framing stays blocked.
+# WHAT THIS POLICY IS WORTH, plainly: it is a host allowlist, not protection against injected
+# script. It stops a script, a frame or a form reaching a host that is not on the list; it does
+# not stop inline script that reaches the page. Never describe it to a client as XSS protection.
+#
+# WHY script-src CARRIES 'unsafe-inline', measured rather than assumed. A build of this
+# template ships three inline scripts: the JSON-LD block, the Vercel adapter's web-analytics
+# bootstrap (astro.config.mjs webAnalytics), and any component script Astro decides to inline
+# (it inlined ContactForm's validation, and left Motion's as a module). Under a strict policy
+# the form validation and the analytics both stop, silently. Hashes cannot fix it here: Vercel
+# reads vercel.json from the REPOSITORY rather than from build output, so a hash would have to
+# be committed by hand and would go stale the next time anyone edits a component script, which
+# kills the script with no error anywhere. So inline script is allowed and the policy is
+# honest about what it buys: an injected <script src> from an unlisted host is blocked, so is
+# a form posting to another origin, a <base> rewrite, an <object>, and framing by a stranger.
+# It does not stop injected inline script.
+#
+# frame-src NAMES 'self' EXPLICITLY. An explicitly set frame-src does NOT fall back to
+# default-src, so listing only Turnstile would block the site framing its own pages, which is
+# how Sanity's Presentation tool shows a live preview (previewUrl origin "same-origin").
+#
+# NEVER add a hash or a nonce to script-src while 'unsafe-inline' is there. A browser that
+# sees either one IGNORES 'unsafe-inline', and every inlined script in the build stops running.
+#
+# The CSP lists the hosts this template actually loads in a browser and nothing else:
+# Humblytics (the analytics script, with its own subdomains allowed to connect because the
+# beacon endpoint is not knowable from the template) and Cloudflare Turnstile, which also
+# needs frame-src because it renders in an iframe. Resend is a SERVER-side fetch from
+# src/pages/api/contact.ts and is deliberately absent: widening the policy for a request the
+# browser never makes is how a CSP stops describing anything. Both style-src and script-src
+# carry 'unsafe-inline': style-src because Astro inlines small stylesheets, script-src for the
+# measured reason above.
+# Add a host here and in templates/astro-project/vercel.json together, or the two hosts
+# disagree about what the same site may load.
+#
+# HSTS: Vercel sends this itself on a custom domain; Workers does not, so a first request
+# over plain http is accepted unless this is here. Two years, subdomains included, and
+# deliberately without `preload`, which is a one-way door for a client's apex domain.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://app.humblytics.com https://challenges.cloudflare.com; connect-src 'self' https://*.humblytics.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:

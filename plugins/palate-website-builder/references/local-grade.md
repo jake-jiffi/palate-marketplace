@@ -9,6 +9,11 @@ wrong one is how a customer ends up quoting a number that does not mean what the
 | **2. Local grade** (`grade-local.mjs`) | the above **plus design craft**: the SigLIP appearance head and the pairwise ladder against library references | free, a few minutes | **no** |
 | **3. Certified grade** (submit at palatemcp.com/grade) | everything, on our infrastructure, on a live URL | free to the submitter, ~US$1.06 to us | **yes, this is the only one** |
 
+**Run it before the done gate, not after.** `gate-done.sh`'s `taste` sub-gate
+(`scripts/gate-taste.mjs`) reads `local-grade.json` and refuses a build whose ladder verdict is
+`somewhat_worse` or `clearly_worse` against its exemplar, or whose `flattery.risk` is true, so
+the local grade has to have run before done for that check to have anything to read.
+
 **You do not need certification to fix your own site. You need it to prove something to someone
 else.** A local grade is computed on the customer's machine from inputs they control, so it can
 be faked. That does not matter for self-healing, because gaming yourself is pointless. It

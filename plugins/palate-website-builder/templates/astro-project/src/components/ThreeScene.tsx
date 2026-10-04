@@ -17,7 +17,7 @@
  *      @astrojs/react + React 19 are already configured, so astro.config.mjs
  *      needs no change.
  *   2. Mount it as an Astro ISLAND on the ONE page that needs it, hydrated lazily
- *      and never as the LCP. In e.g. src/pages/v1.astro:
+ *      and never as the LCP. In e.g. src/components/sections/B1Hero.astro:
  *
  *        ---
  *        import ThreeScene from "../components/ThreeScene";

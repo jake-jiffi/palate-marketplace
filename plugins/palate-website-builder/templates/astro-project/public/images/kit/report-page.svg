@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-labelledby="t">
+  <title id="t">Page four of an assessment report: five findings ranked by cost to fix, each with a price range and a saving.</title>
+  <!-- Drawn for the kit demo pages. Neutral literals on purpose: an SVG loaded through <img> is its own document and cannot read the page's tokens. -->
+  <rect width="1600" height="1000" fill="#e9e7e2"/>
+  <rect x="200" y="40" width="1200" height="920" fill="#ffffff" stroke="#d3d0c9"/>
+  <text x="260" y="112" font-family="Helvetica, Arial, sans-serif" font-size="18" letter-spacing="2" fill="#6b6861">ASSESSMENT REPORT</text>
+  <text x="1340" y="112" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#6b6861">Page 4 of 14</text>
+  <text x="260" y="176" font-family="Georgia, 'Times New Roman', serif" font-size="40" fill="#1f1e1b">Findings, ranked by what each costs to fix</text>
+  <text x="260" y="214" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#4f4c46">The biggest heat loss is not always the one worth fixing first. Start at the top.</text>
+  <g font-family="Helvetica, Arial, sans-serif" fill="#1f1e1b">
+    <g transform="translate(260 270)">
+      <text y="0" font-size="16" letter-spacing="1.5" fill="#6b6861">1</text><text x="40" y="0" font-size="22">Draught sealing, four external doors and the laundry vent</text>
+      <text x="1080" y="0" text-anchor="end" font-size="20">$0 to $180</text>
+      <rect x="40" y="18" width="1040" height="12" rx="6" fill="#ece9e3"/><rect x="40" y="18" width="880" height="12" rx="6" fill="#2f6b4f"/>
+      <text x="40" y="58" font-size="16" fill="#4f4c46">Saves about $310 a winter. Measured: 14.1 air changes an hour, target under 8.</text>
+    </g>
+    <g transform="translate(260 380)">
+      <text y="0" font-size="16" letter-spacing="1.5" fill="#6b6861">2</text><text x="40" y="0" font-size="22">Thermostat schedule and heater placement</text>
+      <text x="1080" y="0" text-anchor="end" font-size="20">$0</text>
+      <rect x="40" y="18" width="1040" height="12" rx="6" fill="#ece9e3"/><rect x="40" y="18" width="620" height="12" rx="6" fill="#2f6b4f"/>
+      <text x="40" y="58" font-size="16" fill="#4f4c46">Saves about $190 a winter. The heater warms the hallway before any bedroom.</text>
+    </g>
+    <g transform="translate(260 490)">
+      <text y="0" font-size="16" letter-spacing="1.5" fill="#6b6861">3</text><text x="40" y="0" font-size="22">Slumped ceiling batts, one bay above the back bedroom</text>
+      <text x="1080" y="0" text-anchor="end" font-size="20">$220 to $340</text>
+      <rect x="40" y="18" width="1040" height="12" rx="6" fill="#ece9e3"/><rect x="40" y="18" width="540" height="12" rx="6" fill="#2f6b4f"/>
+      <text x="40" y="58" font-size="16" fill="#4f4c46">Saves about $240 a winter. Thermal frame 11 shows the cold band across the top third.</text>
+    </g>
+    <g transform="translate(260 600)">
+      <text y="0" font-size="16" letter-spacing="1.5" fill="#6b6861">4</text><text x="40" y="0" font-size="22">Underfloor insulation, front two rooms</text>
+      <text x="1080" y="0" text-anchor="end" font-size="20">$1,400 to $2,100</text>
+      <rect x="40" y="18" width="1040" height="12" rx="6" fill="#ece9e3"/><rect x="40" y="18" width="360" height="12" rx="6" fill="#2f6b4f"/>
+      <text x="40" y="58" font-size="16" fill="#4f4c46">Saves about $260 a winter. Rebate applies at this postcode; see page 9.</text>
+    </g>
+    <g transform="translate(260 710)">
+      <text y="0" font-size="16" letter-spacing="1.5" fill="#6b6861">5</text><text x="40" y="0" font-size="22">Double glazing, living room only</text>
+      <text x="1080" y="0" text-anchor="end" font-size="20">$4,800 to $6,500</text>
+      <rect x="40" y="18" width="1040" height="12" rx="6" fill="#ece9e3"/><rect x="40" y="18" width="170" height="12" rx="6" fill="#2f6b4f"/>
+      <text x="40" y="58" font-size="16" fill="#4f4c46">Saves about $140 a winter. Fourth, not first: the three above cost a weekend between them.</text>
+    </g>
+  </g>
+  <line x1="260" y1="850" x2="1340" y2="850" stroke="#d3d0c9"/>
+  <text x="260" y="890" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#6b6861">Bars show saving per dollar spent. Prices are what customers paid in the last twelve months, not a national average.</text>
+  <text x="1340" y="890" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#6b6861">Blower door result: 14.1 ACH at 50 Pa</text>
+</svg>

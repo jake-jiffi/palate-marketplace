@@ -53,10 +53,26 @@ connection only load at start. Run `/mcp` to confirm `palate` is connected. Upda
 
 ## What you get
 
-`palate-website-builder` — builds production-grade Astro websites grounded by the Palate MCP (real
-design taste from deeply-analysed reference sites), plus brand packages. It bundles the skill, the
-survey/verify agents, the MCP-depth enforcement hooks, and the Palate MCP connector. Full setup and
-the manual/other-client paths: see the plugin's `INSTALL.md`.
+`palate-website-builder` (2.0) builds production Astro websites grounded by the Palate MCP, which
+supplies real design taste from deeply-analysed reference sites. A new site starts with working
+design options you can click through within minutes. You pick one in chat, and the whole site is
+built from it, on one design system with a style guide in the local preview. Existing sites carry
+on where they left off. If you have the Higgsfield CLI installed, Palate can also generate stills
+and scroll films within a credit cap you agree; without it, nothing changes. Full setup and the
+other-client paths: see the plugin's `INSTALL.md`.
+
+## Prefer the previous builder?
+
+The 1.16 builder stays installable as `palate-classic`. It is frozen: it gets security, install and
+MCP-compatibility fixes, nothing else.
+
+```bash
+claude plugin uninstall palate-website-builder@palate
+claude plugin install palate-classic@palate
+```
+
+Then restart Claude Code. Use one Palate plugin at a time: they register the same hooks, so two
+installed together double-count a build's library calls.
 
 ## Maintainers
 

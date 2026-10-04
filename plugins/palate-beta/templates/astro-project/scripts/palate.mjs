@@ -37,13 +37,13 @@ function pluginRoot() {
   if (env && existsSync(join(env, "SKILL.md"))) return env;
 
   // The installed plugin records its own path, so the version never has to be guessed. Both
-  // tracks are accepted: a tester on palate-beta must not silently get no gates.
+  // tracks are accepted, classic included: nobody on another Palate plugin silently gets no gates.
   const manifest = join(homedir(), ".claude", "plugins", "installed_plugins.json");
   if (existsSync(manifest)) {
     try {
       const j = JSON.parse(readFileSync(manifest, "utf8"));
       const entries = Object.entries(j.plugins || {})
-        .filter(([k]) => /^palate-(website-builder|beta)@/.test(k))
+        .filter(([k]) => /^palate-(website-builder|beta|classic)@/.test(k))
         .flatMap(([, v]) => (Array.isArray(v) ? v : [v]))
         .filter((e) => e && e.installPath && existsSync(join(e.installPath, "SKILL.md")));
       if (entries.length) return entries[0].installPath;

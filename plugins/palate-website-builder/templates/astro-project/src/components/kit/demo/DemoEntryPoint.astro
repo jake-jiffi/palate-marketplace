@@ -1,0 +1,180 @@
+---
+/**
+ * INTERACTIVE DEMO ENTRY POINT.
+ *
+ * Use this when there really is a live demo, sandbox or trial the visitor can enter right now.
+ * It is the strongest of the three demo pieces and the easiest to misuse: pointing it at a form,
+ * a waitlist or a booking page trades the one moment of highest intent for a disappointment.
+ *
+ * The piece answers the two questions that stop people clicking, and it answers them in that
+ * order. First, what will I be able to do in there, which is the list rather than a paragraph,
+ * because a list can be scanned in the two seconds this decision actually gets. Second, what does
+ * it cost me, which means the sign-up, the card and the time, not the price. Leave the cost line
+ * out and the button reads as a trap.
+ *
+ * The entry point is an anchor, not a button, because it goes somewhere.
+ *
+ * Content note: the defaults describe a plainly fictional sandbox. Replace them.
+ */
+
+export interface Props {
+  heading?: string;
+  /** One or two sentences setting up what the demo is. */
+  lede?: string;
+  /** Heading for the list. Kept as a real heading so the list is not a floating fragment. */
+  listHeading?: string;
+  /** What they will be able to do. Three to five entries, each a concrete action. */
+  abilities?: string[];
+  /** Where the demo lives. */
+  href?: string;
+  ctaLabel?: string;
+  /** What it costs them: sign-up, card, install, time. Not the price. */
+  cost?: string;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "Try it on a sample week before you sign up",
+  lede = "The sandbox is loaded with a made-up week of work for a three-van business. Change anything you like: it resets on the hour.",
+  listHeading = "What you can do in there",
+  abilities = [
+    "Move a job to another day and watch the customer's confirmation update",
+    "Build a quote from the price list and send it to yourself",
+    "Mark a job complete and see what lands in the invoice run",
+    "Invite a teammate and see what a technician can and cannot change",
+  ],
+  href = "/demo",
+  ctaLabel = "Open the sandbox",
+  cost = "No account, no card, nothing to install. About ten minutes.",
+  tone = "default",
+  class: className,
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `de-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const listHeadingId = `${uid}-list`;
+const items = abilities ?? [];
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+    "de",
+    className,
+  ]}
+  data-tone={tone}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="de-split">
+      <div class="de-pitch kit-stack">
+        <h2 id={headingId} class="kit-h2">{heading}</h2>
+        {lede && <p class="kit-lede kit-muted">{lede}</p>}
+
+        <div class="de-actions">
+          <a class="kit-btn kit-btn--primary de-cta" href={href}>{ctaLabel}</a>
+          {cost && <p class="de-cost">{cost}</p>}
+        </div>
+      </div>
+
+      {items.length > 0 && (
+        <div class="de-doing">
+          <h3 id={listHeadingId} class="kit-h3">{listHeading}</h3>
+          <ul class="de-list" role="list" aria-labelledby={listHeadingId}>
+            {items.map((ability) => (
+              <li class="de-item">{ability}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Reflow without a media query: both columns declare a basis derived from the reading measure,
+     so they sit side by side once there is room for both and stack when there is not. */
+  .de-split {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-2xl) var(--kit-gutter);
+  }
+
+  .de-pitch { flex: 1 1 calc(var(--kit-measure) / 1.2); min-width: 0; }
+  .de-doing { flex: 1 1 calc(var(--kit-measure) / 1.6); min-width: 0; }
+
+  .de-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kit-space-md) var(--kit-gutter);
+    margin-block-start: var(--kit-space-md);
+  }
+
+  .de-cta { flex: none; }
+
+  .de-cost {
+    margin: 0;
+    flex: 1 1 calc(var(--kit-measure) / 2.4);
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-body);
+    color: var(--kit-text-muted);
+    text-wrap: pretty;
+  }
+
+  .de-list {
+    list-style: none;
+    margin: var(--kit-space-md) 0 0;
+    padding: 0;
+  }
+
+  .de-item {
+    padding-block: var(--kit-space-md);
+    border-block-start: var(--kit-border-width) solid var(--kit-border);
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    text-wrap: pretty;
+  }
+
+  .de-item:last-child { border-block-end: var(--kit-border-width) solid var(--kit-border); }
+
+  .de-cta:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  /* A border built for a light ground disappears on a dark one, so it is restated here rather
+     than left to the brand to notice.
+
+     THE CALL TO ACTION DOES NOT USE THE ACCENT ON THIS GROUND. Both accent tokens fall back to
+     the plain accent, which itself falls back to near-black, so an accent-coloured button on the
+     inverse ground is a black button on a black band: the label stays readable and the button
+     disappears. Measured, not assumed. The inverse text and inverse background are the one pair
+     guaranteed to contrast with each other on this band, so the button is built from those and a
+     brand that defines a real lifted accent still colours the hover. */
+  .de[data-tone="inverse"] .de-cost { color: color-mix(in srgb, var(--kit-text-inverse) 72%, transparent); }
+  .de[data-tone="inverse"] .de-item { border-color: color-mix(in srgb, var(--kit-text-inverse) 28%, transparent); }
+  .de[data-tone="inverse"] .de-cta {
+    background: var(--kit-text-inverse);
+    color: var(--kit-bg-inverse);
+    border-color: var(--kit-text-inverse);
+  }
+  .de[data-tone="inverse"] .de-cta:hover {
+    background: color-mix(in srgb, var(--kit-text-inverse) 86%, transparent);
+  }
+  .de[data-tone="inverse"] .de-cta:focus-visible { outline-color: var(--kit-text-inverse); }
+</style>

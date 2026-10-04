@@ -1,0 +1,182 @@
+---
+/**
+ * USE CASES, ORGANISED BY AUDIENCE.
+ *
+ * Reach for this one when the buyer changes by role or by size of organisation, and each of them
+ * needs to see themselves before they will read anything else. The reader is scanning for WHO, so
+ * the name of the audience is the largest thing in the card and everything else is subordinate
+ * to it.
+ *
+ * The three use-case variations are deliberately not the same component three times. This one is
+ * a grid of cards, because an audience is a thing you pick one of. The industry variation is a
+ * dense index, because a sector is a thing you look up. The task variation is a list of wide rows
+ * led by a verb, because a job to be done is a thing you recognise.
+ *
+ * ONE LINK PER CARD. The whole card is clickable through a stretched pseudo-element on that link,
+ * so the target is big enough on a phone, but there is still only one thing in the tab order and
+ * its accessible name is the audience it belongs to. The cost of the pattern is that text inside
+ * the card cannot be selected with a drag, which is the right trade for a routing card and the
+ * wrong one for a card holding a quote or a price.
+ *
+ * Content note: the defaults describe a plainly fictional practice management tool. Replace them.
+ */
+
+export interface Audience {
+  /** Who they are, in their own words rather than a segment name. */
+  name: string;
+  /** The one line that makes them recognise their own week. */
+  need: string;
+  href: string;
+  /** Overrides the default link text. The audience name is appended for screen readers either way. */
+  linkLabel?: string;
+}
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  /** Three to six audiences. Past six nobody finds themselves, they just scroll. */
+  audiences?: Audience[];
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "Who this is built for",
+  lede = "The same system, read four different ways. Start with whichever one sounds like your week.",
+  audiences = [
+    {
+      name: "Practice managers",
+      need: "Needs the roster, the leave requests and the billing to agree with each other before Friday.",
+      href: "/for/practice-managers",
+    },
+    {
+      name: "Clinicians",
+      need: "Wants today's list on a phone, in three taps, and nothing else on the screen.",
+      href: "/for/clinicians",
+    },
+    {
+      name: "Bookkeepers",
+      need: "Needs an export that reconciles without anything being typed in twice.",
+      href: "/for/bookkeepers",
+    },
+    {
+      name: "Owners of two to five sites",
+      need: "Wants one view across every site without signing in to each of them separately.",
+      href: "/for/multi-site",
+    },
+  ],
+  emptyMessage = "The audience pages are being written.",
+  tone = "default",
+  class: className,
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `ua-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const list = audiences ?? [];
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "ua", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="ua-intro kit-stack">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {list.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ul class="ua-grid" role="list">
+        {list.map((audience) => (
+          <li class="ua-card">
+            <h3 class="kit-h3 ua-name">{audience.name}</h3>
+            <p class="kit-body ua-need">{audience.need}</p>
+            <a class="ua-link" href={audience.href}>
+              {audience.linkLabel ?? "See how it works"}
+              <span class="kit-visually-hidden"> for {audience.name}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  .ua-intro { margin-block-end: var(--kit-space-2xl); }
+
+  /* One column on a phone, two on a tablet, three or four on a desktop, with no media query. */
+  .ua-grid {
+    display: grid;
+    gap: var(--kit-gutter);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--kit-measure) / 2)), 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .ua-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-sm);
+    min-width: 0;
+    padding: var(--kit-space-lg);
+    background: var(--kit-bg);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    transition: border-color var(--kit-duration) var(--kit-ease);
+  }
+
+  .ua-name { text-wrap: pretty; }
+
+  .ua-need { color: var(--kit-text-muted); text-wrap: pretty; }
+
+  .ua-link {
+    margin-block-start: auto;
+    padding-block-start: var(--kit-space-sm);
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-strong);
+    color: var(--kit-accent-ink);
+    text-decoration: none;
+  }
+
+  /* The stretched target. It sits above the card's own content but below nothing else, so a card
+     is one big click without any of its text becoming a link. */
+  .ua-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--kit-radius);
+  }
+
+  .ua-card:hover { border-color: var(--kit-border-strong); }
+  .ua-card:hover .ua-link { text-decoration: underline; }
+
+  /* The ring is drawn on the link itself so focus is visible everywhere, and :has adds the card
+     emphasis on top where it is supported rather than being the only thing carrying it. */
+  .ua-link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .ua-card:has(.ua-link:focus-visible) { border-color: var(--kit-border-strong); }
+
+  .kit-section--subtle .ua-card { background: var(--kit-bg); }
+</style>

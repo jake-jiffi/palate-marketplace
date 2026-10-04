@@ -16,6 +16,11 @@ set -uo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$DIR/../hooks/palate-stop.mjs"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+# HOME is redirected: recordBuild appends to ~/.config/palate/builds.log.json, and a suite
+# that drives the Stop hook must not write into the operator's real cross-build log. It lives
+# under this suite's own temp dir so the existing trap cleans it up; a second trap on EXIT would
+# REPLACE that one rather than add to it.
+LOG_HOME="$T/palate-home"; mkdir -p "$LOG_HOME"
 pass=0; fail=0
 ok()   { echo "ok   - $1"; pass=$((pass+1)); }
 bad()  { echo "FAIL - $1"; fail=$((fail+1)); }
@@ -41,7 +46,7 @@ mkproj() {
 # Runs the Stop hook against a project and reports BLOCK or allow.
 run() { # dir [stop_hook_active]
   local d="$1" active="${2:-false}"
-  if echo "{\"cwd\":\"$d\",\"stop_hook_active\":$active}" | node "$HOOK" 2>/dev/null | grep -q '"decision":"block"'; then
+  if echo "{\"cwd\":\"$d\",\"stop_hook_active\":$active}" | env HOME="$LOG_HOME" node "$HOOK" 2>/dev/null | grep -q '"decision":"block"'; then
     echo BLOCK
   else
     echo allow
@@ -57,7 +62,7 @@ printf -- '---\n---\n<script src="https://x.test/{{HUMBLYTICS_SITE_ID}}.js"></sc
 want "an unresolved {{PLACEHOLDER}} blocks by default (no PALATE_GATE_STRICT)" "$(run "$ph")" BLOCK
 
 # The whole point of the finding: the same evidence used to be a stderr line nobody reads.
-if echo "{\"cwd\":\"$ph\"}" | node "$HOOK" 2>/dev/null | grep -q 'HUMBLYTICS_SITE_ID'; then
+if echo "{\"cwd\":\"$ph\"}" | env HOME="$LOG_HOME" node "$HOOK" 2>/dev/null | grep -q 'HUMBLYTICS_SITE_ID'; then
   ok "the block names the actual token, not a generic 'not ready'"
 else
   bad "the block names the actual token, not a generic 'not ready'"
@@ -75,7 +80,7 @@ want "photographs never measured block by default" "$(run "$img")" BLOCK
 off="$(mkproj escape)"
 printf -- '---\n---\n<script src="https://x.test/{{HUMBLYTICS_SITE_ID}}.js"></script>\n' > "$off/src/pages/index.astro"
 if PALATE_GATE_OFF=1 echo >/dev/null; then :; fi
-res="$(echo "{\"cwd\":\"$off\"}" | PALATE_GATE_OFF=1 node "$HOOK" 2>/dev/null | grep -c '"decision":"block"' || true)"
+res="$(echo "{\"cwd\":\"$off\"}" | PALATE_GATE_OFF=1 HOME="$LOG_HOME" node "$HOOK" 2>/dev/null | grep -c '"decision":"block"' || true)"
 want "PALATE_GATE_OFF=1 still bypasses everything" "$res" 0
 
 # A non-Astro directory has no src/pages, so gate-shipready exits 2 (cannot check). Cannot
@@ -105,7 +110,7 @@ want "the latch is bounded: attempt 4 releases"          "$(run "$latch" true)" 
 
 # The release must be audible. A release that reads like a pass is the failure this file exists
 # for, so the outstanding failures are printed on stderr.
-noise="$(echo "{\"cwd\":\"$latch\",\"stop_hook_active\":true}" | node "$HOOK" 2>&1 >/dev/null | grep -c 'RELEASING' || true)"
+noise="$(echo "{\"cwd\":\"$latch\",\"stop_hook_active\":true}" | env HOME="$LOG_HOME" node "$HOOK" 2>&1 >/dev/null | grep -c 'RELEASING' || true)"
 if [ "$noise" -ge 1 ]; then ok "the release says so on stderr, with the failures listed"; else bad "the release says so on stderr, with the failures listed"; fi
 
 # Changed evidence resets the unchanged counter, so real progress is never punished.

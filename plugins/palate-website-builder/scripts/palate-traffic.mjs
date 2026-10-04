@@ -66,9 +66,9 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { buildIndex, blastRadius } from './palate-index.mjs';
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 // ------------------------------------------------------------------ defaults
 
@@ -949,4 +949,4 @@ function main() {
   else console.log(report(a, opt));
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();

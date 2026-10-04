@@ -12,6 +12,11 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$DIR/../../hooks/palate-stop.mjs"
 pass=0; fail=0
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+# HOME is redirected: recordBuild appends to ~/.config/palate/builds.log.json, and a suite
+# that drives the Stop hook must not write into the operator's real cross-build log. It lives
+# under this suite's own temp dir so the existing trap cleans it up; a second trap on EXIT would
+# REPLACE that one rather than add to it.
+LOG_HOME="$TMP/palate-home"; mkdir -p "$LOG_HOME"
 ok()  { echo "ok   - $1"; pass=$((pass+1)); }
 bad() { echo "FAIL - $1"; fail=$((fail+1)); }
 
@@ -30,7 +35,7 @@ JSON
 }
 
 manifest
-OUT=$(printf '{"cwd":"%s","stop_hook_active":false}' "$P" | PATH="$TMP/fakebin:$PATH" node "$HOOK" 2>&1)
+OUT=$(printf '{"cwd":"%s","stop_hook_active":false}' "$P" | PATH="$TMP/fakebin:$PATH" HOME="$LOG_HOME" node "$HOOK" 2>&1)
 EC=$?
 
 [ "$EC" -eq 0 ] && ok "the hook still exits 0 (a missing shell never wedges a session)" \
@@ -48,7 +53,7 @@ GROUND=$(jq -r '.grounding.state' "$P/build-manifest.json" 2>/dev/null)
 
 # The control: with a REAL bash the behaviour must be exactly what it always was.
 manifest
-OUT2=$(printf '{"cwd":"%s","stop_hook_active":false}' "$P" | node "$HOOK" 2>&1)
+OUT2=$(printf '{"cwd":"%s","stop_hook_active":false}' "$P" | env HOME="$LOG_HOME" node "$HOOK" 2>&1)
 printf '%s' "$OUT2" | grep -qF "SKIPPED, not passed" \
   && bad "the no-shell path fired on a machine that HAS bash" || ok "with bash present, the skip does not fire"
 printf '%s' "$OUT2" | grep -qiE "MCP-depth gate" \

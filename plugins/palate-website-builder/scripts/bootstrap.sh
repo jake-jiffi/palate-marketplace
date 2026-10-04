@@ -64,5 +64,10 @@ if [ "$rc" -eq 0 ]; then
   echo "palate-check: clean at the $FAIL_ON bar. The lint is the floor, not the ceiling - ship against the render." >&2
 elif [ "$rc" -eq 1 ]; then
   echo "palate-check: findings above. Fix the cause (do not silence a rule without a one-line brand reason), then re-run. Max 3 attempts, then HALT." >&2
+else
+  # A LINT THAT COULD NOT RUN IS NOT A CLEAN LINT. ux-lint exits 2 when it could not check at
+  # all, including when nothing under the target matches any rule, and reporting that as clean
+  # is how a target with the wrong path passes a gate that never opened a file.
+  echo "palate-check: SKIPPED, not clean. The lint could not check this target (reason above); nothing here has been established." >&2
 fi
 exit "$rc"

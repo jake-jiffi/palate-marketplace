@@ -88,6 +88,11 @@ different infrastructure, and mixing the two makes a real move read as noise.
 carry the same `rubric_version`. Otherwise report the number alone and say why there is no
 delta: the grader changed between the two runs, so the ruler moved and the site did not.
 
+**Gates off.** If `build-manifest.json` carries `gates.state == "off"`, print
+`Gates were OFF for this build at <gates.at>.` beside the numbers. The bypass is legitimate and
+the hooks record it when they take it, so a period whose gates were disabled must not be
+reported as one that cleared them.
+
 Never print a certified number that was not certified, and never print a taste percentile that
 was not computed. If none was taken, the line reads:
 

@@ -3,6 +3,11 @@ description: Check the change against the contract, heal what is fixable, then c
 argument-hint: "[what changed, one line] [--dir <path>] [--yes]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Follow the live-build release contract. Require current verification, resolved launch integrations and authorisation for the actual site deployment. A plugin release or local preview is not a site deployment receipt. Do not fall through to the legacy publish pipeline. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-website-builder:publish
 
 Ship the working tree. The person's only decision is to agree: everything mechanical happens
@@ -137,6 +142,19 @@ which cannot be known before the commit exists.
 1. **The publish commit.** The changed files, plus `<dir>/.palate/baselines/*`, plus
    `<dir>/.palate/ledger.jsonl`. Name the files. Never `git add -A`, and never commit
    `.palate/index.json`, which is derived and gitignored.
+
+   **Once staged, and BEFORE the commit, run the size guard:**
+
+   ```
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/palate-stage-guard.sh" <dir>
+   ```
+
+   It exits 1 and names any staged file over 5 MB or any directory holding over 50 MB of
+   staged content. Ignores only cover paths somebody thought of, and an adoption run staged
+   874 MB of screenshots from a directory that had no rule yet. If it refuses, unstage what it
+   names, add the rule, and run `scripts/palate-gitignore.sh` so the next run is covered too.
+   Do not raise the limits to get past it unless the large file genuinely belongs in the
+   client's repository.
 
    **The ledger is not optional here.** `check` appended a line to it in section 2, and that line
    is the only artefact proving the gate did anything: what it caught, what it healed, what it

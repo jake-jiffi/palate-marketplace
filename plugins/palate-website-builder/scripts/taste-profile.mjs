@@ -47,6 +47,7 @@
 import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 // A preference is reported only once it has been seen at least this many times, so a
 // single build never hardens into a "house style".
@@ -312,7 +313,7 @@ function excludedNote() {
 function clip(s) { const t = String(s); return t.length > 70 ? t.slice(0, 67) + "..." : t; }
 function round2(x) { return Math.round(x * 100) / 100; }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (invokedDirectly(import.meta.url)) {
   const args = process.argv.slice(2);
   const vi = args.indexOf("--variants");
   const variantCount = vi >= 0 ? Number(args[vi + 1]) : 8;

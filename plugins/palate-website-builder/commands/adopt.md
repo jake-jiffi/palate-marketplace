@@ -3,6 +3,11 @@ description: Bring an existing site under Palate management, whether or not Pala
 argument-hint: "[path to the site folder, or a live URL]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+The project already has live-design state. Use its status and source operations to update the profile; do not initialise legacy state or convert it again. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-website-builder:adopt
 
 The site: **$ARGUMENTS**
@@ -13,6 +18,20 @@ beats complete and invented, every time.
 
 Nothing here is a judgement of the site. A site adopted at 44 must still be able to merge a typo
 fix tomorrow, so record what is there and never gate on it.
+
+## 0. Cover the working files before you write any
+
+Run this first, before anything below writes a screenshot:
+
+```
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/palate-gitignore.sh" <dir>
+```
+
+Adoption captures a full-page PNG per route and a filmstrip, and one real adoption staged
+874 MB of them into the client's own repository. The rules only cover the run that comes after
+them, so this belongs at the start rather than at the end. It is idempotent, it never rewrites a
+rule anyone else put there, and on a repo that already carries the block it adds only the rules
+that are missing. No git repo yet means there is nothing to do and it says nothing.
 
 ## 1. Work out what you are adopting
 

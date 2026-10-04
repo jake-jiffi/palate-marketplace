@@ -22,6 +22,7 @@
  */
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 // ---------------------------------------------------------------------------
 // Thresholds. Calibrated against the eight shipped Palate demo builds (aralia,
@@ -274,7 +275,7 @@ export function collectCss(distDir) {
   return sources;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (invokedDirectly(import.meta.url)) {
   const args = process.argv.slice(2);
   const json = args.includes("--json");
   const proj = args.find((a) => !a.startsWith("--")) || ".";

@@ -12,7 +12,7 @@ writable() { touch "$1/.__palate_wtest" 2>/dev/null && rm -f "$1/.__palate_wtest
 inside_skill() {
   local d="$1"
   while [ "$d" != "/" ] && [ -n "$d" ]; do
-    [ -f "$d/SKILL.md" ] && return 0
+    { [ -f "$d/SKILL.md" ] || [ -f "$d/.codex-plugin/plugin.json" ] || [ -f "$d/.claude-plugin/plugin.json" ] || [ -f "$d/skills/palate-website-builder/SKILL.md" ]; } && return 0
     d="$(dirname "$d")"
   done
   return 1

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northgate Plumbing</title>
+<meta name="description" content="Northgate Plumbing services.">
+<style>
+  /* The same page with the gate's named findings actually fixed: a chosen accent instead of
+     Tailwind indigo, faces that are not the default stack, 17px body on a phone, a real
+     measure, and controls that clear WCAG 2.5.8. Nothing else about the page changed, so the
+     score delta is attributable to the fixes. */
+  :root {
+    --accent: #8f3a14;      /* chosen, deltaE well clear of every framework default */
+    --ink: #1b1a17;
+    --paper: #faf7f2;
+    --rule: #ded6ca;
+    --sp: 32px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Charter, Georgia, serif;
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: var(--sp); }
+  header { display: flex; gap: var(--sp); align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  nav { display: flex; gap: 8px; align-items: center; }
+  nav a {
+    font-size: 17px; color: var(--ink); text-decoration: none;
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px;
+  }
+  .cta {
+    background: var(--accent); color: #fff; border: 0; border-radius: 2px;
+    min-height: 44px; padding: 0 20px; font-size: 17px; font-family: inherit;
+  }
+  h1 { font-family: 'Avenir Next', Avenir, sans-serif; font-size: 52px; font-weight: 500; letter-spacing: -0.02em; margin: 64px 0 var(--sp); max-width: 15ch; }
+  h2 { font-family: 'Avenir Next', Avenir, sans-serif; font-size: 26px; font-weight: 500; margin: 64px 0 var(--sp); }
+  h3 { font-family: 'Avenir Next', Avenir, sans-serif; font-size: 19px; font-weight: 500; margin: 0 0 8px; }
+  p { max-width: 62ch; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp); margin-top: var(--sp); }
+  .card { border: 1px solid var(--rule); border-radius: 2px; padding: var(--sp); }
+  footer { margin-top: 64px; padding: var(--sp) 0; border-top: 1px solid var(--rule); }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 700px) {
+    .grid { grid-template-columns: 1fr; }
+    h1 { font-size: 34px; margin-top: var(--sp); }
+    p { max-width: 34ch; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <strong>Northgate Plumbing</strong>
+    <nav aria-label="Main">
+      <a href="/services">Services</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <button class="cta" type="button">Get a quote</button>
+    </nav>
+  </header>
+
+  <h1>Plumbing services you can rely on</h1>
+  <p>We are a leading provider of plumbing solutions for homes and businesses. Our team
+     delivers quality workmanship and outstanding customer service on every job.</p>
+
+  <h2>What we do</h2>
+  <div class="grid">
+    <div class="card"><h3>Emergency repairs</h3><p>Fast response when things go wrong.</p></div>
+    <div class="card"><h3>Hot water</h3><p>Installation and replacement of hot water systems.</p></div>
+    <div class="card"><h3>Bathrooms</h3><p>Full bathroom renovations from start to finish.</p></div>
+  </div>
+
+  <h2>Why choose us</h2>
+  <div class="grid">
+    <div class="card"><h3>Experienced</h3><p>Years of experience in the industry.</p></div>
+    <div class="card"><h3>Reliable</h3><p>We turn up when we say we will.</p></div>
+    <div class="card"><h3>Affordable</h3><p>Competitive pricing with no hidden fees.</p></div>
+  </div>
+</main>
+<footer class="wrap">&copy; Northgate Plumbing</footer>
+</body>
+</html>

@@ -30,6 +30,33 @@ verify-report.json
 .palate/mcp-journal.jsonl
 .palate/harvest/
 .palate/live-capture/
+# Adoption captures a full-page PNG per route plus a filmstrip; one real adoption staged
+# 874MB of them. The adoption RECORD beside them (report.json, routes.json) is measured state
+# and stays committed, so this ignores the images and not the directory.
+.palate/adoption/**/*.png
+.palate/adoption/filmstrip/
+.palate/tmp/
+.palate/explore/shots/
+# The Explore SEED is the operator's own drawing work: one hand-authored artboard per rung
+# (`B<n>.dc.html`) and the images beside it. Those ARE the directions the client was shown and
+# nothing can regenerate them, so they stay COMMITTED. Only what boards-render writes into the
+# same directory is ignored, and it writes the calibration row as well as canvas.json: one
+# `Ref<n>.dc.html` and one `ref<n>.jpg` per reference, both re-derived from refs.json on every
+# run.
+.palate/explore/seed/canvas.json
+.palate/explore/seed/README.md
+.palate/explore/seed/Ref*.dc.html
+.palate/explore/seed/ref*.jpg
+# The donor row and the board judge are generated the same way: one `D<rung>.dc.html` card and
+# one `d<rung>-hero.jpg` per rung, re-fetched from donor-heroes.json on every run, and the
+# judge's request and answers, restated on every run and refused once stale. donor-heroes.json
+# itself is MEASURED state (the surveyor paid for it) and stays committed.
+.palate/explore/seed/D*.dc.html
+.palate/explore/seed/d[0-9]*-hero.jpg
+.palate/explore/judge-request.json
+.palate/explore/judgements.json
+public/_explore/
+*.palate-bak
 .palate-devserver.log
 .palate-devserver.pid
 # MEASURED state stays committed and is deliberately absent above: baselines, the brand

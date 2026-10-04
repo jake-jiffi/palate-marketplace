@@ -1,0 +1,331 @@
+---
+/**
+ * Signup form.
+ *
+ * The shortest form on the site: an email address, optionally a name, and consent where the law
+ * or the honest thing to do requires it. Every field added here costs completions, so add one
+ * only when what you send would be wrong without it.
+ *
+ * IT SAYS WHAT ARRIVES AND HOW OFTEN, before the button rather than after it. "Subscribe to our
+ * newsletter" asks somebody to agree to an unknown quantity of unknown email, and the ones who
+ * agree anyway are the ones who unsubscribe first.
+ *
+ * THE ENDPOINT WANTS A NAME AND A MESSAGE AND THIS FORM HAS NEITHER. /api/contact rejects both as
+ * blank, so the shared runtime sends the address as the name when no name was asked for, and the
+ * form's own `data-kit-fallback-message` as the message. That is why a signup can share the
+ * contact endpoint without a build having to stand up a second one, and why the notification is
+ * readable when it lands.
+ */
+export interface Props {
+  title?: string;
+  /** What arrives and how often. Specific, and true. */
+  intro?: string;
+  /** Ask for a first name so the mail can use it. Off by default. */
+  askName?: boolean;
+  /** Require an explicit tick. Turn on wherever consent has to be recorded rather than assumed. */
+  consent?: boolean;
+  consentLabel?: string;
+  submitLabel?: string;
+  endpoint?: string;
+  /** What the notification says when the form carries no message of its own. */
+  sourceNote?: string;
+  successTitle?: string;
+  successBody?: string;
+  errorHelp?: string;
+  noScriptNote?: string;
+  /** How to get off the list. Say it before they join, not only in the footer of the first email. */
+  privacyNote?: string;
+  /** Inline sits in a row and suits a footer or a banner; stacked suits its own section. */
+  layout?: "stacked" | "inline";
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  title = "Get the occasional useful email",
+  intro = "One email a month: what we have been working on, and the maintenance jobs worth doing before the season turns. Nothing else.",
+  askName = false,
+  consent = false,
+  consentLabel = "Yes, send me the monthly email.",
+  submitLabel = "Sign me up",
+  endpoint = "/api/contact",
+  sourceNote = "Signed up to the mailing list from the website.",
+  successTitle = "You are on the list",
+  successBody = "Check your inbox for a note confirming it. The first proper email comes at the start of next month, and every one of them has an unsubscribe link at the bottom.",
+  errorHelp = "If it will not go through, email us and we will add you by hand.",
+  noScriptNote = "This form needs JavaScript to send. If yours is turned off, email us and we will add you to the list.",
+  privacyNote = "One click to unsubscribe, any time. We do not pass your address on.",
+  layout = "stacked",
+  tone = "subtle",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `fs-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+// A row cannot hold a name field, a tick and a widget without becoming a stack anyway, so those
+// three settle the layout rather than fighting it.
+const inline = layout === "inline" && !askName && !consent && !siteKey;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", "kit-section--tight", toneClass, "kit-signup", inline && "kit-signup--inline", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container kit-signup__inner">
+    <div class="kit-signup__intro">
+      <h2 class="kit-h2 kit-signup__title" id={headingId}>{title}</h2>
+      {intro && <p class="kit-lede kit-muted kit-signup__intro-text">{intro}</p>}
+    </div>
+
+    <div class="kit-signup__panel">
+      <form
+        class="kit-form"
+        method="post"
+        action={endpoint}
+        data-kit-form
+        data-kit-endpoint={endpoint}
+        data-kit-sending="Adding you to the list."
+        data-kit-fallback-message={sourceNote}
+      >
+        <div class="kit-form__alert" data-kit-alert role="alert" tabindex="-1" hidden>
+          <p class="kit-form__alert-text" data-kit-alert-text></p>
+          <p class="kit-form__alert-help kit-muted">{errorHelp}</p>
+        </div>
+
+        <div class="kit-form__fields">
+          {askName && (
+            <div class="kit-field">
+              <label class="kit-field__label" for={`${uid}-name`}>First name</label>
+              <input
+                class="kit-input"
+                id={`${uid}-name`}
+                name="name"
+                type="text"
+                autocomplete="given-name"
+                aria-describedby={`${uid}-name-hint`}
+                data-kit-key="name"
+              />
+              <p class="kit-field__hint" id={`${uid}-name-hint`}>
+                Optional. It only ever appears in the greeting.
+              </p>
+            </div>
+          )}
+
+          <div class="kit-field kit-signup__email">
+            <label class="kit-field__label" for={`${uid}-email`}>Email address</label>
+            <input
+              class="kit-input"
+              id={`${uid}-email`}
+              name="email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              required
+              aria-describedby={`${uid}-email-error`}
+              data-kit-key="email"
+              data-kit-validate="required email"
+              data-kit-required-message="Please enter the email address you would like it sent to."
+              data-kit-error={`${uid}-email-error`}
+            />
+            <p class="kit-field__error" id={`${uid}-email-error`} role="alert" hidden></p>
+          </div>
+
+          <button type="submit" class="kit-btn kit-btn--primary kit-form__submit" data-kit-submit>
+            <span class="kit-spinner" data-kit-spinner aria-hidden="true" hidden></span>
+            <span class="kit-btn__label">{submitLabel}</span>
+          </button>
+        </div>
+
+        {consent && (
+          <div class="kit-field">
+            <label class="kit-check" for={`${uid}-consent`}>
+              <input
+                id={`${uid}-consent`}
+                name="consent"
+                type="checkbox"
+                aria-describedby={`${uid}-consent-error`}
+                data-kit-summary="Consent given"
+                data-kit-validate="required"
+                data-kit-required-message="Please tick the box so we have your say-so on record."
+                data-kit-error={`${uid}-consent-error`}
+              />
+              <span>{consentLabel}</span>
+            </label>
+            <p class="kit-field__error" id={`${uid}-consent-error`} role="alert" hidden></p>
+          </div>
+        )}
+
+        {siteKey && <div class="cf-turnstile" data-sitekey={siteKey}></div>}
+
+        <noscript>
+          <p class="kit-form__fine">{noScriptNote}</p>
+        </noscript>
+
+        {privacyNote && <p class="kit-form__fine kit-muted">{privacyNote}</p>}
+        <p class="kit-visually-hidden" data-kit-status role="status" aria-live="polite"></p>
+      </form>
+
+      <div class="kit-form__done" data-kit-success hidden>
+        <svg class="kit-form__tick" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10.5 8 14.5 16 5.5" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <h3 class="kit-h3" data-kit-success-heading tabindex="-1">{successTitle}</h3>
+        <p class="kit-body">{successBody}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{siteKey && (
+  <script is:inline>
+    (function () {
+      if (document.querySelector("script[data-kit-turnstile]")) return;
+      var s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      s.async = true;
+      s.defer = true;
+      s.setAttribute("data-kit-turnstile", "");
+      document.head.appendChild(s);
+    })();
+  </script>
+)}
+
+<style>
+  [hidden] { display: none !important; }
+
+  /* foundations.css does not set box-sizing, and what normally does is Tailwind's preflight. A
+     build that vendors its own preset instead, which is a failure this repo has already paid for
+     once, would push every full-width control past the right edge of a phone. One rule, stated
+     where it binds, so the form does not depend on a reset arriving from somewhere else. */
+  .kit-input, .kit-select, .kit-textarea { box-sizing: border-box; }
+
+  .kit-signup__inner {
+    display: grid;
+    align-items: start;
+    gap: var(--kit-space-xl) var(--kit-space-3xl);
+  }
+  .kit-signup--inline .kit-signup__inner {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 28ch), 1fr));
+    align-items: center;
+  }
+
+  .kit-signup__intro { display: grid; gap: var(--kit-space-sm); align-content: start; }
+  .kit-signup__title { max-width: 22ch; }
+  .kit-signup__intro-text { text-wrap: pretty; }
+
+  .kit-form { display: grid; gap: var(--kit-space-md); max-width: var(--kit-measure); }
+
+  /* The address and the button sit on one line while they both fit, and stack the moment they do
+     not. The name field, when asked for, joins the same row on its own terms. */
+  .kit-form__fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--kit-space-md);
+  }
+  .kit-form__fields .kit-field { flex: 1 1 22ch; }
+  .kit-form__fields .kit-btn { flex: 0 0 auto; }
+
+  .kit-form__alert {
+    display: grid;
+    gap: var(--kit-space-2xs);
+    padding: var(--kit-space-md);
+    border: var(--kit-border-width) solid var(--kit-error);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-form__alert p { margin: 0; }
+  .kit-form__alert-text { font-weight: var(--kit-weight-strong); color: var(--kit-error); }
+
+  .kit-check { cursor: pointer; }
+  .kit-form__fine { font-size: var(--kit-text-sm); margin: 0; max-width: var(--kit-measure); }
+
+  .kit-form__done {
+    display: grid;
+    gap: var(--kit-space-md);
+    justify-items: start;
+    padding: var(--kit-space-xl);
+    border: var(--kit-border-width) solid var(--kit-success);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    max-width: var(--kit-measure);
+  }
+  .kit-form__tick { width: 1.5em; height: auto; color: var(--kit-success); }
+  .kit-form__done p { text-wrap: pretty; }
+
+  .kit-signup :focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-section--inverse :focus-visible { outline-color: var(--kit-text-inverse); }
+
+  /* THE INVERSE GROUND, AND WHY EVERY ONE OF THESE NEEDS SAYING.
+     foundations pins .kit-field__label to --kit-text and .kit-field__hint to --kit-text-muted,
+     both chosen for a light page. On a dark section that measures 1.06:1 for every label and
+     3.34:1 for every hint, so a form set to tone="inverse" ships with unreadable labels and
+     nothing reports it. The feedback colours have the same shape of problem: --kit-error is a
+     dark red picked to sit on white, and on this ground its border reads 1.8:1. Each is mixed
+     toward the inverse text colour rather than replaced, so an error still looks like an error. */
+  .kit-section--inverse .kit-field__label { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-field__hint {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+  .kit-section--inverse .kit-field__error,
+  .kit-section--inverse .kit-form__alert-text {
+    color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__alert {
+    border-color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__done {
+    border-color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__tick {
+    color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-check input { accent-color: var(--kit-text-inverse); }
+  /* On a dark ground the primary button is drawn in the inverse text colour rather than in the
+     accent. --kit-accent-lift falls back to --kit-accent, which a brand chooses for a LIGHT
+     ground, so on the default token set an accent button is a near-invisible shape carrying
+     legible text. A brand that wants its own colour here overrides .kit-btn--primary inside
+     .kit-section--inverse in its own layer. */
+  .kit-section--inverse .kit-btn--primary {
+    background: var(--kit-text-inverse);
+    color: var(--kit-bg-inverse);
+  }
+  .kit-section--inverse .kit-btn--primary:hover {
+    background: color-mix(in srgb, var(--kit-text-inverse) 86%, var(--kit-bg-inverse));
+  }
+  .kit-section--inverse .kit-form__alert-help { color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent); }
+</style>
+
+<script>
+  /**
+   * NOVALIDATE ONLY ONCE THIS SCRIPT IS RUNNING. The form carries a real `action` and `method`,
+   * so with scripts off or before they bind it still posts to the endpoint as form data, and the
+   * browser's own validation stands in for the piece's. The first version wrote `novalidate` into
+   * the markup, which switched native validation off on exactly the path that had nothing else.
+   */
+  const armNovalidate = () => document.querySelectorAll<HTMLFormElement>("form[data-kit-form]").forEach((f) => f.setAttribute("novalidate", ""));
+  armNovalidate();
+  document.addEventListener("astro:page-load", armNovalidate);
+
+  import { initKitForms } from "./form-runtime";
+  initKitForms();
+</script>

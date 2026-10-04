@@ -50,6 +50,7 @@ Change the site. Each one runs the loop.
 | `/palate-website-builder:fact` | Change a business fact once, in the record, and report every surface that changed with it, structured data and footer included. |
 | `/palate-website-builder:image` | Add or replace an image. Resized, optimised, alt text written, wired to the route, kept out of git history. |
 | `/palate-website-builder:campaign` | A landing page with its matched hero copy, its UTM destination and its tracking, created as one change. No campaign without its own copy. |
+| `/palate-website-builder:pick` | Record which Explore direction the client picked, the calibration answer, and anything they changed on the canvas. The only moment Explore produces a number. It is also Compose's recorder: `--proof` the motion proof, `--looked` the reading of each page type (with `--primary` on the route the drawn inner page became) and `--override` a deliberate departure from the board with its reason. |
 
 ## Ship
 
@@ -70,6 +71,7 @@ The checks, and the numbers.
 | Command | What it does |
 |---|---|
 | `/palate-website-builder:check` | Run the contribution contract over what changed, heal what is fixable, return one verdict. |
+| `/palate-website-builder:jury` | Request deeper critique, also activated autonomously for craft gaps. Independent critic and separate builder, stable references, one shared four-round allowance with early stopping. Separate from the grading instrument. |
 | `/palate-website-builder:drift` | How far each route has moved from its own baseline. Free, local, and not a judgement. |
 | `/palate-website-builder:sweep` | The site-level checks no single contribution can trigger: crawlability, schema, orphans, dead links, stale content. |
 | `/palate-website-builder:grade` | Grades locally and free by default, on a localhost preview, deployed or not. Certification is opt-in and is the only number that can be shared. |
@@ -128,6 +130,11 @@ looking load-bearing.
 | `.palate/schedule.md` | the register of held posts and their release dates | `:schedule --due`, and nothing else, so a due post goes out when a person runs it | **yes** |
 | `.palate/reports/<YYYY-MM>.md` | the monthly artefact, as sent | **nothing.** Written for people, kept so the claim can be checked later | yes |
 | `.palate/adoption/` | the first-run capture from `:adopt`, kept as the arrival record | **nothing.** The record of what the site was on the day it arrived | yes |
+| `.palate/explore/seed/` | the boards themselves: four hand-drawn artboards per direction (`B<rung>` the home page, `I<rung>` the inner page, `M<rung>` the phone at 390, `S<rung>` the detail sheet of the kit pieces as used) and their images, plus the generated `canvas.json` and `README.md` | the design skill, when it seeds the canvas; `palate-pick.mjs --canvas` | **the artboards and their images, yes.** They are hand-authored, they are the record of the directions the client was shown, and `boards-render.mjs` validates and keys them rather than writing them. `canvas.json`, `README.md`, the calibration cards, the donor cards (`D<rung>.dc.html`, `d<rung>-hero.jpg`, re-fetched from `donor-heroes.json` on every run) and all of `.palate/explore/shots/` are generated and ignored |
+| `.palate/explore/donor-heroes.json` | one entry per rung: the library reference that rung is drawn from, its hero URL, its signature move, the component prompts, do/don't lines and copy voice the board reproduces | the drawing step (it IS the brief), `boards-render.mjs` (it fetches each hero and draws the donor beside its board) | yes, the surveyor paid for it and nothing else records which reference a rung answers to |
+| `.palate/explore/judge-request.json` | the comparisons the board judge stated: per direction, three surfaces (the entrance, the page ending and the inner page) against its donor, each in both orders, each pair carrying its own question, bound to one run token | the main build agent, which dispatches one fresh subagent per comparison, then `gate-board-judge.mjs --judgements` | no, ignored: restated on every run and refused once it is stale |
+| `.palate/explore/judgements.json` | one rung per comparison, as the judging subagents answered | `gate-board-judge.mjs`, which scores it into `manifest.explore.board_judgements` | no, ignored: the scored record lives in the manifest |
+| `.palate/explore/feedback.json` | what the client changed on the canvas: text edits, notes, style drags | Compose, which must honour the text and answer the notes | yes, until Compose has honoured it |
 | `.palate/tmp/` | scratch for a single run | nothing | no |
 
 `schedule.md` is the one people leave out, and it is the one that matters most: it is the only

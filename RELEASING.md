@@ -13,14 +13,18 @@ local file copy: no second clone, no SSH, works on every machine. Proven with
 `GIT_SSH_COMMAND=/usr/bin/false` clean-room tests (add, install and update
 all succeed).
 
-## Two tracks, and the line between them
+## Three tracks, and the lines between them
 
-There are two plugins in this marketplace and exactly one source repo.
+There are three plugins in this marketplace and exactly one source repo.
 
-| Plugin | Who installs it | Vendored from | Moves when |
-|---|---|---|---|
-| `palate-website-builder` | customers, including paying ones | skill repo `main` | a deliberate promotion, never otherwise |
-| `palate-beta` | testers who opted in | skill repo `beta` | any time; it is expected to have bugs |
+| Plugin | Who installs it | Vendored from | Built by | Moves when |
+|---|---|---|---|---|
+| `palate-website-builder` | customers, including paying ones | skill repo `main` | `sync-plugin.sh` (build-beta.mjs, prod track) | a deliberate promotion, never otherwise |
+| `palate-beta` | testers who opted in | skill repo `beta` | `sync-beta.sh` (build-beta.mjs, beta track) | any time; it is expected to have bugs |
+| `palate-classic` | customers who prefer the 1.16 builder | skill repo `classic` | `sync-classic.sh` | security, install or MCP-compatibility fixes only |
+
+2.0.0 (4 October 2026) promoted the live-design builder and kept 1.16 as classic. Classic is
+frozen: its version stays 1.16.x and `check-tracks.sh` fails if it moves.
 
 **The customer install path never changes.** `claude plugin marketplace add
 jake-jiffi/palate-marketplace` then `claude plugin install
@@ -32,7 +36,7 @@ tester, 2026-10-02).
 
 ### Hard rules
 
-1. **Beta is vendored from the `beta` branch. Prod is vendored from `main`.**
+1. **Beta is vendored from the `beta` branch, prod from `main`, classic from `classic`.**
    Never sync one from the other's branch. `./scripts/check-tracks.sh` fails if
    the prod vendor and skill `main` disagree, because that is what carrying
    unpromoted work to customers looks like from the outside: valid JSON, a
@@ -51,7 +55,7 @@ tester, 2026-10-02).
 5. **Beta appears on no customer-facing surface.** Not the docs, the FAQ, the
    dashboard connect card, `palate_setup`, this README, or the skill's
    `INSTALL.md`. Testers are told; nobody discovers it in the funnel.
-6. **Never both installed at once.** Both register hooks on plain
+6. **Never two installed at once.** Both register hooks on plain
    `Write|MultiEdit`, so two manifest recorders write the same
    `build-manifest.json` and double-count MCP calls, corrupting the depth gate's
    own numbers. Install one, uninstall the other.
@@ -67,8 +71,11 @@ Only when the beta track has been used in earnest and you are satisfied.
 
 1. In the skill repo: merge `beta` into `main`, bump `VERSION` and
    `.claude-plugin/plugin.json` to the release version (drop `-beta.N`), push.
-2. Here: `./scripts/sync-plugin.sh` to re-vendor prod from `main`.
-3. Bump `metadata.version` and the `palate-website-builder` entry to match.
+2. Here: `./scripts/sync-plugin.sh` to re-vendor prod from `main`. It sets the
+   `palate-website-builder` entry's version; bump `metadata.version` to match.
+3. Reset beta to equal `main`: on the skill repo's `beta` branch, merge `main` and set
+   `VERSION` to the next minor (2.0.0 was followed by 2.1.0), then `./scripts/sync-beta.sh`,
+   which adds `-beta.1`.
 4. In `mcp-server`: bump `PLUGIN_VERSION` in `lib/plugin-version.ts` to the same
    release version, and deploy it. That constant is what `palate_setup` reads back
    to a customer asking what they are running, and it has drifted four times.
@@ -80,14 +87,23 @@ Only when the beta track has been used in earnest and you are satisfied.
 
 ## Release steps, in order
 
-1. In the SKILL repo (`~/dev/palate/skill`): bump `VERSION` and
-   `.claude-plugin/plugin.json` version, commit, push to main.
-2. In THIS repo: run `./scripts/sync-plugin.sh` (re-archives the skill repo's
-   main into `plugins/palate-website-builder`).
-3. Bump the two versions in `.claude-plugin/marketplace.json`
-   (`metadata.version` and `plugins[0].version`) to match.
-4. Commit and push. Users get it with `claude plugin marketplace update palate`
-   then a Claude Code restart.
+1. In the SKILL repo (`~/dev/palate/skill`): bump `VERSION`,
+   `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`, run
+   `node scripts/gen-skill-lite.mjs`, commit, push to main.
+2. In THIS repo: run `./scripts/sync-plugin.sh` (packages the skill repo's main
+   into `plugins/palate-website-builder` and sets its marketplace version).
+3. Bump `metadata.version` in `.claude-plugin/marketplace.json` to match.
+4. Bump the MCP's `PLUGIN_VERSION` and deploy it.
+5. `./scripts/check-tracks.sh`, commit and push. Users get it with
+   `claude plugin marketplace update palate` then a Claude Code restart.
+
+## A classic fix
+
+1. In the skill repo: commit the fix on the `classic` branch, bump `VERSION` and
+   `.claude-plugin/plugin.json` to the next 1.16.x, run `node scripts/gen-skill-lite.mjs`,
+   tag `classic-v1.16.x`, push the branch and the tag.
+2. Here: `./scripts/sync-classic.sh` (archives `classic`, renames it, rewrites command
+   references, sets its marketplace version), `./scripts/check-tracks.sh`, commit, push.
 
 ## Rules
 

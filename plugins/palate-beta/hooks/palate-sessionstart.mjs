@@ -25,6 +25,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 // A source file newer than its baseline by less than this is checkout noise, not an edit. See
@@ -200,6 +201,7 @@ function daysSincePublished(index) {
 
 function main() {
   const payload = readStdin();
+  if (!payload || payload.source !== "compact") pluginNotices();
   if (handleLiveWorkflow(payload || {}, "SessionStart")) return;
 
   // "compact" is not a session opening, it is the middle of one. The person has already seen this
@@ -280,5 +282,34 @@ function pluginName() {
     return JSON.parse(fs.readFileSync(manifest, "utf8")).name || "palate-website-builder";
   } catch {
     return "palate-website-builder";
+  }
+}
+
+// Two notices that sit outside any one site. Once per machine after the 2.0 update: what changed
+// and the way back to the previous builder. Every session while another Palate plugin is installed
+// beside this one: both register the same hooks, so a build double-counts its library calls.
+function pluginNotices() {
+  const name = pluginName();
+  if (name !== "palate-website-builder") return;
+  const home = os.homedir();
+  try {
+    const installed = JSON.parse(fs.readFileSync(path.join(home, ".claude", "plugins", "installed_plugins.json"), "utf8"));
+    const others = Object.keys(installed.plugins || {})
+      .filter((key) => /^palate-(beta|classic)@/.test(key))
+      .map((key) => key.split("@")[0]);
+    if (others.length) {
+      process.stdout.write(`Palate: ${others.join(" and ")} is installed beside palate-website-builder. Use one Palate plugin at a time: uninstall one with claude plugin uninstall <name>@palate, then restart.\n`);
+    }
+  } catch {
+    /* no plugin registry to read is not worth a warning */
+  }
+  try {
+    const marker = path.join(home, ".config", "palate", "notice-2.0.0");
+    if (fs.existsSync(marker)) return;
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, new Date().toISOString() + "\n");
+    process.stdout.write("Palate 2.0: new sites now start with working design options you can click through, and existing sites carry on as before. To go back to the previous builder, in a terminal: claude plugin uninstall palate-website-builder@palate, then claude plugin install palate-classic@palate, then restart Claude Code.\n");
+  } catch {
+    /* a read-only home costs the notice, never the session */
   }
 }

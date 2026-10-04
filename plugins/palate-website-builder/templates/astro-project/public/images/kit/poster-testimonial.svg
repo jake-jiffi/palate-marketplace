@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="A drawn stand-in for a customer interview: a silhouette against a window">
+<title>A drawn stand-in for a customer interview: a silhouette against a window</title>
+<rect width="1920" height="1080" fill="#b8b2a7"/>
+<rect width="1920" height="1080" fill="url(#wall)"/>
+<rect x="120" y="70" width="620" height="740" rx="4" fill="#f6f3ec"/>
+<rect x="120" y="70" width="620" height="740" rx="4" fill="url(#pane)"/>
+<line x1="430" y1="70" x2="430" y2="810" stroke="#9a958c" stroke-width="12"/>
+<line x1="120" y1="430" x2="740" y2="430" stroke="#9a958c" stroke-width="12"/>
+<rect x="104" y="54" width="652" height="772" rx="6" fill="none" stroke="#8f8a81" stroke-width="14"/>
+<path d="M756 826 L1180 1080 L400 1080 Z" fill="#f6f3ec" opacity=".2"/>
+<g transform="translate(-11 0)" fill="#e9e3d8" opacity="0.62">
+<path d="M812 1080 C824 928 904 848 1034 800 C1116 770 1162 736 1186 700 L1258 700 C1282 736 1328 770 1410 800 C1540 848 1620 928 1632 1080 Z"/>
+<path d="M1178 592 L1262 592 L1276 742 L1164 742 Z"/>
+<ellipse cx="1220" cy="500" rx="127" ry="140"/>
+</g>
+<g transform="translate(0 0)" fill="#24282c" opacity="0.97">
+<path d="M812 1080 C824 928 904 848 1034 800 C1116 770 1162 736 1186 700 L1258 700 C1282 736 1328 770 1410 800 C1540 848 1620 928 1632 1080 Z"/>
+<path d="M1178 592 L1262 592 L1276 742 L1164 742 Z"/>
+<ellipse cx="1220" cy="500" rx="127" ry="140"/>
+</g>
+<rect width="1920" height="1080" fill="url(#vig)"/>
+<defs>
+<linearGradient id="wall" x1="0" y1="0" x2="1" y2=".6">
+<stop offset="0" stop-color="#e2ddd3" stop-opacity=".95"/><stop offset=".62" stop-color="#8e887e" stop-opacity=".55"/><stop offset="1" stop-color="#5f5a53" stop-opacity=".75"/>
+</linearGradient>
+<linearGradient id="pane" x1="0" y1="0" x2=".5" y2="1">
+<stop offset="0" stop-color="#ffffff" stop-opacity=".9"/><stop offset="1" stop-color="#ffffff" stop-opacity=".1"/>
+</linearGradient>
+<radialGradient id="vig" cx=".42" cy=".42" r=".8">
+<stop offset=".5" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".38"/>
+</radialGradient>
+</defs>
+</svg>

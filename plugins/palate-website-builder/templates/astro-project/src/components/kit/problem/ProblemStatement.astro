@@ -1,0 +1,95 @@
+---
+/**
+ * POSITIONING STATEMENT. One idea, on its own ground, with no call to action.
+ *
+ * The library keeps returning to this beat and the kit could not compose it: anthropic's mission
+ * band ("we build AI to serve humanity's long-term well-being", no CTA, the note says the absence
+ * is its whole power), mercury's brand-voice block that speaks to the buyer's identity rather than
+ * the product, avalon's mission split, swillhouse's About (two paragraphs in a narrow measure and
+ * enormous whitespace, the quietest section on the page), unoit's positioning paragraph directly
+ * after the concept hero, sealed's one-line vision between features.
+ *
+ * TWO PLACES IT BELONGS. Right after the hero, as the positioning paragraph that says specifically
+ * what the business is; or between the proof and the close, as the mission echo. Either way it
+ * carries NO ACTION. A button here turns a statement into a sell and loses what the band is for.
+ *
+ * The measure is deliberately narrow and the space around it deliberately large: the note on
+ * swillhouse is that every light section is typography and the words live in the quiet. Do not
+ * fill the gap with cards or stats.
+ */
+export interface Props {
+  /** Two to four lines. Specific: the note on unoit is that filler here wastes the hero. */
+  statement?: string;
+  /**
+   * The section's NAME, for a screen reader and the headings list: "Our position", "Why we do not
+   * sell the work". It is never painted. The first version rendered it as a small tracked
+   * uppercase label above the statement, which is the little-label-above-a-heading tell this kit's
+   * own verifier fails a build for, and anthropic's mission band, the reference this piece was read
+   * from, carries no kicker at all: the statement stands alone on its ground.
+   */
+  kicker?: string;
+  /** Used as the section's name when no kicker is given. */
+  accessibleName?: string;
+  /** Left-aligned by default; centre only where the page's heroes are centred too. */
+  align?: "start" | "centre";
+  tone?: "default" | "subtle" | "inverse";
+  id?: string;
+  class?: string;
+  emptyMessage?: string;
+}
+
+const {
+  statement = "",
+  kicker = "",
+  accessibleName = "Our position",
+  align = "start",
+  tone = "subtle",
+  id,
+  class: className,
+  emptyMessage = "What this business stands for is being written up.",
+} = Astro.props as Props;
+
+const text = statement.trim();
+const label = kicker.trim();
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+const uid = id || `pst-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "kit-pst", align === "centre" && "kit-pst--centre", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container kit-pst__inner">
+    {/* The heading names the landmark and is never painted: the statement is the whole band. */}
+    <h2 id={headingId} class="kit-visually-hidden">{label || accessibleName}</h2>
+    {text ? (
+      <p class="kit-pst__statement">{text}</p>
+    ) : (
+      <p class="kit-empty kit-pst__empty">{emptyMessage}</p>
+    )}
+  </div>
+</section>
+
+<style>
+  .kit-pst { padding-block: var(--kit-section-y); }
+  .kit-pst__inner {
+    display: grid;
+    gap: var(--kit-space-lg);
+    /* The words live in the quiet: a narrow measure inside a wide band. */
+    max-width: calc(var(--kit-measure) * 0.9);
+  }
+  .kit-pst--centre .kit-pst__inner { margin-inline: auto; text-align: center; }
+  .kit-pst__statement {
+    margin: 0;
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-2xl);
+    line-height: var(--kit-leading-snug);
+    letter-spacing: var(--kit-tracking-tight);
+    text-wrap: balance;
+  }
+  .kit-pst__empty { max-width: var(--kit-measure); }
+</style>

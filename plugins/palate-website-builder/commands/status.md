@@ -3,6 +3,11 @@ description: One site, read cold: whether the live site answers, what is failing
 argument-hint: "[path to the site] [--live to probe whether the deployed origin answers]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Run `node scripts/palate.mjs status --project <site>` and report current options, selection and stale evidence. Do not infer an absent legacy manifest means that nothing has been recorded. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 # /palate-website-builder:status
 
 Site: **$ARGUMENTS** (default: the current directory).
@@ -69,6 +74,12 @@ specific person and the probe is green, say the origin answered and the fault is
 it and that person, rather than telling them it is fine.
 
 ## 1. Gather
+
+**First, check you are standing in a site.** These all default to the working directory. If it
+holds no `package.json` plus `src/pages`, and no `build-manifest.json` whose `project` is this
+directory, stop and ask which site to report on. Run from a plugin checkout the gates measure the
+plugin rather than anybody's website; they refuse it themselves (`refused:`, exit 2), and this is
+so you never ask them to.
 
 Run these, in this order. Each is instant or seconds.
 

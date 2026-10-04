@@ -25,7 +25,7 @@
  */
 import { chromium } from 'playwright';
 import { writeFileSync } from 'fs';
-import { fileURLToPath } from 'url';
+import { invokedDirectly } from "../lib/invoked-directly.mjs";
 
 // GPU off: this measures layout/type/colour, no WebGL needed (fast path).
 const LAUNCH_ARGS = ['--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'];
@@ -158,4 +158,4 @@ async function main() {
 }
 
 // Only drive the browser when run directly; importing (e.g. the test) does not.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();

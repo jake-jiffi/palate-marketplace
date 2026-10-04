@@ -1,0 +1,239 @@
+---
+/**
+ * TrustResults: two to four figures the business can defend, each carrying its own source.
+ *
+ * The source note is a required field, not an optional one. A results strip is the easiest place
+ * on a website to print a number nobody can stand behind, so this piece makes the provenance part
+ * of the layout: every figure has a line under it saying where it came from, and a figure that
+ * arrives without one renders "source not stated" in the error colour instead of looking finished.
+ *
+ * The figure is a string rather than a number, because the real ones are "1,240", "98%", "3.2x"
+ * and "under 24 hours", and forcing them through a number type only invites a wrong unit later.
+ * Figures are set in tabular numerals so a row of them shares one optical baseline.
+ *
+ * Column counts are chosen from the item count rather than left to auto-fit, because auto-fit
+ * happily leaves a single figure marooned on its own row, which reads as a mistake. Where no
+ * divisor works (seven items at tablet, say) the last item spans the row instead.
+ */
+export interface TrustResult {
+  /** The number as it should read, units and all. */
+  figure: string;
+  /** What the figure measures. */
+  label: string;
+  /** Where it came from. Required: an uncited figure is flagged rather than printed plainly. */
+  source: string;
+  /** Where a reader can go and check it. */
+  sourceUrl?: string;
+}
+
+export interface Props {
+  /** Section heading. Pass an empty string to keep it for assistive technology only. */
+  heading?: string;
+  results?: TrustResult[];
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  /**
+   * Which ground this section sits on. One name and one vocabulary across the whole kit, so a
+   * page can alternate grounds without having to remember which piece calls it what. Every
+   * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  emptyMessage?: string;
+}
+
+const {
+  heading = "What the work has come to so far",
+  results = [
+    {
+      figure: "1,240",
+      label: "Jobs completed since 2019",
+      source: "Internal job records, to 30 June 2026",
+    },
+    {
+      figure: "98%",
+      label: "Finished on the date first quoted",
+      source: "Internal scheduling data, last 12 months",
+    },
+    {
+      figure: "11 days",
+      label: "Median time from quote to first site visit",
+      source: "Internal scheduling data, last 12 months",
+    },
+  ],
+  id,
+  tone = "default",
+  emptyMessage = "Results appear here once there are figures with a source behind them.",
+} = Astro.props;
+
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `trr-${Math.random().toString(36).slice(2, 8)}`;
+const titleId = `${uid}-title`;
+const headingText = heading?.trim() || "Key results";
+const headingHidden = !heading?.trim();
+
+const items = (Array.isArray(results) ? results : []).filter((r) => r && r.figure && r.label);
+
+/**
+ * Pick a column count that never leaves exactly one item alone on the final row. Two and four
+ * both read better in pairs than strung across, so they are named rather than derived.
+ */
+const columnsFor = (n: number, max: number): number => {
+  if (n <= 1) return 1;
+  if (n === 2) return 2;
+  if (max >= 4 && n === 4) return 4;
+  if (max >= 4 && n === 8) return 4;
+  if (n % 3 !== 1) return Math.min(3, max);
+  if (max >= 4 && n % 4 !== 1) return 4;
+  return 2;
+};
+
+const colsLg = columnsFor(items.length, 4);
+const colsMd = items.length === 4 ? 2 : columnsFor(items.length, 3);
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    "kit-section--tight",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+  ]}
+  aria-labelledby={titleId}
+>
+  <div class="kit-container">
+    <h2 id={titleId} class:list={["kit-h2", "trr__heading", headingHidden && "kit-visually-hidden"]}>
+      {headingText}
+    </h2>
+
+    {items.length === 0 ? (
+      <p class="kit-empty trr__empty">{emptyMessage}</p>
+    ) : (
+      <ul class="trr__list" role="list" data-cols={colsLg} data-cols-md={colsMd}>
+        {items.map((r) => (
+          <li class="trr__item">
+            <p class="trr__figure">{r.figure}</p>
+            <p class="trr__label">{r.label}</p>
+            <p class="trr__source kit-muted">
+              {r.source && r.source.trim() ? (
+                r.sourceUrl ? (
+                  <a class="kit-link trr__source-link" href={r.sourceUrl}>{r.source}</a>
+                ) : (
+                  r.source
+                )
+              ) : (
+                <span class="trr__unsourced">Source not stated</span>
+              )}
+            </p>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  /* --kit-accent-lift is the variant meant for dark grounds, but its fallback chain ends at
+     --kit-accent, which is near-black by default and therefore invisible on --kit-bg-inverse.
+     That takes the accent text, the stars and every focus ring down with it. Re-resolving it
+     here reads the brand's own lifted accent when there is one and falls back to the inverse
+     text colour, which the same ground already guarantees. Delete this once foundations gives
+     the token a fallback suited to the ground it exists for. */
+  .kit-section--inverse {
+  }
+
+  .trr__heading {
+    max-width: var(--kit-measure);
+  }
+
+  .trr__empty,
+  .trr__list {
+    margin-block-start: var(--kit-space-xl);
+  }
+
+  .trr__list {
+    list-style: none;
+    margin-inline: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--kit-gutter);
+  }
+
+  .trr__item {
+    min-width: 0;
+    border-block-start: var(--kit-border-width) solid var(--kit-border-strong);
+    padding-block-start: var(--kit-space-md);
+  }
+
+  .trr__figure {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-3xl);
+    line-height: var(--kit-leading-tight);
+    letter-spacing: var(--kit-tracking-tight);
+    font-variant-numeric: tabular-nums;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .trr__label {
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-snug);
+    margin: var(--kit-space-xs) 0 0;
+    max-width: var(--kit-measure);
+    text-wrap: pretty;
+  }
+
+  .trr__source {
+    font-size: var(--kit-text-xs);
+    line-height: var(--kit-leading-body);
+    margin: var(--kit-space-sm) 0 0;
+    max-width: var(--kit-measure);
+  }
+
+  /* An unsourced figure is a defect, so it is allowed to look like one. */
+  .trr__unsourced {
+    color: var(--kit-error);
+    font-weight: var(--kit-weight-medium);
+  }
+
+  /* A source a reader can actually reach on a phone: a bare inline link at this size lands well
+     under the minimum target size. */
+  .trr__source-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--kit-target);
+  }
+
+  .trr__source-link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .kit-section--inverse .trr__source-link:focus-visible {
+    outline-color: var(--kit-accent-lift);
+  }
+
+  @media (min-width: 48rem) {
+    .trr__list[data-cols-md="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .trr__list[data-cols-md="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .trr__list[data-cols-md="2"] > .trr__item:last-child:nth-child(2n + 1) { grid-column: span 2; }
+    .trr__list[data-cols-md="3"] > .trr__item:last-child:nth-child(3n + 1) { grid-column: span 3; }
+  }
+
+  @media (min-width: 64rem) {
+    .trr__list[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .trr__list[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .trr__list[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .trr__list[data-cols="2"] > .trr__item:last-child:nth-child(2n + 1) { grid-column: span 2; }
+    .trr__list[data-cols="3"] > .trr__item:last-child:nth-child(3n + 1) { grid-column: span 3; }
+    .trr__list[data-cols="4"] > .trr__item:last-child:nth-child(4n + 1) { grid-column: span 4; }
+  }
+</style>

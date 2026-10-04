@@ -21,9 +21,23 @@
 #
 # Usage:
 #   scripts/verify-rendered.sh <base-url> [--routes /,/contact,/blog] [--out <dir>]
+#            [--changed <file,...>]  render only the routes those files can reach; a file the
+#                                    index does not know falls wide and says which one. It
+#                                    rebuilds .palate/index.json first, since the blast radius
+#                                    and the route hashes are both read from it.
+#            [--full]                render every route, ignoring the unchanged-route records
+#                                    in .palate-shots/manifest.json. The sweep before
+#                                    hand-over runs this: the records cover a route's own
+#                                    imports, the content entries it renders, and the shared
+#                                    inputs (config, lockfile, src/styles, src/layouts and the
+#                                    CSS they import). Remote content and public/ assets stay
+#                                    outside them.
 #
 # Exit codes:
-#   0  clean        1  findings at or above High        2  bad args
+#   0  clean, on a run that rendered at least one route
+#   1  findings at or above High
+#   2  bad args, OR every selected route was unchanged so nothing was rendered: SKIPPED, not
+#      passed. Re-run with --full to render every route.
 #   3  no browser available - the gate is BLOCKED; surface it, never pass.
 set -uo pipefail
 
@@ -31,7 +45,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE="$SCRIPT_DIR/reference-capture"
 
 URL="${1:-}"
-[ -z "$URL" ] && { echo "verify-rendered: usage: verify-rendered.sh <base-url> [--routes a,b] [--out dir]" >&2; exit 2; }
+[ -z "$URL" ] && { echo "verify-rendered: usage: verify-rendered.sh <base-url> [--routes a,b] [--changed f1,f2] [--full] [--out dir]" >&2; exit 2; }
 shift
 
 command -v node >/dev/null 2>&1 || { echo "verify-rendered: node is required" >&2; exit 2; }

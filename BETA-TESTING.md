@@ -1,26 +1,10 @@
-# Palate 1.18.0-beta.9, tester release
+# Palate 2.1.0-beta.1, tester track
 
-This is an opt-in release for a small tester group, published on 25 September 2026. Features are frozen so we can collect feedback from real use. The production plugin remains at 1.16.0.
+Palate 2.0.0 shipped on 4 October 2026: the live-design builder that ran here as 1.18.0-beta.1 to beta.9 is now the customer plugin, `palate-website-builder`, and the 1.16 builder stays installable as `palate-classic`.
 
-The beta introduces working Astro design options, motion as part of the ordinary design experience, and reference research through the Palate MCP. You can start with an existing website, brand material, a written brief, or no material and a short intake conversation. Shopify is an optional path for appropriate ecommerce projects, especially existing Shopify stores.
+This beta currently equals 2.0.0. New experiments land here first, and this page will say what each one changes. Until then there is no reason to run the beta instead of 2.0.
 
-Beta.3 adds an independent website critic and a separate builder, with review after each revision. The coordinator can deepen the critique when it observes material gaps in design, creativity or motion, without waiting for a manual jury command or a rating. Revisions share a maximum allowance of four builder rounds for the same direction and scope, including earlier corrections. The process stops when the target is met, a blocker prevents progress, or two consecutive rounds fail to improve the result. The jury command is also available for existing websites.
-
-The review instructions require direct browser inspection and comparison with Palate references. Motion needs evidence of visible changes during interaction or scrolling. Missing evidence must be reported as unverified. These are instructions for the host agent, not a guarantee that every run will follow them correctly.
-
-Beta.4 fixes reference lookup when Codex converts the jury command into a skill. Local checks cover the original command and generated wrapper paths. The critic process itself is unchanged from beta.3.
-
-Beta.5 adds optional generated media through Higgsfield. When the Higgsfield CLI or MCP is installed, Palate asks once per site whether it may use it and how much it may spend (300 credits recommended, 800 for a full scroll film, 100 for images only, or no), holds that cap to half your live balance, and uses generated stills in design options and video, including scroll-through films, only for the chosen direction. Which model serves each job comes from a table in the package, not from the conversation. Generated media is illustrative and is never presented as a business's real premises, people or products. Without Higgsfield nothing changes and nothing is mentioned. The media path was tested against a real Higgsfield account: stills, video, a three-scene scroll film in a live preview, spend matching the account exactly, and recovery of an interrupted job without a second charge. It has not been tested in a complete website build.
-
-Beta.6 builds every site on one design system. Once you choose a direction, Palate codifies it into a single system file (type scale, colours, page structure and heading styles independent of heading tags, following Finsweet's Client-First structure with values from your chosen design), keeps a hidden style guide in the local preview at `/_palate/style-guide` that updates whenever the system changes, and checks that no page sets its own type sizes or colours. A deliberate one-off stays, with a written reason. Scroll films can now cover just the opening, one section or the whole page, chosen for what the site's visitors need. The check was run against real builds; it has not yet been used in a complete new build.
-
-Beta.7 makes clear that a scroll film is never a default. Agreeing to a Higgsfield budget is not a request for a film: one is planned only when the chosen direction calls for it, and the film plan always offers "No film".
-
-Beta.8 changes nothing in the builder. Its install instructions now use terminal commands (`claude plugin ...`), because the `/plugin` chat commands open the plugin browser instead of installing when typed into the desktop app.
-
-Beta.9 fixes two things found in a full test pass. New live projects shipped a lockfile with a high-severity advisory in `devalue`, a package Astro depends on; they now get the patched version. And the one-line status Palate prints when a session starts now names the right command for this beta (`/palate-beta:status`).
-
-
+The 1.18 beta notes (critic and builder rounds, Higgsfield media, one design system per site, film scope, terminal install, the beta.9 fixes) are now the 2.0.0 entry in the plugin's CHANGELOG.
 
 ## Known limitations
 
@@ -64,7 +48,7 @@ codex plugin marketplace add https://github.com/jake-jiffi/palate-marketplace.gi
 codex plugin add palate-beta@palate
 ```
 
-If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `1.18.0-beta.9`.
+If it is already configured, refresh it with `codex plugin marketplace upgrade palate` before installing. Start a fresh Codex session after installation. Confirm that `palate-beta@palate` is the only enabled Palate plugin and its version is `2.1.0-beta.1`.
 
 Use your existing Palate MCP connection, or follow its authentication prompt. Start the builder with `/palate-beta:palate-website-builder` in Claude or `$palate-beta:palate-website-builder` in Codex. Provide the website or brand material you have and describe what visitors should be able to do.
 

@@ -40,6 +40,7 @@
 import { readdirSync, statSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, extname, relative, dirname } from "node:path";
 import { createRequire } from "node:module";
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 // sharp lives with the other capture deps, not beside this file, so resolve from there.
 const require = createRequire(new URL("./reference-capture/", import.meta.url));
@@ -316,7 +317,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (invokedDirectly(import.meta.url)) {
   main().catch((e) => {
     console.error(`palate-assets: ${(e && e.message) || e}`);
     process.exit(2);

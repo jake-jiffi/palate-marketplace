@@ -373,3 +373,149 @@ test('a request carries its token, and every comparison id is bound to it', () =
   assert.ok(REQ.runToken, 'the request must record its token');
   for (const c of REQ.comparisons) assert.ok(c.id.endsWith("@" + REQ.runToken), `${c.id} must carry the token`);
 });
+
+// ------------------------------------------------------------- the board judge ----
+//
+// The boards are drawn, not built, and until now nothing compared one with the reference it was
+// drawn from. These cases pin the two functions that state that comparison and score it: the
+// same two-orders discipline as the site ladder, and the same rule that an unstable pair is read
+// at its LOWER rung, because a verdict that moves is not evidence of quality.
+import { buildBoardPair, scoreBoardPair } from '../reference-capture/ladder-local.mjs';
+
+const pair = (id = 'b1', token = 'abc12345') =>
+  buildBoardPair({ id, boardPath: `/tmp/${id}/hero.png`, donorPath: `/tmp/${id}/donor.jpg`, donorSlug: 'aesop', runToken: token });
+
+const boardJudgements = (p, va, vb) => [
+  { id: p.comparisons[0].id, verdict: va, candidate_is: 'A' },
+  { id: p.comparisons[1].id, verdict: vb, candidate_is: 'B' },
+];
+
+test('a board pair is the same comparison asked both ways round', () => {
+  const p = pair();
+  assert.equal(p.comparisons.length, 2);
+  assert.equal(p.comparisons[0].candidate_is, 'A');
+  assert.equal(p.comparisons[1].candidate_is, 'B');
+  assert.equal(p.comparisons[0].A, '/tmp/b1/hero.png');
+  assert.equal(p.comparisons[0].B, '/tmp/b1/donor.jpg');
+  assert.equal(p.comparisons[1].A, '/tmp/b1/donor.jpg');
+  assert.equal(p.comparisons[1].B, '/tmp/b1/hero.png');
+  assert.deepEqual(p.rungs, RUNGS.map((r) => r.id));
+  assert.match(p.question, /how does the candidate compare to the reference/);
+});
+
+test('a board pair with no run token throws rather than minting a weaker one', () => {
+  // The gate always passes eight hex characters. A silent fallback would be a shorter token
+  // minted at the one moment the caller has forgotten the binding, which is when stale
+  // judgements are most likely to be lying about.
+  assert.throws(
+    () => buildBoardPair({ id: 'b1', boardPath: '/tmp/b1/hero.png', donorPath: '/tmp/b1/donor.jpg', donorSlug: 'aesop' }),
+    /run token/i,
+  );
+});
+
+test('both board comparison ids carry the run token, so yesterday judgements cannot score today board', () => {
+  const p = pair('b1', 'deadbeef');
+  assert.equal(p.comparisons[0].id, 'b1:board-first@deadbeef');
+  assert.equal(p.comparisons[1].id, 'b1:donor-first@deadbeef');
+  assert.equal(p.runToken, 'deadbeef');
+});
+
+test('the two orders disagreeing by one rung is read at the LOWER rung', () => {
+  const p = pair();
+  const s = scoreBoardPair(p, boardJudgements(p, 'comparable', 'somewhat_worse'));
+  assert.equal(s.rung, 'somewhat_worse');
+  assert.equal(s.consistent, true);
+  assert.deepEqual(s.verdicts, ['comparable', 'somewhat_worse']);
+  assert.equal(s.id, 'b1');
+});
+
+test('a two-rung gap between the orders is marked inconsistent, and still read low', () => {
+  const p = pair();
+  const s = scoreBoardPair(p, boardJudgements(p, 'better', 'somewhat_worse'));
+  assert.equal(s.rung, 'somewhat_worse');
+  assert.equal(s.consistent, false);
+});
+
+test('agreement is consistent and keeps its rung', () => {
+  const p = pair();
+  assert.deepEqual(
+    (({ rung, consistent }) => ({ rung, consistent }))(scoreBoardPair(p, boardJudgements(p, 'comparable', 'comparable'))),
+    { rung: 'comparable', consistent: true },
+  );
+});
+
+test('a missing, duplicate, unknown or wrongly-oriented judgement throws rather than scoring', () => {
+  const p = pair();
+  assert.throws(() => scoreBoardPair(p, [boardJudgements(p, 'comparable', 'comparable')[0]]), /no judgement/i);
+  const dupe = boardJudgements(p, 'comparable', 'comparable');
+  dupe[1] = { ...dupe[0] };
+  assert.throws(() => scoreBoardPair(p, dupe), /two judgements/i);
+  const unknown = boardJudgements(p, 'comparable', 'comparable');
+  unknown[1] = { ...unknown[1], id: 'b9:donor-first@abc12345' };
+  assert.throws(() => scoreBoardPair(p, unknown), /unknown comparison/i);
+  const badRung = boardJudgements(p, 'comparable', 'excellent');
+  assert.throws(() => scoreBoardPair(p, badRung), /not one of/i);
+  const flipped = boardJudgements(p, 'comparable', 'comparable');
+  flipped[1] = { ...flipped[1], candidate_is: 'A' };
+  assert.throws(() => scoreBoardPair(p, flipped), /candidate_is is "A" but the candidate was image B/);
+  // REQUIRED, not merely checked when present. It was optional and the doctrine never asked for
+  // it, so the check sat dead: every real judgement arrived with the field missing.
+  const bare = boardJudgements(p, 'comparable', 'comparable').map(({ id, verdict }) => ({ id, verdict }));
+  assert.throws(() => scoreBoardPair(p, bare), /has no candidate_is/);
+});
+
+/**
+ * THE JUDGE ON THREE SURFACES.
+ *
+ * One entrance said almost nothing about a page's ending, and nothing at all about the inner
+ * page a client will spend most of their time on. A pair is now built per SURFACE, and the
+ * surface is in the pair's id and in both comparison ids, because the alternative is three
+ * pairs per direction whose ids are identical and whose judgements are therefore
+ * interchangeable.
+ */
+import { BOARD_FOOT_QUESTION, BOARD_INNER_QUESTION } from '../reference-capture/ladder-local.mjs';
+
+test('a surface is named in the pair id, in both comparison ids, and kept beside the direction', () => {
+  const p = buildBoardPair({
+    id: 'b1', surface: 'foot', question: BOARD_FOOT_QUESTION, runToken: 'deadbeef',
+    boardPath: '/tmp/b1/foot.png', donorPath: '/tmp/b1/donor-foot.png', donorSlug: 'aesop',
+  });
+  assert.equal(p.id, 'b1:foot');
+  assert.equal(p.board, 'b1', 'the direction the pair belongs to is lost, so nothing can group the surfaces');
+  assert.equal(p.surface, 'foot');
+  assert.equal(p.comparisons[0].id, 'b1:foot:board-first@deadbeef');
+  assert.equal(p.comparisons[1].id, 'b1:foot:donor-first@deadbeef');
+  assert.equal(p.question, BOARD_FOOT_QUESTION);
+  assert.match(p.question, /page endings/);
+});
+
+test('the inner page is asked whether it HOLDS the reference standard, not whether it matches it', () => {
+  const p = buildBoardPair({
+    id: 'b2', surface: 'inner', question: BOARD_INNER_QUESTION, runToken: 'deadbeef',
+    boardPath: '/tmp/b2/inner.png', donorPath: '/tmp/b2/donor.jpg', donorSlug: 'linear',
+  });
+  assert.equal(p.id, 'b2:inner');
+  // The donor has no inner page on disk, so a question about sameness would be asking about two
+  // different jobs. The question says the roles differ and asks about the standard.
+  assert.match(p.question, /hold the reference's standard/);
+  assert.match(p.question, /differ in role/);
+});
+
+test('no surface leaves the pair exactly as it was, on the entrance question', () => {
+  const p = pair('b1', 'deadbeef');
+  assert.equal(p.id, 'b1');
+  assert.equal(p.board, 'b1');
+  assert.equal(p.surface, null);
+  assert.equal(p.comparisons[0].id, 'b1:board-first@deadbeef');
+  assert.match(p.question, /how does the candidate compare to the reference/);
+});
+
+test('a blank question throws rather than asking a judge nothing', () => {
+  assert.throws(
+    () => buildBoardPair({
+      id: 'b1', surface: 'foot', question: '   ', runToken: 'deadbeef',
+      boardPath: '/tmp/b1/foot.png', donorPath: '/tmp/b1/donor-foot.png',
+    }),
+    /question/i,
+  );
+});

@@ -1,0 +1,297 @@
+---
+/**
+ * PricingQuote: the section for a business whose every job is priced individually.
+ *
+ * This is the honest answer for most trades and most agencies, and it is usually done badly: a
+ * heading saying "Pricing", a sentence saying "every project is different", and a contact button.
+ * That tells the visitor nothing and reads as evasion, which is worse than having no pricing
+ * section at all.
+ *
+ * So this piece is a real section with three obligations, and all three are required props.
+ * `drivers` says what actually moves the price, which is the closest thing to a number you can
+ * give honestly and is often enough for somebody to self-qualify. `send` says exactly what to
+ * hand over, which is the difference between a quote in two days and a fortnight of emails.
+ * `turnaround` says how long it takes, because the unspoken question is always "am I going to be
+ * chased, and when will I hear back". A visitor who reads all three knows more than one who was
+ * shown an invented "from $X" that nobody intends to honour.
+ *
+ * `range` is optional and deliberately blunt: if the business can say "most kitchens land between
+ * $14,000 and $22,000", that single sentence outperforms everything else on the page. Leave it out
+ * rather than inventing one.
+ *
+ * The second action is a `--secondary` button rather than a `--quiet` one. Two real buttons read
+ * as two real choices, and for a trade the phone is often the one people take.
+ *
+ * If `secondaryHref` is a `tel:` link, keep the label to the number itself and join its groups with
+ * non-breaking spaces, as the default does. Everything inside a tel: link is read as part of the
+ * number, so "Or call 01632 960 118" both wraps mid-number on a narrow screen and reads oddly to
+ * anything parsing it. Put the verb in the surrounding copy, not in the link.
+ *
+ * The lists carry an explicit `role="list"` beside `list-style: none`. A strict validator calls
+ * that redundant, and it is not: Safari with VoiceOver drops list semantics from a list whose
+ * markers have been removed, so without it the items stop being announced as a list at all. Do
+ * not strip it to quieten a linter.
+ */
+interface Driver {
+  title: string;
+  detail: string;
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  /** An honest span, if there is one. Left off entirely if there is not. */
+  range?: string;
+  rangeNote?: string;
+  /** What actually moves the price. */
+  drivers?: Driver[];
+  driversHeading?: string;
+  /** What the visitor should send, so the quote can be done properly first time. */
+  send?: string[];
+  sendHeading?: string;
+  /** How long a quote takes. A real figure, not "shortly". */
+  turnaround?: string;
+  turnaroundHeading?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  /** A second way through for people who will not fill in a form. */
+  secondaryLabel?: string;
+  secondaryHref?: string;
+  note?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "How we price a job",
+  lede = "Every job is quoted on its own, because the same room can be a day's work or a fortnight's depending on what is behind the wall. Here is what moves the number and how to get one out of us quickly.",
+  range = "Most full bathroom refits land between $14,000 and $22,000.",
+  rangeNote = "That span covers roughly four fifths of the work we did last year. It is not a quote and we will not hold you to it.",
+  drivers = [
+    {
+      title: "What is already there",
+      detail: "Sound pipework and a level floor can take days off. Lead pipe, a rotten subfloor or a wall that turns out to be structural adds them back.",
+    },
+    {
+      title: "How much has to move",
+      detail: "Keeping the toilet and the soil stack where they are is the single biggest saving available on most jobs.",
+    },
+    {
+      title: "What you are fitting",
+      detail: "We buy at trade and pass it on at cost, so the difference between the cheapest and the dearest tap is entirely yours to make.",
+    },
+    {
+      title: "Access and hours",
+      detail: "A ground floor with parking is straightforward. A third-floor flat with a lift booking and a noise window is not.",
+    },
+  ],
+  driversHeading = "What moves the price",
+  send = [
+    "A few photographs of the room, including the ceiling and under the sink",
+    "Rough measurements, or just the floor plan if you have one",
+    "Anything you have already chosen, even if it is only a photograph of it",
+    "When you would like the work done, and any date it cannot run over",
+  ],
+  sendHeading = "What to send us",
+  turnaround = "A written quote within three working days of the site visit, and the site visit within a week of you getting in touch.",
+  turnaroundHeading = "How long it takes",
+  ctaLabel = "Ask for a quote",
+  ctaHref = "/contact",
+  secondaryLabel = "01632\u00A0960\u00A0118",
+  secondaryHref = "tel:+441632960118",
+  note,
+  emptyMessage = "The details of how we quote are being written up.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `pq-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const driversId = `${uid}-drivers`;
+const sendId = `${uid}-send`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const priceDrivers = (drivers ?? []).filter((d) => d?.title && d?.detail);
+const sendItems = (send ?? []).filter(Boolean);
+const hasAnything = priceDrivers.length > 0 || sendItems.length > 0 || Boolean(turnaround);
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container pq">
+    <div class="pq__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede">{lede}</p>}
+      {range && (
+        <p class="pq__range">
+          <span class="pq__range-figure">{range}</span>
+          {rangeNote && <span class="pq__range-note kit-muted">{rangeNote}</span>}
+        </p>
+      )}
+    </div>
+
+    {!hasAnything ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <div class="pq__body">
+        {priceDrivers.length > 0 && (
+          <div class="pq__block pq__block--wide">
+            {/*
+              THESE ARE LABELS, NOT SECTIONS, AND THE STYLING ALREADY SAID SO.
+              All three were <h3>, set at 15px uppercase with label tracking, so a quote page
+              put "What moves the price", "What we send you" and "Turnaround" into the document
+              outline at the same level as a real subsection while never once looking like a
+              heading. Worse, each carried an id that nothing referenced: the wiring was
+              started and never finished, so the list under it had no accessible name at all.
+              A label over a group names the group through aria-labelledby; a label over a
+              single value needs nothing, because reading order already puts them together.
+            */}
+            <p id={driversId} class="pq__block-heading">{driversHeading}</p>
+            <dl class="pq__drivers" aria-labelledby={driversId}>
+              {priceDrivers.map((driver) => (
+                <div class="pq__driver">
+                  <dt class="pq__driver-title">{driver.title}</dt>
+                  <dd class="pq__driver-detail kit-muted">{driver.detail}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+
+        <div class="pq__aside">
+          {sendItems.length > 0 && (
+            <div class="pq__block">
+              <p id={sendId} class="pq__block-heading">{sendHeading}</p>
+              <ul class="pq__send" role="list" aria-labelledby={sendId}>
+                {sendItems.map((item) => (
+                  <li class="pq__send-item">
+                    <span class="pq__mark" aria-hidden="true"></span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {turnaround && (
+            <div class="pq__block">
+              <p class="pq__block-heading">{turnaroundHeading}</p>
+              <p class="pq__turnaround">{turnaround}</p>
+            </div>
+          )}
+
+          <div class="pq__actions">
+            {ctaLabel && ctaHref && (
+              <a class="kit-btn kit-btn--primary pq__cta" href={ctaHref}>{ctaLabel}</a>
+            )}
+            {secondaryLabel && secondaryHref && (
+              <a class="kit-btn kit-btn--secondary pq__secondary" href={secondaryHref}>{secondaryLabel}</a>
+            )}
+          </div>
+
+          {note && <p class="pq__note kit-muted">{note}</p>}
+        </div>
+      </div>
+    )}
+  </div>
+</section>
+
+<style>
+  .pq__head { display: grid; gap: var(--kit-space-md); }
+
+  .pq__range {
+    margin: 0;
+    display: grid;
+    gap: var(--kit-space-xs);
+    padding: var(--kit-space-lg);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    max-width: var(--kit-measure);
+  }
+  .pq__range-figure {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-xl);
+    line-height: var(--kit-leading-snug);
+    font-variant-numeric: tabular-nums;
+    text-wrap: pretty;
+  }
+  .pq__range-note { font-size: var(--kit-text-sm); line-height: var(--kit-leading-snug); }
+
+  .pq__body {
+    display: grid;
+    gap: var(--kit-space-2xl);
+    margin-block-start: var(--kit-space-2xl);
+    align-items: start;
+  }
+
+  .pq__block { display: grid; gap: var(--kit-space-md); align-content: start; min-width: 0; }
+  /* Deliberately .kit-label one step larger: these head a column rather than sit beside a
+     value, so they carry a little more weight. Written out rather than composed with the
+     shared class because the size is the whole difference and an override at equal specificity
+     would depend on stylesheet order to win. */
+  .pq__block-heading {
+    margin: 0;
+    font-family: var(--kit-font-body);
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-strong);
+    letter-spacing: var(--kit-tracking-label);
+    text-transform: uppercase;
+    line-height: var(--kit-leading-snug);
+    padding-block-end: var(--kit-space-sm);
+    border-block-end: var(--kit-border-width) solid var(--kit-border);
+  }
+
+  .pq__drivers { margin: 0; display: grid; gap: var(--kit-space-lg); }
+  .pq__driver { display: grid; gap: var(--kit-space-2xs); }
+  .pq__driver-title { font-weight: var(--kit-weight-strong); font-size: var(--kit-text-base); }
+  .pq__driver-detail {
+    margin: 0;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    max-width: var(--kit-measure);
+  }
+
+  .pq__aside { display: grid; gap: var(--kit-space-2xl); align-content: start; min-width: 0; }
+
+  .pq__send { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--kit-space-sm); }
+  .pq__send-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--kit-space-sm);
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-snug);
+  }
+  .pq__mark {
+    width: var(--kit-space-xs);
+    height: var(--kit-space-xs);
+    margin-block-start: var(--kit-space-2xs);
+    border-radius: var(--kit-radius-pill);
+    background: var(--kit-border-strong);
+  }
+
+  .pq__turnaround {
+    margin: 0;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    max-width: var(--kit-measure);
+  }
+
+  .pq__actions { display: flex; flex-wrap: wrap; gap: var(--kit-space-md); align-items: center; }
+  .pq__cta, .pq__secondary { width: 100%; }
+  .pq__note { margin: 0; font-size: var(--kit-text-xs); line-height: var(--kit-leading-snug); }
+
+  @media (min-width: 64rem) {
+    .pq__body { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--kit-space-3xl); }
+    .pq__cta, .pq__secondary { width: auto; }
+  }
+</style>

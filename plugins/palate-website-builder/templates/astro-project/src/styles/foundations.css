@@ -1,0 +1,432 @@
+/*
+ * THE SIX FOUNDATIONS OF THE WEBSITE KIT.
+ *
+ * Every kit piece reads these and NOTHING ELSE. No kit component may contain a literal colour,
+ * font family, font size, radius, shadow or spacing value; `gate-kit-tokens.mjs` fails the build
+ * on one. That rule is what stops a 45-piece section library homogenising every site built with
+ * it: the piece owns the structure and the states, the brand owns the surface, and two sites
+ * using the same piece with different tokens do not read as the same site.
+ *
+ * Each token falls back to a sane value, so the kit renders correctly on a build with a full
+ * brand package, a partial one, or none at all. Override them in the brand package, never here.
+ */
+:root {
+/*
+ * ============================ THE BRAND BRIDGE ============================
+ *
+ * READ THE NAMES THE BRAND PACKAGE ACTUALLY PUBLISHES, then the older spellings, then a literal.
+ *
+ * This was broken and nothing reported it. `foundations.css` read `--brand-bg`, `--brand-text`,
+ * `--brand-muted`, `--brand-accent`, `--brand-border` and `--brand-dark`; the generated brand
+ * package at templates/brand-repo-skeleton/tokens/tokens.css publishes `--brand-bg-default`,
+ * `--brand-text-primary`, `--brand-text-muted`, `--brand-accent-default`,
+ * `--brand-border-default` and `--brand-bg-inverse`. Not one of the colours matched. Only the
+ * fonts and the radii connected, so every kit colour silently fell back to the literal defaults
+ * written here, and a client's ink of #333 rendered as #111 on every page.
+ *
+ * That is the exact failure the token rule exists to prevent, arriving by a different door: a
+ * kit whose pieces all read tokens correctly, and whose tokens are not wired to the brand, is a
+ * kit that renders every client's site in the same colours. gate-kit-tokens could never have
+ * caught it, because every component was doing the right thing.
+ *
+ * The template's own globals.css had the same mismatch, so this predates the kit.
+ *
+ * Each token now falls through three names: the published one, the older spelling a
+ * hand-vendored brand may use, and a literal so a build with no brand still renders. Adding a
+ * name here is cheap; a silent fallback is not. gate-brand-bridge.mjs asserts the bridge
+ * actually resolves rather than trusting this comment.
+ */
+
+  /* ---- 1. COLOUR: brand, backgrounds, contrast and feedback ------------------------------ */
+  --kit-bg:            var(--brand-bg-default, var(--brand-bg, var(--brand-paper, #ffffff)));
+  --kit-bg-subtle:     var(--brand-bg-2, var(--brand-paper-2, #f5f5f5));
+  --kit-bg-inverse:    var(--brand-bg-inverse, var(--brand-dark, #16181a));
+  --kit-text:          var(--brand-text-primary, var(--brand-text, var(--brand-ink, #111111)));
+  --kit-text-muted:    var(--brand-text-muted, var(--brand-muted, var(--brand-ink-muted, #6b6b6b)));
+  --kit-text-inverse:  var(--brand-text-inverse, var(--brand-inverse, #ffffff));
+  --kit-accent:        var(--brand-accent-default, var(--brand-accent, #111111));
+  /* The accent moves in OPPOSITE directions by ground: darker on light, lighter on dark. A
+     single accent used on both is the commonest contrast failure in a themed kit. */
+  --kit-accent-ink:    var(--brand-accent-hover, var(--brand-accent-ink, var(--kit-accent)));
+  /* THE LIFT MUST ACTUALLY LIFT. This fell back to --kit-accent, so on a dark ground the
+     "lighter accent" was the dark accent: three independent builders each measured a focus ring
+     or a primary button at 1.06:1 against the inverse band, which is invisible. A brand that
+     ships no dark-ground accent gets the inverse text colour, which is the one value guaranteed
+     to read on that ground. */
+  --kit-accent-lift:   var(--brand-accent-lift, var(--kit-text-inverse));
+  --kit-border:        var(--brand-border-default, var(--brand-border, var(--brand-rule, #dddddd)));
+  --kit-border-strong: var(--brand-border-strong, var(--kit-text));
+  /* ---- A CONTROL EDGE IS NOT A HAIRLINE RULE, and one token cannot be both --------------
+     WCAG 1.4.11 asks 3:1 for the visual boundary of a control, and it is a SEPARATE rule from
+     text contrast: fixing the text did nothing for this. --kit-border is chosen to be a quiet
+     divider (#dddddd measures 1.36:1 on white), which is right for a rule between rows and
+     wrong for the edge of a text input. Every input, select and textarea in all four forms was
+     below 3:1 on EVERY ground, measured 1.36:1 on light and 2.17:1 on inverse.
+     Derived from the ink so it flips with the ground automatically: 55% of the text colour
+     composited over the band clears 3:1 on both, with room to spare. */
+  --kit-control-border: color-mix(in srgb, var(--kit-text) 55%, transparent);
+  /* Feedback. Semantic, never the brand accent: an error that is also the brand colour reads as
+     decoration. */
+  --kit-success:       var(--brand-success, #1d7a4c);
+  --kit-warning:       var(--brand-warning, #8a5a00);
+  --kit-error:         var(--brand-error, #b3261e);
+  --kit-info:          var(--brand-info, var(--kit-text-muted));
+  /* A scrim for text over an image. Every piece that puts a headline on a photograph needs one,
+     and three of them were deriving their own. */
+  --kit-scrim:         color-mix(in srgb, var(--kit-bg-inverse) 58%, transparent);
+  /* The focus ring. Foundations shipped no :focus-visible treatment, so all eleven components in
+     one slice invented their own from calc(). One definition, so a ring cannot drift by piece. */
+  --kit-focus-ring:    var(--kit-accent-ink);
+  --kit-focus-width:   2px;
+  --kit-focus-offset:  2px;
+  /* The underline, which is how a text-only control answers a pointer. A colour shift cannot do
+     that job here: on a brand that publishes no dark-ground accent, --kit-accent-lift falls back
+     to the inverse text colour, so a hover that moves the colour toward the text is no change at
+     all on an inverse band. Thickness and offset move on every ground. */
+  --kit-underline-offset: 3px;
+  --kit-underline-hover:  2px;
+
+  /* ---- 2. TYPOGRAPHY: headings, body, labels, links --------------------------------------- */
+  /* TWO NAMING CONVENTIONS EXIST IN THE WILD AND BOTH MUST RESOLVE. The generated brand package
+     publishes --brand-font-display / --brand-font-body; every brand vendored by hand so far
+     publishes --brand-display / --brand-sans. Reading only the first pair meant a real project's
+     type never reached the kit: the body rendered the brand face because globals.css sets it
+     directly, while every kit heading fell through to system-ui, so headings and body silently
+     disagreed on every page. Colour had the same fault and was fixed a round earlier; this is
+     its type half. */
+  --kit-font-display:  var(--brand-font-display, var(--brand-display, var(--brand-font-body, var(--brand-sans, system-ui, sans-serif))));
+  --kit-font-body:     var(--brand-font-body, var(--brand-sans, system-ui, sans-serif));
+  --kit-font-mono:     var(--brand-font-mono, var(--brand-mono, ui-monospace, SFMono-Regular, Menlo, monospace));
+
+  /* A fluid scale. Every step clamps, so a piece never needs its own media query for type. */
+  --kit-text-xs:   clamp(0.75rem, 0.73rem + 0.1vw, 0.8125rem);
+  --kit-text-sm:   clamp(0.875rem, 0.85rem + 0.12vw, 0.9375rem);
+  --kit-text-base: clamp(1rem, 0.97rem + 0.15vw, 1.0625rem);
+  --kit-text-lg:   clamp(1.125rem, 1.08rem + 0.22vw, 1.25rem);
+  --kit-text-xl:   clamp(1.3rem, 1.2rem + 0.5vw, 1.6rem);
+  --kit-text-2xl:  clamp(1.6rem, 1.4rem + 1vw, 2.2rem);
+  --kit-text-3xl:  clamp(2rem, 1.6rem + 2vw, 3rem);
+  --kit-text-4xl:  clamp(2.4rem, 1.8rem + 3vw, 4rem);
+
+  --kit-leading-tight: 1.1;
+  --kit-leading-snug:  1.35;
+  --kit-leading-body:  1.65;
+  --kit-tracking-tight: -0.02em;
+  --kit-tracking-label: 0.12em;
+
+  --kit-weight-body:    400;
+  --kit-weight-medium:  500;
+  --kit-weight-strong:  600;
+  --kit-weight-display: var(--brand-weight-display, 400);
+
+  /* The reading measure. A piece that sets its own width instead of this is a bug. */
+  --kit-measure: 62ch;
+  --kit-measure-wide: 78ch; /* a closing band's copy caps here so a wide dark section is not one-sided void */
+
+  /* ---- 3. LAYOUT: page widths, grids, spacing, section padding ---------------------------- */
+  --kit-page-max:   var(--brand-page-max, 1180px);
+  --kit-page-wide:  var(--brand-page-wide, 1440px);
+  --kit-page-pad:   clamp(1.25rem, 4vw, 2rem);
+  --kit-gutter:     clamp(1rem, 2.5vw, 2rem);
+
+  --kit-space-2xs: 0.25rem;
+  --kit-space-xs:  0.5rem;
+  --kit-space-sm:  0.75rem;
+  --kit-space-md:  1rem;
+  --kit-space-lg:  1.5rem;
+  --kit-space-xl:  2rem;
+  --kit-space-2xl: 3rem;
+  --kit-space-3xl: 4rem;
+
+  /* Section rhythm. One value, so consecutive sections cannot disagree about their own spacing. */
+  --kit-section-y:       clamp(3rem, 7vw, 5.5rem);
+  --kit-section-y-tight: clamp(2rem, 4vw, 3rem);
+
+  /* ---- 4. BUTTONS AND SURFACES ------------------------------------------------------------ */
+  --kit-radius:        var(--brand-radius, 0px);
+  --kit-radius-sm:     var(--brand-radius-sm, var(--kit-radius));
+  --kit-radius-pill:   var(--brand-radius-pill, 999px);
+  --kit-border-width:  var(--brand-border-width, 1px);
+  /* Shadow is opt-in: a kit that shadows everything flattens its own hierarchy. */
+  --kit-shadow:        var(--brand-shadow, none);
+  --kit-shadow-raised: var(--brand-shadow-raised, var(--kit-shadow));
+
+  /* WCAG 2.5.8 is 24px; 44px is the comfortable target and what every kit control uses. */
+  --kit-target: 44px;
+
+  /* ---- 5. MOTION -------------------------------------------------------------------------- */
+  --kit-duration-fast: 120ms;
+  --kit-duration:      200ms;
+  --kit-duration-slow: 400ms;
+  --kit-ease:          cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ---- 6. VISUAL STYLE: media ------------------------------------------------------------- */
+  --kit-media-radius: var(--kit-radius);
+  --kit-media-ratio-wide: 16 / 9;
+  --kit-media-ratio-photo: 4 / 3;
+  --kit-media-ratio-portrait: 4 / 5;
+  --kit-media-placeholder: color-mix(in srgb, var(--kit-text) 6%, transparent);
+}
+
+/* ---- BREAKPOINTS -------------------------------------------------------------------------
+   CSS cannot read a custom property in a media prelude, so these two cannot be tokens and are
+   written literally in the pieces that need them. They are recorded here so the kit agrees with
+   itself rather than each component guessing:
+
+     48rem  the single-to-two-column step
+     64rem  the two-to-three-column step
+
+   Most pieces need neither: an intrinsic grid (auto-fit with a ch-based minimum) follows the
+   content instead of guessing at the device, and that is the preferred answer.
+   ----------------------------------------------------------------------------------------- */
+
+/* ============================ SHARED PRIMITIVES ============================
+   Used by every piece, so a button in the hero and a button in the footer cannot drift. */
+
+/* ============================ GROUND AWARENESS ============================
+   A section sits on one of three grounds and every semantic token flips WITH it. This is the
+   difference between a kit that works on a dark band and one where each of forty-five pieces
+   patches its own colours: three separate builders independently measured `.kit-lede`,
+   `.kit-field__label`, `.kit-field__hint`, the error border and the primary button all failing
+   contrast on an inverse section, because each pinned itself to a light-ground token.
+
+   Redefining the tokens per band means a piece writes `color: var(--kit-text)` once and is
+   correct on every ground, and a piece added next year inherits that for free. */
+.kit-section { padding-block: var(--kit-section-y); background: var(--kit-bg); color: var(--kit-text); }
+/* An in-page anchor lands the section's heading BELOW a sticky bar, not under it: a tight section's
+   48px of top padding left its h2 under a 77px navigation. The offset is a token so a build with a
+   taller bar changes one number. */
+.kit-section, .kit-anchor { scroll-margin-top: var(--kit-anchor-offset, 6rem); }
+/* A wide table scrolls inside its own region; the edges say so with a soft shadow that fades as
+   the reader reaches the end, with no script: the first two layers ride with the content and cover
+   the shadows, the second two stay put. */
+.kit-scroll-x {
+  overflow-x: auto;
+  background:
+    linear-gradient(90deg, var(--kit-bg) 40%, transparent) left / 3rem 100% no-repeat local,
+    linear-gradient(270deg, var(--kit-bg) 40%, transparent) right / 3rem 100% no-repeat local,
+    linear-gradient(90deg, var(--kit-scrim), transparent) left / 1rem 100% no-repeat scroll,
+    linear-gradient(270deg, var(--kit-scrim), transparent) right / 1rem 100% no-repeat scroll;
+}
+.kit-section--tight { padding-block: var(--kit-section-y-tight); }
+
+.kit-section--subtle {
+  /* THE FULL CHAIN, NOT A SHORT ONE. This override read only --brand-bg-2 while the base
+     declaration reads --brand-bg-2 then --brand-paper-2, so on a brand that publishes the
+     second name and not the first, every subtle band silently rendered the kit's default. It
+     renders identically on a brand where both values happen to match, which is exactly why no
+     screenshot and no contrast measurement could ever have found it. gate-brand-bridge did. */
+  --kit-bg: var(--brand-bg-2, var(--brand-paper-2, #f5f5f5));
+  --kit-bg-subtle: var(--brand-bg-default, var(--brand-bg, var(--brand-paper, #ffffff)));
+  --kit-media-placeholder: color-mix(in srgb, var(--kit-text) 8%, transparent);
+  background: var(--kit-bg);
+  color: var(--kit-text);
+}
+
+.kit-section--inverse {
+  --kit-bg: var(--kit-bg-inverse);
+  --kit-bg-subtle: color-mix(in srgb, var(--kit-text-inverse) 8%, transparent);
+  --kit-text: var(--kit-text-inverse);
+  --kit-text-muted: color-mix(in srgb, var(--kit-text-inverse) 72%, transparent);
+  --kit-border: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent);
+  --kit-border-strong: color-mix(in srgb, var(--kit-text-inverse) 55%, transparent);
+  --kit-control-border: color-mix(in srgb, var(--kit-text-inverse) 62%, transparent);
+  /* The accent inverts direction on a dark ground: it gets LIGHTER, never darker. */
+  --kit-accent: var(--kit-accent-lift);
+  --kit-accent-ink: var(--kit-accent-lift);
+  --kit-focus-ring: var(--kit-accent-lift);
+  --kit-media-placeholder: color-mix(in srgb, var(--kit-text-inverse) 12%, transparent);
+  /* The feedback colours are chosen for a white page and are unreadable on near-black. Mixed
+     toward the inverse text so they stay semantic and stay legible. */
+  --kit-error: color-mix(in srgb, var(--brand-error, #b3261e) 45%, var(--kit-text-inverse));
+  --kit-success: color-mix(in srgb, var(--brand-success, #1d7a4c) 45%, var(--kit-text-inverse));
+  --kit-warning: color-mix(in srgb, var(--brand-warning, #8a5a00) 45%, var(--kit-text-inverse));
+  background: var(--kit-bg);
+  color: var(--kit-text);
+}
+
+.kit-container { max-width: var(--kit-page-max); margin-inline: auto; padding-inline: var(--kit-page-pad); }
+.kit-container--wide { max-width: var(--kit-page-wide); }
+
+.kit-stack { display: flex; flex-direction: column; gap: var(--kit-space-md); }
+.kit-grid { display: grid; gap: var(--kit-gutter); }
+
+/* ---- A LONG UNBROKEN TOKEN BREAKS, IT DOES NOT PUSH THE PAGE SIDEWAYS -------------------
+   Real copy carries them. A pasted URL in a paragraph, a German or Dutch compound, a part
+   number, an email address that lands in a heading. One 108-character word with no break
+   opportunity took three pieces 270px past a 390px viewport, and a sideways-scrolling page is
+   the most obvious thing a phone can do wrong.
+
+   It lives here rather than in the pieces because it was ALREADY in the pieces, fifteen times,
+   in two different spellings, and the three that needed it most did not have it. A rule each
+   component has to remember is a rule the forty-sixth component will not have.
+
+   `anywhere` rather than `break-word`, and the difference is the whole reason this is one line
+   and not two. Both break the word once the box is fixed, but only `anywhere` lowers the
+   element's MIN-CONTENT contribution, and min-content is what a grid track or a flex item is
+   sized by. Measured on the dropdown wordmark at 390px: with `break-word` the flex item still
+   laid out 923px wide and the page still scrolled; with `anywhere` it wraps inside the bar.
+   The cost is that an `auto` grid track can now squeeze narrower than its longest word when
+   space is genuinely tight, which is the correct trade against a page that scrolls sideways.
+
+   Applied to the two structural primitives as well as the type roles because the property
+   inherits: a piece's own class (a wordmark, a table cell, a stat figure) is covered without
+   naming it, which is what makes a piece written next year correct for free. The navigation
+   roots are named individually because they are the pieces that sit outside .kit-section, and
+   gate-kit-complete asserts that list stays equal to the set of roots the kit actually uses. */
+:where(.kit-section, .kit-container, .kit-nav, .kit-navdd, .kit-sheet,
+       .kit-display, .kit-h2, .kit-h3, .kit-lede, .kit-body, .kit-label, .kit-link,
+       .kit-btn, .kit-field, .kit-empty) {
+  overflow-wrap: anywhere;
+}
+
+/* Type roles. A piece uses these rather than styling headings itself. */
+.kit-display { font-family: var(--kit-font-display); font-weight: var(--kit-weight-display);
+  font-size: var(--kit-text-4xl); line-height: var(--kit-leading-tight);
+  letter-spacing: var(--kit-tracking-tight); text-wrap: balance; margin: 0; }
+.kit-h2 { font-family: var(--kit-font-display); font-weight: var(--kit-weight-display);
+  font-size: var(--kit-text-3xl); line-height: var(--kit-leading-tight);
+  letter-spacing: var(--kit-tracking-tight); text-wrap: balance; margin: 0; }
+.kit-h3 { font-family: var(--kit-font-display); font-weight: var(--kit-weight-strong);
+  font-size: var(--kit-text-xl); line-height: var(--kit-leading-snug); margin: 0; }
+.kit-lede { font-size: var(--kit-text-lg); line-height: var(--kit-leading-body);
+  color: var(--kit-text); max-width: var(--kit-measure); margin: 0; }
+.kit-body { font-size: var(--kit-text-base); line-height: var(--kit-leading-body);
+  max-width: var(--kit-measure); margin: 0; }
+.kit-muted { color: var(--kit-text-muted); }
+.kit-label { font-size: var(--kit-text-xs); letter-spacing: var(--kit-tracking-label);
+  text-transform: uppercase; color: var(--kit-text-muted); margin: 0; }
+/* THE UNDERLINE IS THE KIT'S, NOT THE BROWSER'S. `.kit-link` set a colour and an offset and left
+   the line itself to the user agent, and the template's Tailwind preflight resets `a` to
+   `text-decoration: inherit`, so every kit link rendered with NO underline at all: measured
+   `text-decoration-line: none` on the footer contact, the ratings source citation and the rest.
+   That leaves colour as the only thing separating a link from the text around it, and the colour
+   measured 1.85:1 against that text, well under the 3:1 a colour-only link would need. Two
+   independent faults with one cause, and neither is visible to a reader who can see the colour. */
+.kit-link { color: var(--kit-accent-ink); text-decoration: underline;
+  text-underline-offset: var(--kit-underline-offset); }
+/* EVERY LINK IN THE KIT ANSWERS A POINTER. It did not: `.kit-link` set a colour and an offset and
+   stopped, so a link was inert under the mouse unless the piece around it happened to add its own
+   hover. Three did; the rest inherited nothing, and a footer phone number, a source citation and
+   an alternating-benefit action all measured byte-identical computed style at rest and on hover. */
+.kit-link:hover { text-decoration-thickness: var(--kit-underline-hover); }
+/* A LINK THAT STANDS ALONE IS A TARGET, NOT A WORD. A link inside a sentence takes the line box
+   it sits in, and WCAG 2.5.8 exempts it; a phone number in a footer, "See every location", a card
+   title in a grid and a fallback download link are standalone targets, and they measured 18 to
+   20px at 390 in sixteen frames while the one link a critic had named was raised to 24px.
+   `kit-link--target` gives a standalone link the 24px box without touching links in prose. */
+.kit-link--target { display: inline-flex; align-items: center; min-block-size: 1.5rem; }
+.kit-section--inverse .kit-link { color: var(--kit-accent-lift); }
+.kit-section--inverse .kit-muted { color: color-mix(in srgb, var(--kit-text-inverse) 72%, transparent); }
+
+/* Buttons: primary, secondary, and the loading and disabled states his spec names. */
+.kit-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--kit-space-xs);
+  /* A LONG LABEL MUST WRAP, NOT PUSH THE PAGE SIDEWAYS. A flex item has no implicit maximum, so
+     a call to action longer than the viewport ran past the right edge: measured 50px of overflow
+     at rest on the demo entry point and 127px under triple-length content on the product example
+     page, which is one of the three pages that exist to prove the kit composes. It was the only
+     failure in ninety content-tolerance combinations, and it landed on a proof page. */
+  max-width: 100%;
+  min-height: var(--kit-target); padding-inline: var(--kit-space-lg);
+  font-family: var(--kit-font-body); font-size: var(--kit-text-sm); font-weight: var(--kit-weight-strong);
+  border-radius: var(--kit-radius); border: var(--kit-border-width) solid transparent;
+  cursor: pointer; text-decoration: none; text-align: center;
+  transition: background-color var(--kit-duration) var(--kit-ease), color var(--kit-duration) var(--kit-ease),
+              border-color var(--kit-duration) var(--kit-ease); }
+.kit-btn { text-wrap: balance; }
+.kit-btn--primary { background: var(--kit-accent); color: var(--kit-btn-primary-ink, var(--kit-text-inverse)); }
+.kit-btn--primary:hover { background: var(--kit-accent-ink); }
+/* On an inverse band --kit-accent has already flipped to the lift, so the label must flip too or
+   it is light-on-light. With stock tokens the old rule painted near-black on near-black: a
+   readable label and no button shape at all, which axe cannot see because the label passes
+   against its own fill. */
+.kit-section--inverse .kit-btn--primary { --kit-btn-primary-ink: var(--kit-bg-inverse); }
+.kit-btn--secondary { background: transparent; color: var(--kit-text); border-color: var(--kit-border-strong); }
+.kit-btn--secondary:hover { background: var(--kit-bg-subtle); }
+.kit-btn--quiet { background: transparent; color: var(--kit-accent-ink); padding-inline: 0; min-height: var(--kit-target); }
+/* Primary and secondary both move their background on hover and quiet was simply missed, so the
+   kit's third button, the one a tertiary action uses, was the only one that did nothing. It has no
+   background to move, so it underlines: the same answer .kit-link gives, from the same tokens. */
+.kit-btn--quiet:hover { text-decoration: underline; text-underline-offset: var(--kit-underline-offset);
+  text-decoration-thickness: var(--kit-underline-hover); }
+.kit-section--inverse .kit-btn--secondary { color: var(--kit-text-inverse); border-color: color-mix(in srgb, var(--kit-text-inverse) 45%, transparent); }
+.kit-section--inverse .kit-btn--quiet { color: var(--kit-accent-lift); }
+.kit-btn[disabled], .kit-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.kit-btn[data-loading="true"] { cursor: progress; }
+.kit-btn[data-loading="true"] .kit-btn__label { opacity: 0.6; }
+.kit-spinner { width: 1em; height: 1em; border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: var(--kit-radius-pill); animation: kit-spin 700ms linear infinite; flex: none; }
+@keyframes kit-spin { to { transform: rotate(360deg); } }
+
+/* Form controls: inputs, selects, checkboxes, validation. */
+/* ---- A FIELD DOES NOT STRETCH ITS OWN ROWS ---------------------------------------------
+   Two fields side by side in a form row are grid items, so they are stretched to the height of
+   the taller one. `.kit-field` is itself a grid with auto rows, and an auto row under
+   `align-content: normal` STRETCHES to absorb that extra height, spread across however many
+   rows the field happens to have. A field with a hint has four rows and a field without has
+   three, so the same spare 30px was divided differently in each: measured on the booking form,
+   the email input rendered 67px tall starting at y9768 while the phone beside it rendered 52px
+   tall starting at y9752. Two controls in one row, different heights, different baselines, and
+   the only difference between them was that one carried a hint.
+
+   Nothing about that is visible at rest with matched content, which is why it survived: it
+   needs one field in a row to say something the other does not, which is the ordinary case.
+   `start` keeps every row at its content height and leaves the spare space at the bottom of
+   the shorter field, where it belongs. */
+.kit-field { display: grid; gap: var(--kit-space-xs); align-content: start; }
+.kit-field__label { font-size: var(--kit-text-sm); font-weight: var(--kit-weight-medium); color: var(--kit-text); }
+.kit-field__hint { font-size: var(--kit-text-sm); color: var(--kit-text-muted); margin: 0; }
+.kit-field__error { font-size: var(--kit-text-sm); color: var(--kit-error); margin: 0; }
+.kit-input, .kit-select, .kit-textarea {
+  font: inherit; font-size: var(--kit-text-base); color: var(--kit-text); background: var(--kit-bg);
+  border: var(--kit-border-width) solid var(--kit-control-border); border-radius: var(--kit-radius);
+  /* THE LINE HEIGHT IS SET SO THE THREE CONTROLS AGREE ON THEIR OWN HEIGHT.
+     Left at `normal` each one asks its host for a default, and they get different answers: with
+     identical padding, border and min-height, an input measured 52px and the select beside it 48px
+     on the booking form, side by side in the same row. Nobody writes a 4px difference on purpose,
+     and no token could have caught it because neither control had a size of its own to read. */
+  line-height: var(--kit-leading-snug);
+  padding: var(--kit-space-sm) var(--kit-space-md); min-height: var(--kit-target); width: 100%; }
+.kit-textarea { min-height: calc(var(--kit-target) * 2.5); resize: vertical; }
+.kit-input:hover, .kit-select:hover, .kit-textarea:hover { border-color: var(--kit-border-strong); }
+.kit-input[aria-invalid="true"], .kit-select[aria-invalid="true"], .kit-textarea[aria-invalid="true"] { border-color: var(--kit-error); }
+.kit-check { display: flex; gap: var(--kit-space-sm); align-items: flex-start; font-size: var(--kit-text-sm); }
+.kit-check input { width: 1.15em; height: 1.15em; margin-top: 0.2em; accent-color: var(--kit-accent); flex: none; }
+
+/* Media. A ratio box so a missing image never collapses the layout. */
+.kit-media { display: block; width: 100%; background: var(--kit-media-placeholder);
+  border-radius: var(--kit-media-radius); overflow: hidden; }
+.kit-media > img, .kit-media > video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.kit-media--wide { aspect-ratio: var(--kit-media-ratio-wide); }
+.kit-media--photo { aspect-ratio: var(--kit-media-ratio-photo); }
+.kit-media--portrait { aspect-ratio: var(--kit-media-ratio-portrait); }
+
+/* Empty state, shared by every piece that takes a list. */
+.kit-empty { border: var(--kit-border-width) dashed var(--kit-border); border-radius: var(--kit-radius);
+  padding: var(--kit-space-xl); text-align: center; color: var(--kit-text-muted); font-size: var(--kit-text-sm); }
+
+/* ONE FOCUS TREATMENT. Without this each piece invents its own and they drift. */
+:where(.kit-btn, .kit-link, .kit-input, .kit-select, .kit-textarea, .kit-section a, .kit-section button, .kit-section summary):focus-visible {
+  outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+  outline-offset: var(--kit-focus-offset);
+}
+
+/* Tailwind's preflight normally supplies this. A build that vendors its own preset has no
+   preflight, and then every full-width control with padding runs past the right edge of a
+   phone: measured, not assumed. Scoped to the kit so it cannot fight a host stylesheet.
+
+   THE ROOT LIST IS THE SAME ONE THE WRAP RULE USES, and it was not. This read `.kit-section *`
+   alone, so the three navigation pieces, whose root is `.kit-navdd`, `.kit-sheet` or
+   `.kit-nav` and never a section, got no border-box at all. On a build with Tailwind that is
+   invisible, which is exactly why it survived: the preflight was doing the work and the kit's
+   own net had a hole under the one piece that sits at the top of every page. */
+:where(.kit-section, .kit-nav, .kit-navdd, .kit-sheet) *,
+:where(.kit-section, .kit-nav, .kit-navdd, .kit-sheet) *::before,
+:where(.kit-section, .kit-nav, .kit-navdd, .kit-sheet) *::after { box-sizing: border-box; }
+
+.kit-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-spinner { animation-duration: 2s; }
+}

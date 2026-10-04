@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Inline favicon so a bare static server's /favicon.ico 404 is not mistaken for a
+       page console error: the only error in this set must be the defective fixture's
+       deliberate throw, nothing incidental from the harness. -->
+  <link rel="icon" href="data:," />
+  <title>Tide and Bait - clean fixture</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Georgia, serif; background: #0b1d2a; color: #e7eef3; }
+    main { display: block; }
+
+    /* No overflow: the headline is constrained and wraps. */
+    .hero { padding: 64px 32px; }
+    .hero h1 {
+      max-width: 18ch;
+      font-size: clamp(2.5rem, 7vw, 5rem);
+      margin: 0 0 1.5rem;
+      line-height: 1.05;
+    }
+
+    /* Real imagery: a painted gradient stands in for a real photo here (a fixture,
+       not a placeholder wireframe-grey box). */
+    .hero-art {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: radial-gradient(120% 90% at 70% 10%, #15425e 0%, #0b1d2a 70%);
+      border-radius: 12px;
+    }
+
+    /* Floors honoured: 18px body, light text well above the contrast floor on the
+       dark surface, generous line-height. */
+    .body-copy { font-size: 18px; color: #cfe0ea; line-height: 1.6; max-width: 60ch; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero" data-section-id="hero">
+      <h1>The pull of the coast, at six on a Friday</h1>
+      <div class="hero-art" role="img" aria-label="evening tide over the rock shelf"></div>
+      <p class="body-copy">
+        Daily catch, the rigs that work this week, and where to find us on the point.
+      </p>
+    </section>
+    <section data-section-id="catch">
+      <p class="body-copy">Today's board: whiting, flathead, the odd bream off the rocks.</p>
+    </section>
+  </main>
+  <!-- No client error: nothing thrown, console stays clean. -->
+</body>
+</html>

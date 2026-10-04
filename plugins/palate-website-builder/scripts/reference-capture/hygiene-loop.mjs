@@ -139,15 +139,22 @@ const round3 = (n) => Math.round(n * 1000) / 1000;
  * is worse than no trend.
  *
  * So the basis is the configuration the caller controls: vitals on or off (14 of the 100
- * weight, so the number is genuinely a different quantity across it), axe available or not,
- * and the route set axe swept. Check-set changes WITHIN a basis still shift the denominator a
- * little; those are reported as a caveat on the delta rather than as a refusal to compare.
+ * weight, so the number is genuinely a different quantity across it) and axe available or not.
+ * Check-set changes WITHIN a basis still shift the denominator a little; those are reported as
+ * a caveat on the delta rather than as a refusal to compare.
+ *
+ * THE ROUTE SET IS NO LONGER PART OF IT, and that was the second version of the same mistake.
+ * Once the rendered gate learned to render only a blast radius, every incremental run swept a
+ * different route set, so every incremental run reported NO COMPARISON: the fix, re-run, read
+ * the trend rhythm this loop exists for was available on a full sweep and nowhere else, which
+ * is precisely when nobody needs it. A different route set changes the COVERAGE, not the
+ * quantity (the score is the home route's design and vitals plus axe binaries), so it is
+ * disclosed on the comparison instead of refusing one. See `compare`.
  */
 export function basisOf(ctx = {}) {
   return [
     'vitals:' + (ctx.vitals === false ? 'off' : 'on'),
     'axe:' + (ctx.axe === false ? 'off' : 'on'),
-    'routes:' + [...(ctx.routes ?? [])].sort().join('+'),
   ].join(' ');
 }
 
@@ -249,11 +256,24 @@ export function comparableTail(entries, basis) {
  * basis: an axe check that fired last time and not this time, or a check that went
  * inapplicable. Part of the move is then the denominator rather than the page, and the
  * message says so instead of taking full credit.
+ *
+ * `coverageNote` is set when the two runs swept a different set of ROUTES. That is now the
+ * normal case, because an incremental run renders a blast radius, and it is disclosed rather
+ * than refused: the axe binaries had fewer pages to fire on, so the score is comparable and
+ * the coverage is not.
  */
 export function compare(current, previous) {
-  if (!previous) return { verdict: 'first', delta: null, previous: null, denominatorNote: null };
+  if (!previous) return { verdict: 'first', delta: null, previous: null, denominatorNote: null, coverageNote: null };
   if (previous.basis !== current.basis) {
-    return { verdict: 'incomparable', delta: null, previous, denominatorNote: null };
+    return { verdict: 'incomparable', delta: null, previous, denominatorNote: null, coverageNote: null };
+  }
+  const nowRoutes = [...(current.routes ?? [])].sort();
+  const thenRoutes = [...(previous.routes ?? [])].sort();
+  let coverageNote = null;
+  if (nowRoutes.join('+') !== thenRoutes.join('+')) {
+    coverageNote = nowRoutes.every((r) => thenRoutes.includes(r))
+      ? `this run swept ${nowRoutes.length} of the ${thenRoutes.length} route(s) the comparison run did, so the accessibility checks had fewer pages to fire on: the score is comparable, the coverage is not`
+      : `this run swept a different route set (${nowRoutes.length} route(s) against ${thenRoutes.length}), so the accessibility checks saw different pages`;
   }
   const now = Object.keys(current.checks ?? {});
   const then = Object.keys(previous.checks ?? {});
@@ -265,9 +285,28 @@ export function compare(current, previous) {
         added.length ? 'newly scored: ' + added.join(', ') : '',
       ].filter(Boolean).join('; ')}), so part of this move is the denominator, not the page`
     : null;
+  // A DIFFERENT ROUTE SET GETS NO VERDICT, and this is the correction to the previous version
+  // of this function rather than a new rule bolted on.
+  //
+  // Comparing across coverage was right; putting an improved / regressed VERDICT on it was not.
+  // The design checks are computed on the home route alone, so a blast radius that excludes `/`
+  // drops four of them and the denominator falls from 54 of the rubric's weight to 14. Measured:
+  // adding one utility class to a component printed "REGRESSED: 95 -> 90 ... revert it before
+  // trying something else", and creating a file nothing imports printed "IMPROVING: 90 -> 95 ...
+  // keep going in the same direction". Both are the denominator. The self-correction loop is
+  // capped at two or three iterations, so a spurious "revert it" spends one undoing a correct
+  // fix, which is worse than the NO COMPARISON this replaced: that was useless and never wrong.
+  //
+  // So the numbers are still reported, the difference is still named, and no direction is
+  // asserted. A CHANGED SCORED SET INSIDE THE SAME ROUTE SET still reports its verdict with the
+  // denominator caveat: that is the axe-fix case the basis was rewritten for, where the agent
+  // did exactly what it was told and must be told it worked.
+  if (coverageNote) {
+    return { verdict: 'coverage', delta: null, current: current.overall, previous, denominatorNote, coverageNote };
+  }
   const delta = current.overall - previous.overall;
   const verdict = Math.abs(delta) <= NOISE_BAND ? 'unchanged' : delta > 0 ? 'improved' : 'regressed';
-  return { verdict, delta, previous, denominatorNote };
+  return { verdict, delta, current: current.overall, previous, denominatorNote, coverageNote };
 }
 
 /**
@@ -314,17 +353,25 @@ const signed = (n) => (n > 0 ? '+' + n : String(n));
 export function trendLine(cmp, iterations) {
   const it = ` (iteration ${iterations} of this loop)`;
   const caveat = cmp.denominatorNote ? ` NOTE: ${cmp.denominatorNote}.` : '';
+  // WHICH RUN. "up 14" against an unnamed previous run is unreadable once the loop compares
+  // across route sets: the reader has to know what they are being compared with.
+  const against = cmp.previous?.at
+    ? ` Compared against the run at ${cmp.previous.at} (${(cmp.previous.routes ?? []).length} route(s) swept).`
+    : '';
+  const coverage = cmp.coverageNote ? ` NOTE: ${cmp.coverageNote}.` : '';
   switch (cmp.verdict) {
     case 'first':
       return 'FIRST MEASUREMENT: there is no previous run to compare against, so there is no trend yet. The next run will report whether your changes moved it.';
     case 'incomparable':
       return `NO COMPARISON: the previous run measured a different configuration (${cmp.previous.basis}), so the two numbers are not the same quantity. Re-run with the same flags and routes to get a trend.`;
+    case 'coverage':
+      return `NOT COMPARABLE: this run scored ${cmp.current} and the run being compared scored ${cmp.previous.overall}, but the two swept different routes, so the difference between them is COVERAGE and not the page. There is NO verdict here: do not read it as better or worse, and do not revert anything on it.${against}${coverage}${caveat} For a trend you can act on, re-run with --full or over the same routes.`;
     case 'improved':
-      return `IMPROVING: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, UP ${cmp.delta}${it}. Keep going in the same direction.${caveat}`;
+      return `IMPROVING: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, UP ${cmp.delta}${it}. Keep going in the same direction.${against}${caveat}${coverage}`;
     case 'regressed':
-      return `REGRESSED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, DOWN ${Math.abs(cmp.delta)}${it}. The last change made it WORSE - revert it before trying something else.${caveat}`;
+      return `REGRESSED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, DOWN ${Math.abs(cmp.delta)}${it}. The last change made it WORSE - revert it before trying something else.${against}${caveat}${coverage}`;
     default:
-      return `UNCHANGED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, a move of ${signed(cmp.delta)}${it}. Run-to-run spread on an unchanged page is about ${NOISE_BAND} points, so this is noise, not progress: what you changed did not move the score.${caveat}`;
+      return `UNCHANGED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, a move of ${signed(cmp.delta)}${it}. Run-to-run spread on an unchanged page is about ${NOISE_BAND} points, so this is noise, not progress: what you changed did not move the score.${against}${caveat}${coverage}`;
   }
 }
 
@@ -462,11 +509,17 @@ export function summaryLine({ scored, cmp, stall, minScore }) {
   // With the gate off there is no floor to clear, and saying "CLEARS the 0 floor" would read as
   // an endorsement of a build nothing judged.
   const clears = minScore > 0 && projected.overall >= minScore;
+  // THE NUMBER DOES NOT LEAD THE LINE. It used to read "build hygiene 92/100 CLEARS the 80
+  // floor", and a number in that position reads as a grade no matter what the rest of the
+  // sentence says: the local score correlates with the public grade at r = -0.074, so leading
+  // with it invites exactly the reading it cannot support. The verdict leads, the number
+  // follows it, and "(not a grade)" travels in the same breath rather than in a caveat
+  // further down that nobody reaches.
   const state = minScore > 0
-    ? `${clears ? 'CLEARS' : 'is BELOW'} the ${minScore} floor`
-    : 'is UNGATED (PALATE_MIN_HYGIENE=0), so nothing here passed or failed';
+    ? `${clears ? 'clears' : 'is BELOW'} the ${minScore} floor at ${projected.overall} (not a grade)`
+    : `is UNGATED (PALATE_MIN_HYGIENE=0) at ${projected.overall} (not a grade), so nothing here passed or failed`;
   return (
-    `verify-rendered: build hygiene ${projected.overall}/100 ${state}, ` +
+    `verify-rendered: build hygiene: ${state}, ` +
     // "of the 100 weight measurable locally" was wrong and flattering: measuredWeight is what
     // THIS run scored, and it moves (40 clean, 52 with axe firing, +14 with vitals). Calling it
     // the local ceiling implied the number rests on everything available.

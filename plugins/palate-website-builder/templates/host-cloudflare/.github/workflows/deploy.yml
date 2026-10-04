@@ -28,6 +28,9 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          # Cloudflare has no VERCEL_ENV. Without this the build cannot tell it is the live
+          # site, and BaseLayout noindexes every page of it.
+          PUBLIC_SITE_ENV: production
           SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
           SANITY_DATASET: production
           SANITY_API_READ_TOKEN: ${{ secrets.SANITY_API_READ_TOKEN }}

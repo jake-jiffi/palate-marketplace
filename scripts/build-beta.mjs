@@ -47,13 +47,24 @@ function inventory(root) {
   walk(root); return files;
 }
 
-export function transformBeta(root, { version, commit, rollback = false }) {
-  if (!/^\d+\.\d+\.\d+-beta\.\d+(?:\+codex\.[a-zA-Z0-9.-]+)?$/.test(version)) throw new Error('Expected an explicit beta version');
+// Two tracks are built from the same live-design source tree. Beta is renamed so it can sit in the
+// marketplace beside the customer plugin; prod keeps the source's own name and command namespace.
+export const TRACKS = {
+  beta: { name: 'palate-beta', ref: 'beta', rewrite: true, descriptionPrefix: 'Palate beta. Use one Palate plugin at a time. ', codexName: 'Palate Beta' },
+  prod: { name: 'palate-website-builder', ref: 'main', rewrite: false, descriptionPrefix: '', codexName: 'Palate' },
+};
+
+export function transformBeta(root, { version, commit, rollback = false, track = 'beta' }) {
+  const t = TRACKS[track];
+  if (!t) throw new Error(`Unknown track: ${track}`);
+  if (track === 'beta' && !/^\d+\.\d+\.\d+-beta\.\d+(?:\+codex\.[a-zA-Z0-9.-]+)?$/.test(version)) throw new Error('Expected an explicit beta version');
+  if (track === 'prod' && !/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Expected a release version for prod');
   if (!/^[a-f0-9]{40}$/.test(commit)) throw new Error('Expected the archived source commit SHA');
   if (fs.existsSync(path.join(root, '.git'))) throw new Error('Transform an archived staging directory, never a checkout');
   const original = inventory(root);
   const sourceVersion = fs.readFileSync(path.join(root, 'VERSION'), 'utf8').trim();
-  if (!version.startsWith(sourceVersion + '-beta.')) throw new Error('Beta version must use the archived source version');
+  if (track === 'beta' && !version.startsWith(sourceVersion + '-beta.')) throw new Error('Beta version must use the archived source version');
+  if (track === 'prod' && version !== sourceVersion) throw new Error('Prod version must equal the archived source version');
   for (const required of ['SKILL.md', 'LEGACY.md', 'references/live-build.md', 'agents/palate-surveyor.md', 'scripts/palate.mjs', 'hooks/hooks.json', 'live-policy.json']) {
     if (!fs.statSync(path.join(root, required)).isFile()) throw new Error(`Missing package input: ${required}`);
   }
@@ -64,7 +75,7 @@ export function transformBeta(root, { version, commit, rollback = false }) {
   if (legacyLinks[0][1] !== '../references/legacy-survey.md' || legacyTarget !== path.resolve(root, 'references/legacy-survey.md')) throw new Error(`Wrong legacy survey agent link target: ${legacyLinks[0][1]}`);
   if (!fs.existsSync(legacyTarget) || !fs.statSync(legacyTarget).isFile()) throw new Error('Missing legacy survey reference file: references/legacy-survey.md');
   for (const [rel] of original) {
-    if (rel.endsWith('.md')) {
+    if (t.rewrite && rel.endsWith('.md')) {
       const file = path.join(root, rel);
       const text = fs.readFileSync(file, 'utf8');
       const next = text.replaceAll('/palate-website-builder:', '/palate-beta:');
@@ -89,12 +100,12 @@ export function transformBeta(root, { version, commit, rollback = false }) {
   for (const host of ['.claude-plugin', '.codex-plugin']) {
     const file = path.join(root, host, 'plugin.json'), manifest = readJSON(file);
     if (!manifest.author?.name || !manifest.description) throw new Error(`Incomplete ${host} manifest`);
-    manifest.name = 'palate-beta'; manifest.version = version;
-    manifest.description = 'Palate beta. Use one Palate plugin at a time. ' + manifest.description;
+    manifest.name = t.name; manifest.version = version;
+    manifest.description = t.descriptionPrefix + manifest.description;
     if (host === '.codex-plugin') {
       manifest.skills = './skills/';
       delete manifest.hooks;
-      manifest.interface.displayName = 'Palate Beta';
+      manifest.interface.displayName = t.codexName;
       for (const field of ['shortDescription', 'longDescription', 'developerName', 'category', 'defaultPrompt', 'capabilities']) {
         if (!manifest.interface[field]) throw new Error(`Missing Codex interface.${field}`);
       }
@@ -108,7 +119,7 @@ export function transformBeta(root, { version, commit, rollback = false }) {
   fs.writeFileSync(path.join(root, 'VERSION'), version + '\n');
   const content = inventory(root);
   const provenance = {
-    schema: 1, sourceCommit: commit, sourceVersion, version, rollback,
+    schema: 1, track, sourceCommit: commit, sourceVersion, version, rollback,
     sourceDigest: sha(JSON.stringify(original)), contentDigest: sha(JSON.stringify(content)),
     entry: 'skills/palate-website-builder/SKILL.md', rebasedLinks: links,
   };
@@ -128,50 +139,52 @@ export function activate(staged, destination) {
   return staged;
 }
 
-export function buildBeta({ source, marketplace, version, output, rollback = false }) {
+export function buildBeta({ source, marketplace, version, output, rollback = false, track = 'beta' }) {
+  if (!TRACKS[track]) throw new Error(`Unknown track: ${track}`);
   if (!source || !marketplace) throw new Error('Source and marketplace directories are required');
   source = fs.realpathSync(source); marketplace = fs.realpathSync(marketplace);
   if (output) {
     output = canonicalTarget(output);
     if (overlaps(output, source) || overlaps(output, marketplace)) throw new Error('Candidate output must be isolated from the source clone and marketplace, including production packages');
-    if (fs.existsSync(output) && fs.readdirSync(output).length && (!fs.existsSync(path.join(output, 'package-provenance.json')) || readJSON(path.join(output, '.claude-plugin/plugin.json')).name !== 'palate-beta')) throw new Error('Candidate destination is occupied by an unrelated directory');
+    if (fs.existsSync(output) && fs.readdirSync(output).length && (!fs.existsSync(path.join(output, 'package-provenance.json')) || readJSON(path.join(output, '.claude-plugin/plugin.json')).name !== TRACKS[track].name)) throw new Error('Candidate destination is occupied by an unrelated directory');
   }
-  const lock = path.join(marketplace, '.palate-beta-build.lock');
+  const lock = path.join(marketplace, `.palate-${track}-build.lock`);
   const lockFd = fs.openSync(lock, 'wx', 0o600);
   fs.writeFileSync(lockFd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
   fs.closeSync(lockFd);
-  try { return buildLocked({ source, marketplace, version, output, rollback }); }
+  try { return buildLocked({ source, marketplace, version, output, rollback, track }); }
   finally { fs.unlinkSync(lock); }
 }
 
-function buildLocked({ source, marketplace, version, output, rollback }) {
+function buildLocked({ source, marketplace, version, output, rollback, track }) {
+  const t = TRACKS[track];
   const git = args => {
     const result = spawnSync('git', ['-C', source, ...args], { encoding: 'utf8' });
     if (result.status !== 0) throw new Error(result.stderr || 'Source git command failed');
     return result.stdout.trim();
   };
-  const commit = git(['rev-parse', '--verify', 'beta^{commit}']);
+  const commit = git(['rev-parse', '--verify', `${t.ref}^{commit}`]);
   const marketplaceFile = path.join(marketplace, '.claude-plugin/marketplace.json');
   noRedirects(marketplace, marketplaceFile);
   const nextMarketplace = output ? null : readJSON(marketplaceFile);
-  const betaEntry = nextMarketplace?.plugins?.find(plugin => plugin.name === 'palate-beta');
-  if (!output && !betaEntry) throw new Error('Missing existing beta marketplace entry');
-  if (!output && betaEntry.source !== './plugins/palate-beta') throw new Error('Beta marketplace entry must point to the expected local beta package');
-  const destination = path.resolve(output || path.join(marketplace, 'plugins/palate-beta'));
+  const betaEntry = nextMarketplace?.plugins?.find(plugin => plugin.name === t.name);
+  if (!output && !betaEntry) throw new Error(`Missing existing ${t.name} marketplace entry`);
+  if (!output && betaEntry.source !== `./plugins/${t.name}`) throw new Error(`The ${t.name} marketplace entry must point to its local package`);
+  const destination = path.resolve(output || path.join(marketplace, `plugins/${t.name}`));
   if (!output) noRedirects(marketplace, destination);
   const parent = path.dirname(destination);
   fs.mkdirSync(parent, { recursive: true });
-  const staged = fs.mkdtempSync(path.join(parent, '.palate-beta-stage-'));
+  const staged = fs.mkdtempSync(path.join(parent, `.${t.name}-stage-`));
   // A failed extraction is retained for diagnosis. It never replaces the current beta.
   const archive = spawnSync('git', ['-C', source, 'archive', commit], { maxBuffer: 256 * 1024 * 1024 });
   if (archive.status !== 0) throw new Error('Source archive failed');
   const extraction = spawnSync('tar', ['-x', '-C', staged], { input: archive.stdout, maxBuffer: 1024 * 1024 });
   if (extraction.status !== 0) throw new Error('Source archive extraction failed');
-  const provenance = transformBeta(staged, { version, commit, rollback });
+  const provenance = transformBeta(staged, { version, commit, rollback, track });
   // Host manifests and all generated links are validated before replacing the package.
   for (const host of ['.claude-plugin', '.codex-plugin']) {
     const manifest = readJSON(path.join(staged, host, 'plugin.json'));
-    if (manifest.name !== 'palate-beta' || manifest.version !== version) throw new Error('Host package identity mismatch');
+    if (manifest.name !== t.name || manifest.version !== version) throw new Error('Host package identity mismatch');
   }
   for (const link of provenance.rebasedLinks) {
     if (!fs.existsSync(path.resolve(staged, 'skills/palate-website-builder', '../../' + link.split('#')[0]))) throw new Error(`Broken generated link: ${link}`);
@@ -179,7 +192,7 @@ function buildLocked({ source, marketplace, version, output, rollback }) {
   let registryTemp;
   if (!output) {
     betaEntry.version = version;
-    betaEntry.description = 'Opt-in tester beta, expected to have bugs. Live Astro design options with real MCP references, interactive motion and optional Shopify commerce. Design speed, visual consistency and complete end-to-end workflows are not yet validated. Use disposable projects, not client production work. Install one Palate plugin at a time. See BETA-TESTING.md.';
+    if (track === 'beta') betaEntry.description = 'Opt-in tester beta, expected to have bugs. Live Astro design options with real MCP references, interactive motion and optional Shopify commerce. Design speed, visual consistency and complete end-to-end workflows are not yet validated. Use disposable projects, not client production work. Install one Palate plugin at a time. See BETA-TESTING.md.';
     registryTemp = marketplaceFile + `.tmp-${randomUUID()}`;
     const fd = fs.openSync(registryTemp, 'wx', 0o600);
     try { fs.writeFileSync(fd, JSON.stringify(nextMarketplace, null, 2) + '\n'); fs.fsyncSync(fd); }
@@ -204,7 +217,7 @@ if (invokedDirectly(import.meta.url)) {
   try {
     const result = buildBeta({
       source: value('--source'), marketplace: value('--marketplace'), version: value('--version'),
-      output: value('--output'), rollback: args.includes('--rollback'),
+      output: value('--output'), rollback: args.includes('--rollback'), track: value('--track') || 'beta',
     });
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } catch (error) { process.stderr.write(`build-beta: ${error.message}\n`); process.exitCode = 1; }

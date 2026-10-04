@@ -82,7 +82,16 @@ export default defineConfig({
     mdx(),
     react(),
     // Posts are prerendered routes now, so the integration enumerates them itself.
-    sitemap(),
+    /**
+     * THE SITEMAP MUST NOT ADVERTISE A WORKING DOCUMENT.
+     *
+     * Left unfiltered it listed 362 kit demo URLs against the client's live domain on a PREVIEW
+     * build: pages that carry noindex, which a sitemap entry directly contradicts, at addresses
+     * that do not exist on the domain being advertised. gate-shipready refuses them at production
+     * stage, and a preview deployment is publicly reachable too, so the filter is the half that
+     * covers every stage rather than the last one.
+     */
+    sitemap({ filter: (page) => !/\/kit(-frame)?(\/|$)/.test(page) }),
     pagefind(),
   ],
   devToolbar: { enabled: false },

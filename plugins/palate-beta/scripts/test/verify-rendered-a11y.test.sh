@@ -22,8 +22,10 @@ check() {
   else echo "FAIL - $desc (got '$got', want '$want')"; fail=$((fail + 1)); fi
 }
 
-(cd "$FIX/broken" && python3 -m http.server 8731 >/dev/null 2>&1) &
-(cd "$FIX/clean"  && python3 -m http.server 8732 >/dev/null 2>&1) &
+# exec, so the background job IS the server: killing a subshell wrapper left python listening, and
+# the next run then measured the previous run's pages (every rule read 0 on the broken fixture).
+(cd "$FIX/broken" && exec python3 -m http.server 8731 >/dev/null 2>&1) &
+(cd "$FIX/clean"  && exec python3 -m http.server 8732 >/dev/null 2>&1) &
 sleep 2
 
 # 1. Every rule fires, at all three viewports. Rules are asserted individually: a

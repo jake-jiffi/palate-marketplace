@@ -25,6 +25,8 @@
 set -euo pipefail
 
 MANIFEST="${1:-build-manifest.json}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/workflow-route.sh"
+palate_route_workflow reader gate-mcp-depth "$MANIFEST"
 MIN_REFS="${PALATE_MIN_REFS:-5}"
 MIN_INNER="${PALATE_MIN_INNER:-2}"
 MIN_TOOLS="${PALATE_MIN_TOOLS:-3}"
@@ -46,7 +48,7 @@ ungrounded() { echo "MCP-depth gate UNGROUNDED: $1" >&2; exit 3; }
 # before. They are deliberately NOT the ungrounded case: labelling a missing-jq
 # environment "ungrounded" would be wrong, and would hand the user a reconnect command
 # that fixes nothing.
-command -v jq >/dev/null 2>&1 || skip "jq is not installed; not gating."
+command -v jq >/dev/null 2>&1 || skip "jq is not installed, so this gate is OFF. Install it and re-run: brew install jq (macOS), apt install jq (Debian/Ubuntu), winget install jqlang.jq (Windows)."
 [ -f "$MANIFEST" ] || skip "no $MANIFEST (no tracked build, or the Palate MCP is not in use)."
 jq -e . "$MANIFEST" >/dev/null 2>&1 || skip "$MANIFEST is not readable JSON; not gating."
 

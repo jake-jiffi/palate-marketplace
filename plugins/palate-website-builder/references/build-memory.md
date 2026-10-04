@@ -33,8 +33,8 @@ entry shape is defined in `hooks/build-log-entry.mjs`:
   "explore": {
     "ran": true,
     "shown": [
-      { "id": "v1", "name": "Deep Trawl", "donor_slug": "aesop", "hero_pattern": "centred-display", "position": 1 },
-      { "id": "v3", "name": "Low Tide", "donor_slug": "the-modern-house", "hero_pattern": "full-bleed", "position": 3 }
+      { "id": "v1", "name": "Deep Trawl", "donor_slug": "aesop", "position": 1 },
+      { "id": "v3", "name": "Low Tide", "donor_slug": "the-modern-house", "position": 3 }
     ],
     "picks": [{ "surface": "hero", "variant_id": "v3" }, { "surface": "cta", "variant_id": "v1" }],
     "edits": [{ "surface": "hero", "variant_id": "v3", "note": "shortened headline" }]
@@ -55,9 +55,17 @@ no model is trained here yet.
 
 (Earlier drafts of this doc described per-entry `macrostructure` / `hero_pattern`
 / `explore_picks` top-level fields. Those were never written by the hook. The
-hero-pattern signal now lives inside `explore.shown[].hero_pattern`, the shipped
+hero-pattern signal was to live inside `explore.shown[].hero_pattern`, the shipped
 hero is the picked variant's, and the deterministic cross-build skin check is
 `gate-novelty.mjs`.)
+
+**`explore.shown[].hero_pattern` IS NOT WRITTEN ON A CANVAS-FIRST BUILD, and has
+not been since Explore started drawing artboards.** `boards-render.mjs`
+`recordShown` writes `{ id, name, donor_slug, position }`, so every entry logged
+since then carries a donor and no hero pattern. Read it as unlabelled rather than
+as "no repeat found": `scripts/taste-profile.mjs` still counts
+`pickRate.heroPattern` from the field and simply sees nothing to count, and the
+cross-build exclusion rule below is stated on `donor_slug`, which IS written.
 
 ## WHAT THE LOG ACTUALLY CONTAINS (measured 2026-08-13)
 
@@ -102,13 +110,15 @@ At Phase A.4 (Explore) plan checkpoint, read the last 5 entries **that carry the
 field each rule reads** (not the last 5 rows, see above). Apply two hard rules
 when generating the variant set:
 
-1. **No hero pattern repeated from the last 3 builds** that recorded one. If the
-   most recent three logged Palate builds all used a "centred display +
-   image-right" hero, the variant set for this build cannot include another
-   centred display + image-right hero. Pick from the long tail. (Read each recent
-   build's shipped hero from `explore.picks` and the matching
-   `explore.shown[].hero_pattern`.) Note the older `explore.shown: ["v1","v2"]`
-   id-only shape carries no hero pattern; those entries cannot answer this rule.
+1. **No DONOR repeated from the last 3 builds** that recorded one. If the most
+   recent three logged Palate builds all drew a rung from `aesop`, no rung of
+   this build's ladder is drawn from `aesop`. Pick from the long tail. (Read each
+   recent build's `explore.shown[].donor_slug`, which `boards-render.mjs` writes
+   on every canvas-first build.) This rule used to be stated on
+   `explore.shown[].hero_pattern`, which nothing writes any more (above), so it
+   could never fire; the donor is the field that is there, and a repeated donor is
+   the same failure one layer earlier. The older `explore.shown: ["v1","v2"]`
+   id-only shape carries neither; those entries cannot answer this rule.
 2. **No identical macrostructure from any of the last 5 builds.** The full
    section sequence cannot repeat verbatim. **This rule is currently INERT and
    you should not report it as satisfied**: nothing writes a macrostructure to

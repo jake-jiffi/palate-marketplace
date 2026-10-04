@@ -1,0 +1,20 @@
+name = "{{SLUG}}-site"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# SSR on Workers. Do NOT set `main` - the @astrojs/cloudflare adapter injects
+# the worker entry as a virtual module at build time. Just point assets at dist.
+[assets]
+directory = "./dist"
+
+# Two kinds of config - do not mix them up:
+#
+# BUILD-TIME vars (CI build env / local .env) - @sanity/astro bakes these into
+# the bundle at build, so they must be present when `astro build` runs:
+#   SANITY_PROJECT_ID, SANITY_DATASET, SANITY_API_READ_TOKEN,
+#   PUBLIC_SANITY_VISUAL_EDITING_ENABLED
+#
+# RUNTIME Worker secrets (`wrangler secret put` - never committed) - read per
+# request via `locals.runtime.env`:
+#   SANITY_API_WRITE_TOKEN  - /api/contact writes formSubmission docs
+#   RESEND_API_KEY, TURNSTILE_SECRET - the contact form

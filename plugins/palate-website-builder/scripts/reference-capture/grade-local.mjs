@@ -58,7 +58,6 @@
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { measurePage, scoreDesignFacts } from './design-measure.mjs';
 import { measureVitals, scoreVitals } from './vitals.mjs';
@@ -66,6 +65,7 @@ import { score as scoreRubric } from './rubric.mjs';
 import { embedHero, disposeTaste, HERO_VIEWPORT } from './taste-local.mjs';
 import { buildLadderRequest, validateJudgements, scoreLadder, naChecks } from './ladder-local.mjs';
 import { createClient, PalateMcpError, NO_TOKEN_REMEDY } from './palate-mcp.mjs';
+import { invokedDirectly } from "../lib/invoked-directly.mjs";
 
 // --------------------------------------------------------------------- args ----
 const args = {};
@@ -884,7 +884,7 @@ export { flatteryOf, FLATTERY_TASTE_FLOOR, FLATTERY_OVERSCORE };
 
 // --------------------------------------------------------------------- main ----
 // Only when run directly, so the module can be imported for testing without grading anything.
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMain = invokedDirectly(import.meta.url);
 
 // Sets process.exitCode and unwinds; it never calls process.exit(). See GradeFailure above.
 if (isMain) try {

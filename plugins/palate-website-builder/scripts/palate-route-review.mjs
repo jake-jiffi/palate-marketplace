@@ -47,8 +47,8 @@
  *   [--grounded | --ungrounded]   recorded in the output, never routed on.
  */
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { classify, lanesFor } from './palate-contract.mjs';
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 export const REVIEWER = { NONE: 'none', TECHNOLOGIST: 'technologist' };
 
@@ -322,4 +322,4 @@ function main() {
   process.exit(d.humanReviewRequired ? 1 : 0);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();

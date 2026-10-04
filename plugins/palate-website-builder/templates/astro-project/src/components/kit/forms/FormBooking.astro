@@ -1,0 +1,498 @@
+---
+/**
+ * Booking form.
+ *
+ * Use this when a time is genuinely being reserved. It asks for the day and the slot rather than
+ * "when suits you", because a free-text answer to that question costs the two emails the form was
+ * meant to save.
+ *
+ * THE EMPTY STATE IS THE ONE THAT MATTERS. Handed no times, this renders a short explanation and
+ * the way to reach a human INSTEAD of the form. A booking form with an empty time picker is worse
+ * than no booking form: it looks like the site is broken, and a visitor who came to book leaves
+ * without doing anything at all.
+ *
+ * THE BOOKING WINDOW IS COMPUTED IN THE BROWSER, NOT AT BUILD TIME. A static build stamped with
+ * the day it was built starts refusing perfectly good dates a fortnight later, and nothing would
+ * report it: the visitor just gets told to pick a later day, forever. The script below sets `min`
+ * and `max` from the visitor's own clock on every page load, and both the native picker and the
+ * validation read those attributes, so there is one source for the rule.
+ *
+ * The days the business works are stated in the hint and enforced by the same array, so the copy
+ * cannot promise Saturdays the validation then refuses.
+ */
+export interface Props {
+  title?: string;
+  intro?: string;
+  /** What can be booked. With none, the picker becomes a plain text field. */
+  services?: string[];
+  /** The bookable slots. AN EMPTY ARRAY RENDERS THE EMPTY STATE, not an empty dropdown. */
+  times?: string[];
+  /** Days the business works, Sunday 0 through Saturday 6. */
+  openDays?: number[];
+  /** How much notice is needed, in days. 1 means "not today". */
+  leadDays?: number;
+  /** How far ahead bookings are taken, in days. */
+  horizonDays?: number;
+  /** Shown when there are no times. Say why, not just that. */
+  emptyMessage?: string;
+  /** Where to send someone when there is nothing to book. Ringing usually beats waiting. */
+  emptyAction?: { label: string; href: string };
+  submitLabel?: string;
+  endpoint?: string;
+  successTitle?: string;
+  successBody?: string;
+  errorHelp?: string;
+  noScriptNote?: string;
+  privacyNote?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  title = "Book a time",
+  intro = "Pick a day and a slot that suit you. We confirm by email, and we will ring if anything about the job means we need longer.",
+  services = ["Standard service", "Repair or callout", "Inspection and report", "Quote on site"],
+  times = ["8:00 am", "9:30 am", "11:00 am", "1:00 pm", "2:30 pm", "4:00 pm"],
+  openDays = [1, 2, 3, 4, 5],
+  leadDays = 1,
+  horizonDays = 60,
+  emptyMessage = "There is nothing bookable online at the moment, usually because the diary is full for the next few weeks. Ring us and we will find you a time, or put your name down for a cancellation.",
+  emptyAction = { label: "Ring us instead", href: "/contact" },
+  submitLabel = "Request this time",
+  endpoint = "/api/contact",
+  successTitle = "Time requested",
+  successBody = "We have your request and we are holding that slot while we check it against the run sheet. You will get a confirmation email within one business day. It is not booked until that email arrives, so please do not rearrange your day around it yet.",
+  errorHelp = "If it will not send, ring us and we will write you into the diary over the phone.",
+  noScriptNote = "This form needs JavaScript to send. If yours is turned off, ring us or send an email and we will book you in that way.",
+  privacyNote = "Your details are used to arrange and confirm this booking.",
+  tone = "default",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `fb-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+
+const slots = Array.isArray(times) ? times : [];
+const hasTimes = slots.length > 0;
+const hasServices = Array.isArray(services) && services.length > 0;
+
+/** The working week, said once, in the words the hint and the error both use. */
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// An empty array would otherwise read as "We book on ." and switch the weekday check off
+// silently, so it is treated as what it plainly means: every day is bookable.
+const chosen = [...new Set(openDays)].sort((a, b) => a - b);
+const days = chosen.length > 0 ? chosen : [0, 1, 2, 3, 4, 5, 6];
+const contiguous = days.length > 2 && days.every((day, i) => i === 0 || day - days[i - 1] === 1);
+const openSentence =
+  days.length === 7
+    ? "We book any day of the week."
+    : contiguous
+      ? `We book ${DAY_NAMES[days[0]]} to ${DAY_NAMES[days[days.length - 1]]}.`
+      : `We book on ${days.map((d) => DAY_NAMES[d]).join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
+---
+
+<section class:list={["kit-section", toneClass, "kit-formsec", className]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container kit-formsec__inner">
+    <div class="kit-formsec__intro">
+      <h2 class="kit-h2 kit-formsec__title" id={headingId}>{title}</h2>
+      {intro && <p class="kit-lede kit-muted kit-formsec__intro-text">{intro}</p>}
+    </div>
+
+    <div class="kit-formsec__panel">
+      {!hasTimes ? (
+        <div class="kit-empty kit-formsec__none">
+          <p class="kit-formsec__none-text">{emptyMessage}</p>
+          {emptyAction && (
+            <a class="kit-btn kit-btn--secondary" href={emptyAction.href}>
+              <span class="kit-btn__label">{emptyAction.label}</span>
+            </a>
+          )}
+        </div>
+      ) : (
+        <form
+          class="kit-form"
+          method="post"
+          action={endpoint}
+          data-kit-form
+          data-kit-endpoint={endpoint}
+          data-kit-sending="Sending your booking request."
+          data-kit-fallback-message="Booking requested from the website."
+        >
+          <div class="kit-form__alert" data-kit-alert role="alert" tabindex="-1" hidden>
+            <p class="kit-form__alert-text" data-kit-alert-text></p>
+            <p class="kit-form__alert-help kit-muted">{errorHelp}</p>
+          </div>
+
+          <div class="kit-field">
+            <label class="kit-field__label" for={`${uid}-name`}>Your name</label>
+            <input
+              class="kit-input"
+              id={`${uid}-name`}
+              name="name"
+              type="text"
+              autocomplete="name"
+              required
+              aria-describedby={`${uid}-name-error`}
+              data-kit-key="name"
+              data-kit-validate="required"
+              data-kit-required-message="Please tell us your name, so we know whose booking this is."
+              data-kit-error={`${uid}-name-error`}
+            />
+            <p class="kit-field__error" id={`${uid}-name-error`} role="alert" hidden></p>
+          </div>
+
+          <div class="kit-form__row">
+            <div class="kit-field">
+              <label class="kit-field__label" for={`${uid}-email`}>Email address</label>
+              <input
+                class="kit-input"
+                id={`${uid}-email`}
+                name="email"
+                type="email"
+                inputmode="email"
+                autocomplete="email"
+                required
+                aria-describedby={`${uid}-email-error`}
+                data-kit-key="email"
+                data-kit-validate="required email"
+                data-kit-required-message="Please give us an email address. The confirmation goes there."
+                data-kit-error={`${uid}-email-error`}
+              />
+              <p class="kit-field__error" id={`${uid}-email-error`} role="alert" hidden></p>
+            </div>
+
+            <div class="kit-field">
+              <label class="kit-field__label" for={`${uid}-phone`}>Phone</label>
+              <input
+                class="kit-input"
+                id={`${uid}-phone`}
+                name="phone"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel"
+                required
+                aria-describedby={`${uid}-phone-hint ${uid}-phone-error`}
+                data-kit-summary="Phone"
+                data-kit-validate="required tel"
+                data-kit-required-message="Please add a phone number, in case we are running late on the day."
+                data-kit-error={`${uid}-phone-error`}
+              />
+              <p class="kit-field__hint" id={`${uid}-phone-hint`}>Only used about this booking.</p>
+              <p class="kit-field__error" id={`${uid}-phone-error`} role="alert" hidden></p>
+            </div>
+          </div>
+
+          <div class="kit-field">
+            <label class="kit-field__label" for={`${uid}-service`}>What is the booking for?</label>
+            {hasServices ? (
+              <select
+                class="kit-select"
+                id={`${uid}-service`}
+                name="service"
+                required
+                aria-describedby={`${uid}-service-error`}
+                data-kit-summary="Booking for"
+                data-kit-validate="required"
+                data-kit-required-message="Please choose what the booking is for, so we allow the right amount of time."
+                data-kit-error={`${uid}-service-error`}
+              >
+                <option value="" disabled selected>Choose one</option>
+                {services.map((service) => <option value={service}>{service}</option>)}
+              </select>
+            ) : (
+              <input
+                class="kit-input"
+                id={`${uid}-service`}
+                name="service"
+                type="text"
+                required
+                aria-describedby={`${uid}-service-error`}
+                data-kit-summary="Booking for"
+                data-kit-validate="required"
+                data-kit-required-message="Please tell us in a few words what the booking is for."
+                data-kit-error={`${uid}-service-error`}
+              />
+            )}
+            <p class="kit-field__error" id={`${uid}-service-error`} role="alert" hidden></p>
+          </div>
+
+          <div class="kit-form__row">
+            <div class="kit-field">
+              <label class="kit-field__label" for={`${uid}-date`}>Preferred date</label>
+              <input
+                class="kit-input"
+                id={`${uid}-date`}
+                name="date"
+                type="date"
+                required
+                aria-describedby={`${uid}-date-hint ${uid}-date-error`}
+                data-kit-summary="Preferred date"
+                data-kit-validate="required date"
+                data-kit-required-message="Please choose a date."
+                data-kit-invalid-message={`We do not work that day. ${openSentence}`}
+                data-kit-error={`${uid}-date-error`}
+                data-kit-date-window
+                data-kit-open-days={days.join(",")}
+                data-kit-lead-days={String(leadDays)}
+                data-kit-horizon-days={String(horizonDays)}
+              />
+              <p class="kit-field__hint" id={`${uid}-date-hint`}>{openSentence}</p>
+              <p class="kit-field__error" id={`${uid}-date-error`} role="alert" hidden></p>
+            </div>
+
+            <div class="kit-field">
+              <label class="kit-field__label" for={`${uid}-time`}>Preferred time</label>
+              <select
+                class="kit-select"
+                id={`${uid}-time`}
+                name="time"
+                required
+                aria-describedby={`${uid}-time-hint ${uid}-time-error`}
+                data-kit-summary="Preferred time"
+                data-kit-validate="required"
+                data-kit-required-message="Please choose a time that suits you."
+                data-kit-error={`${uid}-time-error`}
+              >
+                <option value="" disabled selected>Choose a time</option>
+                {slots.map((slot) => <option value={slot}>{slot}</option>)}
+              </select>
+              <p class="kit-field__hint" id={`${uid}-time-hint`}>
+                A request, not a confirmation. We will say yes or offer the nearest slot.
+              </p>
+              <p class="kit-field__error" id={`${uid}-time-error`} role="alert" hidden></p>
+            </div>
+          </div>
+
+          <div class="kit-field">
+            <label class="kit-field__label" for={`${uid}-notes`}>
+              Anything we should know
+              <span class="kit-field__optional kit-muted">&#32;(optional)</span>
+            </label>
+            <textarea
+              class="kit-textarea"
+              id={`${uid}-notes`}
+              name="message"
+              rows="4"
+              aria-describedby={`${uid}-notes-hint`}
+              data-kit-key="message"
+            ></textarea>
+            <p class="kit-field__hint" id={`${uid}-notes-hint`}>
+              Parking, access, a dog in the yard, a time you cannot be reached.
+            </p>
+          </div>
+
+          {siteKey && <div class="cf-turnstile" data-sitekey={siteKey}></div>}
+
+          <noscript>
+            <p class="kit-form__fine">{noScriptNote}</p>
+          </noscript>
+
+          <button type="submit" class="kit-btn kit-btn--primary kit-form__submit" data-kit-submit>
+            <span class="kit-spinner" data-kit-spinner aria-hidden="true" hidden></span>
+            <span class="kit-btn__label">{submitLabel}</span>
+          </button>
+
+          {privacyNote && <p class="kit-form__fine kit-muted">{privacyNote}</p>}
+          <p class="kit-visually-hidden" data-kit-status role="status" aria-live="polite"></p>
+        </form>
+      )}
+
+      <div class="kit-form__done" data-kit-success hidden>
+        <svg class="kit-form__tick" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10.5 8 14.5 16 5.5" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <h3 class="kit-h3" data-kit-success-heading tabindex="-1">{successTitle}</h3>
+        <p class="kit-body">{successBody}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{siteKey && (
+  <script is:inline>
+    (function () {
+      if (document.querySelector("script[data-kit-turnstile]")) return;
+      var s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      s.async = true;
+      s.defer = true;
+      s.setAttribute("data-kit-turnstile", "");
+      document.head.appendChild(s);
+    })();
+  </script>
+)}
+
+<style>
+  [hidden] { display: none !important; }
+
+  /* foundations.css does not set box-sizing, and what normally does is Tailwind's preflight. A
+     build that vendors its own preset instead, which is a failure this repo has already paid for
+     once, would push every full-width control past the right edge of a phone. One rule, stated
+     where it binds, so the form does not depend on a reset arriving from somewhere else. */
+  .kit-input, .kit-select, .kit-textarea { box-sizing: border-box; }
+
+  .kit-formsec__inner {
+    display: grid;
+    align-items: start;
+    gap: var(--kit-space-2xl) var(--kit-space-3xl);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 30ch), 1fr));
+  }
+
+  .kit-formsec__intro { display: grid; gap: var(--kit-space-lg); align-content: start; }
+  .kit-formsec__title { max-width: 18ch; }
+  .kit-formsec__intro-text { text-wrap: pretty; }
+
+  /* The empty state: an explanation and a way through, never a picker with nothing in it. */
+  .kit-formsec__none {
+    display: grid;
+    gap: var(--kit-space-lg);
+    justify-items: start;
+    text-align: start;
+    max-width: var(--kit-measure);
+  }
+  .kit-formsec__none-text { margin: 0; text-wrap: pretty; }
+
+  .kit-form { display: grid; gap: var(--kit-space-lg); max-width: var(--kit-measure); }
+  .kit-form__row {
+    display: grid;
+    gap: var(--kit-space-lg);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20ch), 1fr));
+  }
+
+  .kit-form__alert {
+    display: grid;
+    gap: var(--kit-space-2xs);
+    padding: var(--kit-space-md);
+    border: var(--kit-border-width) solid var(--kit-error);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-form__alert p { margin: 0; }
+  .kit-form__alert-text { font-weight: var(--kit-weight-strong); color: var(--kit-error); }
+
+  /* The space before "(optional)" is written as &#32; inside the span, not as a space in the
+     markup. A plain space is swallowed when Astro trims the newline before an expression, which is
+     how one label read "Anything else we should know(optional)" while its neighbour read
+     "Photos (optional)". An entity is a character rather than whitespace, so it survives either
+     layout, and unlike a CSS margin it also puts a space in the accessible name. */
+  .kit-field__optional { font-weight: var(--kit-weight-body); }
+
+  .kit-form__submit { justify-self: start; }
+  .kit-form__fine { font-size: var(--kit-text-sm); margin: 0; max-width: var(--kit-measure); }
+
+  .kit-form__done {
+    display: grid;
+    gap: var(--kit-space-md);
+    justify-items: start;
+    padding: var(--kit-space-xl);
+    border: var(--kit-border-width) solid var(--kit-success);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    max-width: var(--kit-measure);
+  }
+  .kit-form__tick { width: 1.5em; height: auto; color: var(--kit-success); }
+  .kit-form__done p { text-wrap: pretty; }
+
+  .kit-formsec :focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-section--inverse :focus-visible { outline-color: var(--kit-text-inverse); }
+
+  /* THE INVERSE GROUND, AND WHY EVERY ONE OF THESE NEEDS SAYING.
+     foundations pins .kit-field__label to --kit-text and .kit-field__hint to --kit-text-muted,
+     both chosen for a light page. On a dark section that measures 1.06:1 for every label and
+     3.34:1 for every hint, so a form set to tone="inverse" ships with unreadable labels and
+     nothing reports it. The feedback colours have the same shape of problem: --kit-error is a
+     dark red picked to sit on white, and on this ground its border reads 1.8:1. Each is mixed
+     toward the inverse text colour rather than replaced, so an error still looks like an error. */
+  .kit-section--inverse .kit-field__label { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-field__hint {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+  .kit-section--inverse .kit-field__error,
+  .kit-section--inverse .kit-form__alert-text {
+    color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__alert {
+    border-color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__done {
+    border-color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__tick {
+    color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-check input { accent-color: var(--kit-text-inverse); }
+  /* The empty state is the whole point of this variation, so it has to survive the dark ground
+     too: .kit-empty is muted text inside a dashed --kit-border, and both were picked for white. */
+  .kit-section--inverse .kit-formsec__none {
+    color: color-mix(in srgb, var(--kit-text-inverse) 82%, transparent);
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 34%, transparent);
+  }
+  .kit-section--inverse .kit-form__alert-help { color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent); }
+</style>
+
+<script>
+  /**
+   * NOVALIDATE ONLY ONCE THIS SCRIPT IS RUNNING. The form carries a real `action` and `method`,
+   * so with scripts off or before they bind it still posts to the endpoint as form data, and the
+   * browser's own validation stands in for the piece's. The first version wrote `novalidate` into
+   * the markup, which switched native validation off on exactly the path that had nothing else.
+   */
+  const armNovalidate = () => document.querySelectorAll<HTMLFormElement>("form[data-kit-form]").forEach((f) => f.setAttribute("novalidate", ""));
+  armNovalidate();
+  document.addEventListener("astro:page-load", armNovalidate);
+
+  import { initKitForms } from "./form-runtime";
+  initKitForms();
+
+  /**
+   * The bookable window, measured from the visitor's clock rather than from the build.
+   *
+   * A `min` stamped into the HTML at build time is correct on the day it ships and quietly wrong
+   * every day after, and the failure is invisible: the picker offers dates the validation then
+   * refuses, with an error blaming the visitor. Setting both attributes here means the native
+   * picker and the validation read the same rule, and it is right every morning.
+   */
+  (() => {
+    const w = window as unknown as { __kitBookingWindow?: boolean };
+    if (w.__kitBookingWindow) return;
+    w.__kitBookingWindow = true;
+
+    const iso = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+    const applyWindow = () => {
+      document.querySelectorAll<HTMLInputElement>("[data-kit-date-window]").forEach((el) => {
+        const lead = Number(el.getAttribute("data-kit-lead-days") || "1");
+        const horizon = Number(el.getAttribute("data-kit-horizon-days") || "60");
+        const first = new Date();
+        first.setHours(0, 0, 0, 0);
+        first.setDate(first.getDate() + (Number.isFinite(lead) ? lead : 1));
+        const last = new Date(first);
+        last.setDate(first.getDate() + (Number.isFinite(horizon) ? horizon : 60));
+        el.setAttribute("min", iso(first));
+        el.setAttribute("max", iso(last));
+      });
+    };
+
+    document.addEventListener("astro:page-load", applyWindow);
+    applyWindow();
+  })();
+</script>

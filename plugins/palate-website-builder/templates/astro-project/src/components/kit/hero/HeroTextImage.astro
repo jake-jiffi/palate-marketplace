@@ -1,0 +1,167 @@
+---
+/**
+ * HeroTextImage: a claim that needs a paragraph, next to one strong image.
+ *
+ * Reach for this when the argument does not fit in a headline and there is a single photograph or
+ * illustration worth the space. If the product itself is the proof, HeroCentredPreview shows it
+ * better; if the image is a full-bleed photograph of the work, HeroServicePhoto frames it better.
+ *
+ * The image slot is a ratio box, so a build that has not sourced its photography yet renders a
+ * tinted panel of the right shape rather than a collapsed layout that has to be redesigned once
+ * the picture arrives. That is deliberate: the hole is the correct size from the first render.
+ *
+ * The heading level is a prop because a hero is an h1 on a home or landing page and an h2 if a
+ * page ever carries a second one. Nothing in the piece assumes it owns the page's only h1.
+ */
+export interface HeroCta {
+  label: string;
+  href: string;
+  /** First call to action defaults to primary, any later one to secondary. */
+  variant?: "primary" | "secondary";
+}
+export interface HeroImage {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+}
+export interface Props {
+  headline?: string;
+  lede?: string;
+  /** One or two. With one, the row simply holds one button. */
+  ctas?: HeroCta[];
+  /** 16:9 or 4:3. Null renders the ratio box empty rather than collapsing the column. */
+  image?: HeroImage | null;
+  ratio?: "wide" | "photo" | "portrait";
+  /** Put the image first on wide screens. On narrow screens the words always come first. */
+  imageFirst?: boolean;
+  level?: 1 | 2;
+  /**
+   * Which ground this piece sits on. One name and one vocabulary across the whole kit, so a page
+   * can alternate grounds without having to remember which piece calls it what. Every semantic
+   * token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  headline = "Kitchens built to outlast the house they sit in",
+  lede = "We measure, make and fit every cabinet in our own workshop in Marrickville, so the joinery you approve on paper is the joinery that arrives.",
+  ctas = [
+    { label: "Request a quote", href: "/contact" },
+    { label: "See recent work", href: "/work" },
+  ],
+  image = null,
+  ratio = "wide",
+  imageFirst = false,
+  level = 1,
+  id,
+  tone = "default",
+} = Astro.props;
+
+const Heading = level === 2 ? "h2" : "h1";
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `hti-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const calls = ctas.slice(0, 2);
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section class:list={["kit-section", toneClass, "hero", imageFirst && "hero--image-first"]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container hero__grid">
+    <div class="hero__words">
+      <Heading id={headingId} class="kit-display">{headline}</Heading>
+      {lede && <p class="kit-lede kit-muted hero__lede">{lede}</p>}
+      {calls.length > 0 && (
+        <div class="hero__ctas">
+          {calls.map((cta, index) => (
+            <a
+              class:list={[
+                "kit-btn",
+                (cta.variant ?? (index === 0 ? "primary" : "secondary")) === "primary"
+                  ? "kit-btn--primary"
+                  : "kit-btn--secondary",
+                "hero__cta",
+              ]}
+              href={cta.href}
+            >
+              {cta.label}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div class="hero__figure">
+      <div class:list={["kit-media", `kit-media--${ratio}`]}>
+        {image && (
+          <img
+            src={image.src}
+            alt={image.alt}
+            width={image.width}
+            height={image.height}
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+          />
+        )}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero__grid {
+    display: grid;
+    gap: var(--kit-gutter);
+    align-items: center;
+  }
+
+  .hero__words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-lg);
+    /* A very long headline must not drag the column past the reading measure. */
+    min-width: 0;
+  }
+  .hero__lede { margin: 0; }
+
+  .hero__ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-md);
+    margin-top: var(--kit-space-xs);
+  }
+  /* On the narrowest screens a two-word button and a five-word button should not sit at two
+     different widths, so each takes the full line until there is room for both. */
+  .hero__cta { flex: 1 1 auto; }
+
+  .hero__figure { min-width: 0; }
+
+  .hero__cta:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  @media (min-width: 40em) {
+    .hero__cta { flex: 0 0 auto; }
+  }
+
+  @media (min-width: 56em) {
+    .hero__grid {
+      grid-template-columns: 1.05fr 1fr;
+      gap: var(--kit-space-3xl);
+    }
+    .hero--image-first .hero__words { order: 2; }
+    .hero--image-first .hero__figure { order: 1; }
+  }
+</style>

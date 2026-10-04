@@ -3,6 +3,11 @@ description: Change existing copy in plain language. Finds the right file, edits
 argument-hint: "[what to change, e.g. \"the homepage hero should lead with the 20-year guarantee\"]"
 ---
 
+For a project with `palate.project.json` (including a parent directory), use the live-design route below. If the marker is corrupt or unsupported, report it and leave state unchanged.
+
+Continue the selected site using its source profile and pinned runtime. Preserve working journeys, normal motion and source identity. Refresh affected option and build evidence after edits. Read `../references/live-build.md` for the exact commands, then finish this command without executing the legacy instructions below. Projects without the new marker retain the following workflow.
+
+
 Change words that are already on the site. Say what you want in plain language and this finds
 where that copy actually lives, edits it there, and checks only the routes that moved.
 

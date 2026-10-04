@@ -5,7 +5,13 @@
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 LINT="$DIR/../ux-lint.sh"
-FIX="$DIR/fixtures/uxlint"
+# THE FIXTURES ARE COPIED OUT OF THE REPO FIRST. ux-lint refuses any directory inside a Claude
+# Code plugin checkout (this one), because run from a plugin it grades the plugin: the doctrine
+# QUOTES the tells it hunts. A fixture that lives here must be linted somewhere else.
+FIXSRC="$DIR/fixtures/uxlint"
+FIXTMP="$(mktemp -d)"; trap 'rm -rf "$FIXTMP"' EXIT
+cp -R "$FIXSRC" "$FIXTMP/uxlint"
+FIX="$FIXTMP/uxlint"
 pass=0; fail=0
 
 # ux-lint takes a project DIRECTORY, so each case lives in its own dir.

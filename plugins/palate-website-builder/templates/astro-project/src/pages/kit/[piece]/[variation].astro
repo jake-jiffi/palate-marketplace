@@ -1,0 +1,39 @@
+---
+/**
+ * ONE PAGE PER VARIATION, at rest, with every state it declares one click away.
+ *
+ * This is the surface the kit is judged on, and it is deliberately not a screenshot gallery: the
+ * frame below mounts the REAL component, so a piece that does not compile, does not render, or
+ * throws on its own defaults fails the build rather than a client's site. "Forty five variations
+ * exist" is a fact the build proves rather than a number in a manifest.
+ *
+ * SAMPLE PROPS COME FROM src/lib/kit-sample.ts, NOT FROM THE COMPONENTS.
+ *
+ * A component may not default an identity, an asset path or a list of customer quotes, because an
+ * omitted prop then becomes an invented firm or a broken image on a real client's site. That would
+ * leave the demo pages with nothing to show, which would make the kit unjudgeable, so the fiction
+ * lives in one file that only the framed demo imports. A variation with no entry there renders on
+ * its own defaults, which is the correct reading: it needs nothing invented to look right.
+ */
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import DemoViewer from "../../../components/kitdemo/DemoViewer.astro";
+import { kit } from "../../../lib/kit";
+
+export function getStaticPaths() {
+  return kit.flatMap((piece) =>
+    piece.variations.map((v) => ({
+      params: { piece: piece.id, variation: v.id },
+      props: { piece, variation: v },
+    })),
+  );
+}
+
+const { piece, variation } = Astro.props;
+---
+<BaseLayout
+  title={`${variation.name} - ${piece.name}`}
+  description={variation.when}
+  noindex={true}
+>
+  <DemoViewer piece={piece} variation={variation} state="rest" />
+</BaseLayout>

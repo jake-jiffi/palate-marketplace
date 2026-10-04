@@ -1,0 +1,405 @@
+---
+/**
+ * SCREENSHOT SHOWCASE.
+ *
+ * Use this when the product has several screens worth comparing and the visitor's real question
+ * is "what will I be looking at all day". One hero screenshot answers "does it exist"; a set
+ * answers "does it fit how we work", which is the harder sale.
+ *
+ * Two decisions worth explaining.
+ *
+ * The thumbnail is an ANCHOR pointing at the full-size image, not a button. With no JavaScript,
+ * or in a browser without <dialog>, clicking it still shows the image, which is the whole job of
+ * the piece. Where <dialog> is available the script intercepts the click and opens the enlarged
+ * view instead, so the good experience is an upgrade rather than a requirement. Modified clicks
+ * (cmd, ctrl, shift, middle button) are left alone so "open in a new tab" keeps working.
+ *
+ * The thumbnail image carries an EMPTY alt because the caption sits immediately beneath it and
+ * is the text alternative; repeating it would make every link announce twice. The enlarged image
+ * inside the dialog carries the real alt, because there the caption is the only other text and
+ * the screenshot itself is the content.
+ *
+ * Content note: the default screenshots are a plainly fictional trades scheduling tool. Replace
+ * the paths, the alt text and the captions with the real product before shipping.
+ */
+
+export interface Screenshot {
+  /** Thumbnail image. */
+  src: string;
+  /** What the screen shows, written for someone who cannot see it. Used on the enlarged view. */
+  alt: string;
+  /** One line naming what this screen is for. Shown under the thumbnail and in the dialog. */
+  caption: string;
+  /** Full-size image, if it differs from the thumbnail. Falls back to src. */
+  full?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  /** Two to six screens. Fewer than two is a single image, not a showcase. */
+  screenshots?: Screenshot[];
+  /** Shown instead of the grid when there are no screenshots yet. */
+  emptyMessage?: string;
+  /** Visible affordance on each thumbnail, and part of its accessible name. */
+  enlargeLabel?: string;
+  closeLabel?: string;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "The screens you will be in every day",
+  lede = "Four views from a working account, so you can judge the fit before you sign up for anything.",
+  /* Empty by default. A defaulted screenshot path 404s on every site that does not carry that exact file; the demo pages pass samples from src/lib/kit-sample.ts. */
+  screenshots = [],
+  emptyMessage = "Screenshots are being prepared for this release.",
+  enlargeLabel = "View full size",
+  closeLabel = "Close",
+  tone = "default",
+  class: className,
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `ds-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const captionId = `${uid}-dialog-caption`;
+const shots = screenshots ?? [];
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "ds", className]}
+  aria-labelledby={headingId}
+  data-kit-screenshots
+>
+  <div class="kit-container">
+    <div class="ds-intro kit-stack">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {shots.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ul class="ds-grid" role="list">
+        {shots.map((shot) => (
+          <li class="ds-item">
+            <a
+              class="ds-thumb"
+              href={shot.full ?? shot.src}
+              data-ds-open
+              data-ds-src={shot.full ?? shot.src}
+              data-ds-alt={shot.alt}
+              data-ds-caption={shot.caption}
+            >
+              <span class="kit-media kit-media--wide ds-media">
+                <img
+                  src={shot.src}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width={shot.width}
+                  height={shot.height}
+                />
+              </span>
+              <span class="ds-caption">{shot.caption}</span>
+              <span class="ds-hint">{enlargeLabel}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  {/*
+    KNOWN, MEASURED, AND NOT WORTH FAKING A FIX FOR. This dialog holds exactly one focusable
+    element, and tabbing through it reads Close, then a stop where activeElement is the body, then
+    Close again: one press in three lands on nothing visible. That is the browser's own handling of
+    a modal whose focus cycle has a single member, not something the markup here decides.
+    `tabindex="-1"` on the dialog was tried and measured: the cycle is unchanged, so it was removed
+    rather than left in place with a comment claiming it did something. Adding a decorative second
+    stop to fill the cycle would be worse than the thing it hides. Focus never leaves the dialog,
+    Escape closes it, and focus returns to the thumbnail that opened it, all verified.
+  */}
+  <dialog class="ds-dialog" data-ds-dialog aria-labelledby={captionId}>
+    <div class="ds-dialog__inner" data-ds-frame>
+      <div class="ds-dialog__bar">
+        <p class="ds-dialog__caption kit-body" id={captionId} data-ds-caption-target></p>
+        {/* Previous and next, so a reader walks the set without closing and reopening; the
+            arrow keys do the same while the dialog is open. */}
+        <button type="button" class="kit-btn kit-btn--secondary ds-dialog__step" data-ds-prev aria-label="Previous screenshot">
+          <span aria-hidden="true">&larr;</span>
+        </button>
+        <button type="button" class="kit-btn kit-btn--secondary ds-dialog__step" data-ds-next aria-label="Next screenshot">
+          <span aria-hidden="true">&rarr;</span>
+        </button>
+        <button type="button" class="kit-btn kit-btn--secondary ds-dialog__close" data-ds-close>
+          {closeLabel}
+        </button>
+      </div>
+    </div>
+  </dialog>
+</section>
+
+<style>
+  .ds-intro { margin-block-end: var(--kit-space-2xl); }
+
+  /* Reflow without a media query: the track floor is derived from the reading measure, so the
+     grid goes one column on a phone, two on a tablet and three or four on a desktop, and it does
+     the same thing inside a narrow container as it does at full width. */
+  /*
+   * TWO COLUMNS, AND THE LAST ITEM SPANS BOTH WHEN THE COUNT IS ODD.
+   *
+   * auto-fit chose three columns on a wide screen, which orphans the fourth of four: three across
+   * and one alone beside two thirds of nothing. The manifest allows two to six screenshots, so the
+   * column count has to fill at every count in that range, and two does, given the span: 2 -> [2],
+   * 3 -> [2, 1 spanning], 4 -> [2, 2], 5 -> [2, 2, 1 spanning], 6 -> [2, 2, 2]. It also gives a
+   * screenshot roughly half the container rather than a third, which is the difference between
+   * being able to read the screen and being shown that one exists.
+   */
+  .ds-grid {
+    display: grid;
+    gap: var(--kit-gutter);
+    grid-template-columns: minmax(0, 1fr);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .ds-item { min-width: 0; }
+
+  @media (min-width: 40em) {
+    .ds-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* An odd count leaves one item on its own; it takes the whole row rather than half of it. */
+    .ds-item:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  }
+
+  .ds-thumb {
+    display: grid;
+    gap: var(--kit-space-sm);
+    color: var(--kit-text);
+    text-decoration: none;
+  }
+
+  .ds-media {
+    border: var(--kit-border-width) solid var(--kit-border);
+    transition: border-color var(--kit-duration) var(--kit-ease);
+  }
+
+  .ds-caption {
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-snug);
+    text-wrap: pretty;
+  }
+
+  .ds-hint {
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+    text-decoration: underline;
+    transition: color var(--kit-duration) var(--kit-ease);
+  }
+
+  .ds-thumb:hover .ds-media { border-color: var(--kit-border-strong); }
+  .ds-thumb:hover .ds-hint { color: var(--kit-accent-ink); }
+
+  .ds-thumb:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .ds-dialog {
+    width: min(94vw, var(--kit-page-max));
+    max-width: min(94vw, var(--kit-page-max));
+    max-height: 92vh;
+    padding: var(--kit-space-md);
+    background: var(--kit-bg);
+    color: var(--kit-text);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+  }
+
+  .ds-dialog::backdrop {
+    background: color-mix(in srgb, var(--kit-bg-inverse) 76%, transparent);
+  }
+
+  .ds-dialog__inner {
+    display: grid;
+    gap: var(--kit-space-md);
+  }
+
+  .ds-dialog__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 68vh;
+    object-fit: contain;
+    background: var(--kit-media-placeholder);
+    border-radius: var(--kit-media-radius);
+  }
+
+  .ds-dialog__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kit-space-md);
+  }
+
+  .ds-dialog__caption { flex: 1 1 calc(var(--kit-measure) / 2); }
+  .ds-dialog__close { flex: none; }
+  .ds-dialog__step { flex: none; min-inline-size: var(--kit-target); }
+
+  .ds-dialog__close:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+</style>
+
+<script>
+  // Bound once for the whole document and delegated from `document`, because Astro's ClientRouter
+  // replaces the body on navigation: a listener attached to a section would go with it, and this
+  // module is not re-executed after the first load.
+  (() => {
+    const store = window as unknown as Record<string, boolean | undefined>;
+    if (store.__kitDemoScreenshotsBound) return;
+    store.__kitDemoScreenshotsBound = true;
+
+    const dialogReady =
+      typeof HTMLDialogElement !== "undefined" &&
+      typeof HTMLDialogElement.prototype.showModal === "function";
+    // Without <dialog> the thumbnails stay ordinary links to the full-size image.
+    if (!dialogReady) return;
+
+    let opener: HTMLElement | null = null;
+
+    /* THE ENLARGED IMAGE IS CREATED ON FIRST OPEN, NOT SERVER-RENDERED.
+       There is nothing to point it at before a thumbnail is clicked, so the markup used to carry
+       an <img> with no src: invalid HTML (src is required), and a broken-image element sitting in
+       every page that mounts this piece. It is inside a closed dialog so nobody ever saw it,
+       which is exactly why it survived. Made here instead, once per dialog, so a page that never
+       opens the lightbox never carries one. */
+    const imageFor = (dialog: HTMLDialogElement): HTMLImageElement | null => {
+      const existing = dialog.querySelector("[data-ds-image]");
+      if (existing instanceof HTMLImageElement) return existing;
+      const frame = dialog.querySelector("[data-ds-frame]");
+      if (!(frame instanceof HTMLElement)) return null;
+      const image = document.createElement("img");
+      image.className = "ds-dialog__img";
+      image.decoding = "async";
+      image.alt = "";
+      image.setAttribute("data-ds-image", "");
+      frame.prepend(image);
+      return image;
+    };
+
+    /** Put one thumbnail's image and caption in its section's dialog, and open it if closed. */
+    const show = (trigger: HTMLAnchorElement): boolean => {
+      const section = trigger.closest("[data-kit-screenshots]");
+      const dialog = section ? section.querySelector("[data-ds-dialog]") : null;
+      if (!(dialog instanceof HTMLDialogElement)) return false;
+      const image = imageFor(dialog);
+      if (image) {
+        image.src = trigger.dataset.dsSrc || trigger.href;
+        image.alt = trigger.dataset.dsAlt || "";
+      }
+      const caption = dialog.querySelector("[data-ds-caption-target]");
+      if (caption instanceof HTMLElement) caption.textContent = trigger.dataset.dsCaption || "";
+      const triggers = section ? Array.from(section.querySelectorAll<HTMLAnchorElement>("[data-ds-open]")) : [trigger];
+      const at = triggers.indexOf(trigger);
+      dialog.querySelectorAll<HTMLButtonElement>("[data-ds-prev], [data-ds-next]").forEach((b) => {
+        const next = b.hasAttribute("data-ds-next");
+        b.disabled = next ? at >= triggers.length - 1 : at <= 0;
+      });
+      if (!dialog.open) {
+        opener = trigger;
+        dialog.showModal();
+      } else {
+        opener = trigger;
+      }
+      return true;
+    };
+
+    /** Move to the neighbouring screenshot of the open dialog's section. */
+    const step = (direction: 1 | -1) => {
+      const open = document.querySelector("dialog[data-ds-dialog][open]");
+      const section = open ? open.closest("[data-kit-screenshots]") : null;
+      if (!section || !opener) return;
+      const triggers = Array.from(section.querySelectorAll<HTMLAnchorElement>("[data-ds-open]"));
+      const at = triggers.indexOf(opener as HTMLAnchorElement);
+      const target = triggers[at + direction];
+      if (target) show(target);
+    };
+
+    /* CAPTURE PHASE. <ClientRouter /> also listens for clicks on `document` to drive view
+       transitions, and it registers first, so a bubble-phase handler here lost: clicking a
+       thumbnail NAVIGATED to the raw image file instead of opening the lightbox. Taking the
+       click in the capture phase means this runs before the router. Modified clicks and
+       middle clicks still fall through untouched below, so "open in a new tab" keeps working,
+       which is the reason the anchor has a real href in the first place. */
+    document.addEventListener("click", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      if (!origin) return;
+
+      if (origin.closest("[data-ds-close]")) {
+        const parent = origin.closest("dialog");
+        if (parent instanceof HTMLDialogElement) parent.close();
+        return;
+      }
+
+      // A click that lands on the dialog element itself is a click on the backdrop or the frame
+      // around the content, never on the content, so it closes.
+      if (origin instanceof HTMLDialogElement && origin.hasAttribute("data-ds-dialog")) {
+        origin.close();
+        return;
+      }
+
+      if (origin.closest("[data-ds-prev], [data-ds-next]")) {
+        step(origin.closest("[data-ds-next]") ? 1 : -1);
+        return;
+      }
+
+      const trigger = origin.closest("[data-ds-open]");
+      if (!(trigger instanceof HTMLAnchorElement)) return;
+      if (event.defaultPrevented) return;
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (!show(trigger)) return;
+      event.preventDefault();
+    }, { capture: true });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const open = document.querySelector("dialog[data-ds-dialog][open]");
+      if (!open) return;
+      event.preventDefault();
+      step(event.key === "ArrowRight" ? 1 : -1);
+    });
+
+    // `close` does not bubble, so it is caught on the way down instead of on the way up.
+    document.addEventListener(
+      "close",
+      (event) => {
+        const dialog = event.target;
+        if (!(dialog instanceof HTMLDialogElement)) return;
+        if (!dialog.hasAttribute("data-ds-dialog")) return;
+        const returnTo = opener;
+        opener = null;
+        if (returnTo && returnTo.isConnected) returnTo.focus();
+      },
+      true,
+    );
+  })();
+</script>
