@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" role="img" aria-label="An abstract stand-in for the before photograph, with broken edges">
+<title>An abstract stand-in for the before photograph, with broken edges</title>
+<rect width="1200" height="900" fill="#d8cfc2"/>
+<rect width="1200" height="900" fill="url(#wash5)"/>
+<path d="M216,0 L552,0 L1080,900 L600,900 Z" fill="#f2ebe0" opacity=".22"/>
+<path d="M0,900 L0.0,427.0 L85.7,381.1 L171.4,417.6 L257.1,384.4 L342.9,362.9 L428.6,317.6 L514.3,334.5 L600.0,438.8 L685.7,371.3 L771.4,329.8 L857.1,409.5 L942.9,379.2 L1028.6,422.8 L1114.3,327.5 L1200.0,393.9 L1200,900 Z" fill="#b9ad9c"/>
+<path d="M0,900 L0.0,531.0 L85.7,488.1 L171.4,458.7 L257.1,472.9 L342.9,457.9 L428.6,518.3 L514.3,544.0 L600.0,532.4 L685.7,490.1 L771.4,544.9 L857.1,512.2 L942.9,552.5 L1028.6,527.9 L1114.3,449.6 L1200.0,506.2 L1200,900 Z" fill="#9a8f7f"/>
+<path d="M0,900 L0.0,662.7 L85.7,640.3 L171.4,646.6 L257.1,641.6 L342.9,650.6 L428.6,666.2 L514.3,634.3 L600.0,650.2 L685.7,608.5 L771.4,567.2 L857.1,565.5 L942.9,652.0 L1028.6,618.8 L1114.3,575.0 L1200.0,597.3 L1200,900 Z" fill="#7b7264"/>
+<path d="M0,900 L0.0,706.6 L85.7,722.2 L171.4,739.7 L257.1,775.1 L342.9,699.6 L428.6,771.8 L514.3,741.8 L600.0,676.7 L685.7,737.2 L771.4,785.2 L857.1,706.0 L942.9,688.3 L1028.6,705.8 L1114.3,714.1 L1200.0,677.5 L1200,900 Z" fill="#5c554b"/>
+<defs><linearGradient id="wash5" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f2ebe0" stop-opacity=".45"/><stop offset="1" stop-color="#f2ebe0" stop-opacity="0"/>
+</linearGradient></defs>
+</svg>

@@ -1,0 +1,165 @@
+# The build manifest (`build-manifest.json`)
+
+The machine-readable record of what a build actually did, written to the project
+root during a build by the PostToolUse hook (`hooks/palate-manifest.mjs`). It is
+populated from real tool **telemetry**, not the agent's narration, so the gates
+that read it cannot be talked around. Every enforcement gate hangs off this file.
+
+## Schema
+
+```jsonc
+{
+  "schema": 3,
+  "created_at": "ISO-8601",
+  "business": "free-text brief (optional; the agent may set it)",
+  "signature_move": { "name": "...", "source_slug": "..." },  // optional, agent-set
+
+  // --- what this build was built WITH (hook-set) ---
+  "plugin_version": "1.17.0",                     // hook-set: the plugin's own VERSION file
+  "mcp_version": "2026-09-09.catalogue-stamp",    // hook-set: the MCP's version, as the MCP reports it
+  "library": { "references": 2170, "catalogue_stamp": "2026-07-09T04:12:55.108Z" }, // hook-set: from the MCP's refs_list_verticals answer; null when it did not say
+  "library_unverified": false,                    // hook-set: true until the MCP sends a stamp. A missing stamp never reads as a verified one
+  "rubric_version": null,                         // hook-set: the vendored rubric's own RUBRIC_VERSION export, null when it has none
+  "rubric_unverified": true,                      // hook-set: true while rubric.mjs exports no version. FOLLOW-UP: the constant belongs grader-side (see below)
+  "mcp_calls": [
+    { "tool": "mcp__palate__refs_search", "args": { ... }, "slugs": ["..."], "ts": "..." }
+  ],
+  "references_surveyed": ["slug", "..."],        // unique slugs seen across all calls
+  "inner_pages_viewed": [{ "slug": "...", "page": "pricing" }],
+  "layers_read": ["signature_moves", "do_dont", "..."], // R2: rich refs_get layers pulled
+  "files_written": ["src/pages/index.astro", "..."],
+  "files_written_outside": [],                    // hook-set: writes that landed OUTSIDE the project. Recorded, never counted as part of the build
+  "project": "/abs/path/to/{slug}-site",          // hook-set: the project this manifest is FOR (hooks/project-dir.mjs). A different project starts a fresh manifest
+  "project_resolved_by": "hint",                  // hook-set: env | hint | cwd | child | fallback. "fallback" means nothing was detected
+  "mcp_failures": [],                             // hook-set: Palate calls that were REFUSED or came back empty. NOT grounding, but never erased
+  "stop_gate": null,                              // Stop-hook release latch: { fingerprint, unchanged, total, reasons, at }. Cleared once the evidence clears
+  "sections": [],                                 // optional, agent-set: section -> donor provenance
+
+  // --- schema 3 evidence blocks (the divergent spine + visual loop) ---
+  // The agent may set the DESCRIPTIVE fields it genuinely knows; every pass/fail
+  // verdict is computed by a script from a real artefact and folded in by
+  // scripts/manifest-merge.mjs. The hook NEVER sets a pass/fail.
+  "diverge": null,      // MODE-AWARE: { ran, n, mode, axes_varied:[...], locked:{...}, concepts:[{ id, mechanic, lens, analogical_seed, conventionality:0..1, colourway, type, layout, motion, density, art_direction }] }
+  "converge": null,     // { ran, scored:[{ id, originality:0..5, craft_feasibility:0..5, combined:0..5 }], advanced:[id,...] }
+  "commission": null,   // A.3.5: { bar, intensity:"high"|"calm", concept, vision, chosen_mechanisms:[{ name, recipe, precedent_slug, astro_recipe_pulled, fit_reason }], proof:{ viewports, read_pixels, read_console, mobile_friendly, holds_60fps, honours_reduced_motion }, restraint_note, explore_skip?:bool } - agent-set descriptive only; intensity arms the v1.5 bold bar in scripts/gate-done.sh (high -> pairwise + ambition + full-Explore enforced); explore_skip records a named-direction Explore exemption; intensity_asked (1..4) is the calibration answer the CLIENT gave, recorded beside intensity and never over it - the asked one sets the default pick suggestion, the inferred one still governs the bold bar
+  "variants": [],       // [{ id, name, concept_id, donor_slugs:[], html_path }] - no `route`: a board is an artboard, not a page. html_path is the ARCHIVED ARTBOARD, .palate/explore/shots/<id>/rendered.html, which gate-novelty.mjs reads for the build-level comparison
+  "explore": null,      // W1 labels + the board record: { ran, boards:[{ id, rung, donor }], shown_at, canvas:{ url } | { skipped:true, reason }, shown:[{ id, name, donor_slug, position }], picks:[{ surface, variant_id, rung, position, picked_at }], question_round:{ motion, mix, cms, answered_at }, second_passes:int, cta, notes:[{ surface, variant_id, note, at }], edits:[...], proof:{ url, verified_at }, donor_row:{ skipped:true, reason } | { skipped:false, count, slugs:[] }, board_judgements:[{ id, donor, rung, rungs:{ entrance, foot, inner }, consistent, run_token, judged_at, board_hero, board_foot, board_inner }] } - persisted to builds.log.json by palate-stop.mjs. boards-render.mjs writes boards + shown_at + shown + donor_row (donor_row records a skipped donor row with its reason, so a canvas drawn without the references its boards reproduce cannot be mistaken for one whose donors were never recorded), gate-board-judge.mjs writes board_judgements (one entry per registered board, judged on THREE surfaces against its donor: the entrance, the page ending and the inner page, each read at the lower of its two orders, with rungs carrying the three readings and rung the LOWEST of them, which is what gate-explore.mjs reads to block a shown board that was never compared with its donor or was read below the bar, and the bar is comparable or better on every surface the direction was judged on, so both somewhat_worse and clearly_worse refuse; a surface that could not be judged records null in rungs and null for its fingerprint, which happens when the library holds no whole-page capture for that reference, and gate-explore.mjs WARNS rather than blocks so nobody reads the lowest of two surfaces as the lowest of three; board_hero/board_foot/board_inner fingerprint the stills the verdicts are about, so a redraw of any surface is judged again), palate-pick.mjs writes the rest through manifest-merge.mjs and there is a flag for every field of it (--hero/--section, --intensity, --cta, --note, --canvas-url | --canvas-skipped, --answer, --second-pass, --proof), so none of it is ever hand-edited; time to pick is picked_at - shown_at, which is the only number this stage has ever produced. A board is its ARTBOARD and a DIRECTION is four of them (src/lib/variants.ts carries artboard:"B<rung>.dc.html" plus presentation:{ inner, mobile, sheet } naming I/M/S<rung>.dc.html, and pieces:{ <piece>:{ variation, donor } } for at least navigation, hero, trust, cta, forms, footer and the direction's own section, all required; there is no route, and gate-explore.mjs checks every variation against src/lib/kit.ts, every donor against references_surveyed and the detail sheet's own data-kit-piece marks against the registry's variations), so canvas says what happened to the published canvas and gate-explore.mjs blocks a shown build that recorded neither a url nor a reason, and gate-done.sh blocks a build that recorded picks without a complete question_round (palate-pick.mjs --answer motion=... --answer mix=... --answer cms=...)
+  "compose": null,      // SCRIPT-set, by scripts/palate-pick.mjs only: { pages:[{ route, page_type, shot, shot_sha256, looked_at, verdict }], overrides:[{ route, section, what, reason, recorded_at }] } - the record that somebody OPENED the built pages. A real build shot 101 screenshots and finished with nothing saying one of them had been held against the board it was composed from, because a screenshot proves a page RENDERED and says nothing about whether it still carries the picked direction. `--looked <route> --shot .palate-shots/<file>.png --verdict "<what you can see>"` writes one entry per route (a second look at the same route REPLACES the first, so one look at the home page can never stand in for five): the shot must sit under .palate-shots/ and be NEWER than dist/client/<route>/index.html, since a sentence about pixels replaced afterwards is a sentence about a page nobody has seen, and it is fingerprinted with sha256 so the record names the exact image; the verdict must run past 40 characters and must not carry an empty phrase ("looks good", "matches the board", "no issues", "as designed"), which is the shape a model reaches for when it did not open anything ("fine" is NOT on that list: "the hairline rule is fine at 1px, the kicker is gone" is a real reading). `--primary` beside `--looked` marks that route as the one the direction's DRAWN INNER PAGE (`inner.png`) became, at most one per build (a second `--primary` moves it, and the home page is refused because it has a board of its own): the page judge then holds that route's entrance against the drawn inner page rather than against the donor's home page, which is the comparison the client was actually shown. `--override <route> --section <band> --what "<what was done instead>" --reason "<why>"` APPENDS a deliberate departure from the board (the only photograph is too soft to bleed), and the reason IS the record: without it a departure is indistinguishable from drift. scripts/gate-look.mjs reads pages and blocks a picked build in which any PAGE TYPE built under dist/client was never looked at (page types are classified by scripts/lib/route-kind.mjs, shared with palate-pick so the two cannot disagree; /kit, /kit-frame, /explore, /404 and /thank-you are not the site), skipping before a pick exists and under PALATE_GATE_LOOK=0. **PALATE_GATE_LOOK=0 costs more than the look gate**: scripts/gate-page-judge.mjs takes the routes it judges from `compose.pages[]`, one per page type, so releasing the look narrows the judge's coverage to whatever somebody happened to look at, and a build with no recorded look at all leaves the page judge with nothing to judge and it skips. Release it knowing that, or record the looks. **`page_judgements`** is written by scripts/gate-page-judge.mjs (SCRIPT-set, never by hand): `[{ route, page_type, surfaces:["entrance","foot"], rungs:{ entrance, foot }, rung, against:{ entrance, foot }, fingerprints:{ entrance_sha, foot_sha, html_sha }, consistent, judged_at, run_token }]` - the BUILT page held against the picture it was composed from by the same pairwise instrument that judged the boards, because a gate that measures whether a page rendered cannot see bland and bland is what the eastcoast v3 home page (lifted from the board with six safe-looking edits that between them inverted the pick) and its eighteen unjudged inner pages were. The home page answers to the picked BOARD, every other page type to the board's DONOR, on the entrance and on the ending, both orders each; the lower ordering and the LOWEST surface stand, and the bar is the board judge's own (both somewhat_worse and clearly_worse refuse, at every intensity). A SURFACE WITH NO PICTURE IS DROPPED, NEVER THE RUN: the library holds no whole-page capture for some references, so `donor-foot.png` may not exist, and that route is then judged on its entrance alone with `surfaces:["entrance"]`, `rungs.foot: null` and the dropped surface named on stderr, exactly as gate-board-judge.mjs treats a donor with no full capture. A refused reading is recorded rather than discarded, so it can be fixed instead of re-argued. gate-done.sh runs `--check`, which reads the record alone and blocks when a looked page type carries no verdict, carries one below the bar, or carries one whose `html_sha` no longer matches the built page (a page refused, patched and rebuilt would otherwise sail on the verdict its old pixels earned); PALATE_GATE_JUDGE=0 releases it, the same switch that releases the board judge. A `--check` on a build with a looked route whose picked direction has NO picture at all for it SKIPS naming gate-board-judge.mjs rather than refusing, because a comparison nobody can make from here is not a finding about the site; a route judged on its entrance alone counts as judged
+  "architecture": null, // W16: { ran, pages:[{ route, pageType, purpose, donor_slug }], nav, journey, rationale } - the page inventory, read by the verifier's cross-page check (8.5)
+  "visual": null,       // SCRIPT-set: { ran, pass, iterations:[{ i, shots:{...}, axes:{...}, defects:[{type,location}], score }], console_errors:int }
+  "novelty": null,      // SCRIPT-set: { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
+  "verifier": null,     // SCRIPT-set: { ran, pass, verdict, report_path }
+  "buildability": null  // { ran, mechanics:[{ name, precedent_slug, astro_recipe_pulled:bool, feasible:bool, fallback }] }
+}
+```
+
+- **`mcp_calls`**, **`references_surveyed`**, **`inner_pages_viewed`**, **`layers_read`**,
+  **`files_written`** are written automatically by the hook (telemetry). The hook reads
+  the tool result (`tool_response`) and harvests every `slug` it returned, including
+  slugs inside stringified-JSON MCP text blocks. **Grounding is counted from the RESULT,
+  not the request:** a call only reaches `mcp_calls` when its result actually carried
+  content, and a refused, errored or empty call goes to `mcp_failures` instead, feeding
+  nothing into `references_surveyed`, `inner_pages_viewed` or `layers_read`. **The manifest
+  belongs to ONE project:** it lives in the project directory (package.json + src/pages,
+  resolved by `hooks/project-dir.mjs`, overridable with `PALATE_PROJECT_DIR`), is moved there
+  once when the scaffold first appears, and is started fresh rather than merged if the project
+  underneath it changes.
+- **The version stamps** answer "what was this built with", because the same brief run twice
+  against a different plugin, a different MCP deploy or a re-seeded library produces two
+  different sites and nothing used to record why. `plugin_version` and `rubric_version` are read
+  locally (the plugin's `VERSION`, and the vendored `rubric.mjs`'s own `RUBRIC_VERSION` export
+  when the grader adds one, since that file is byte-identical to the grader's copy and hash-pinned
+  in both repos, so the plugin reads it rather than writing one). **`rubric_version` is null on
+  every build today and `rubric_unverified` says so.** The constant has to be added in
+  palate-product's copy of `rubric.mjs` and will then be read here with no plugin change; that is
+  a tracked follow-up, and until it lands a re-grade cannot be attributed to a rubric change from
+  the manifest alone. `mcp_version` and `library` come
+  from the MCP's own `refs_list_verticals` answer, because only the server knows what its
+  catalogue currently holds, and the FIRST answer of a build is kept: a re-seed mid-build must not
+  rewrite what the survey actually read. An older MCP sends no stamp, which leaves `library: null`
+  and `library_unverified: true` standing rather than certifying a library nobody measured.
+- **`business`**, **`signature_move`**, **`sections`** are optional and may be set by
+  the agent/surveyor to record intent; the depth gate cross-checks them against the
+  telemetry (e.g. a declared signature move's `source_slug` must appear in
+  `references_surveyed`).
+- **The schema-3 evidence blocks** record the divergent-then-convergent concept spine
+  (`diverge`, `converge`), the **build commission** (`commission`, the ambition bar +
+  the chosen toolkit made explicit at A.3.5 - `references/build-commission.md`), the
+  Explore variants and their donors (`variants`), the buildability oracle
+  (`buildability`), and the COMPUTED verdicts of the visual loop, the novelty check and
+  the verifier (`visual`, `novelty`, `verifier`). The agent sets the descriptive parts
+  (concepts, scores, donor slugs, the commission's bar / concept / vision / chosen
+  mechanisms / proof requirements); the `pass`/`fail` inside `visual`/`novelty`/`verifier`
+  is set ONLY by a script reading a real artefact (screenshots, rendered HTML, a gate's
+  exit code), never by an LLM boolean. The commission's ambition bar is likewise judged
+  by the verifier from the render, not self-claimed in the manifest. This is the
+  anti-reward-hacking rule: "done" is machine-checkable, not self-claimed.
+- A schema-1/2 manifest is upgraded in place on the next hook write: the new blocks
+  (including `commission`) are added (null / empty) without touching any existing field,
+  and `schema` becomes 3. `commission` is additive within schema 3: a schema-3 manifest
+  written before it existed gets `commission: null` backfilled on the next hook write,
+  no schema bump.
+- Note: the manifest `sections` field is the section -> donor provenance map (which
+  donor each section came from). It is UNRELATED to the `refs_get` `layer` arg, which
+  is the renamed retrieval selector (concept / pages / tokens / signature_moves / ...).
+
+## The `diverge` block is mode-aware
+
+The build's BRAND MODE is set at state-init (`.palate-skill-state.json` `brandMode`) from
+the Phase 0 outcome: **brand-creation** when no brand was provided (no package, no real
+tokens / assets, no stated colours+fonts, so the skill is inventing the identity), or
+**brand-provided** when a brand package resolved, real tokens / assets were extracted, or
+the brief stated colours+fonts. A partial brand (colour only, or a logo only) is
+brand-provided: the provided half is LOCKED and the missing half is chosen to fit it.
+
+The agent sets these DESCRIPTIVE fields on `diverge` (the hook never does); the two gates
+read `brandMode` from the marker and judge validity accordingly:
+
+```jsonc
+"diverge": {
+  "ran": true,
+  "n": 8,
+  "mode": "brand-creation" | "brand-provided",   // MUST equal the marker's brandMode
+  "axes_varied": ["colourway","type","mood","layout","motion"], // the axes this set varied
+  "locked": { "colour": false, "type": false }
+          // brand-provided: { "colour": true, "type": true, "palette_source": "@palate/brand@2.1.0", "faces": ["soehne","tiempos"] }
+  "concepts": [
+    { "id":"c1", "mechanic":"...", "lens":"...", "analogical_seed":"...", "conventionality":0.1,
+      "layout":"split-canvas, left rail", "motion":"scroll-rise tide", "density":"airy", "art_direction":"documentary photo",
+      "colourway":"ink + bone + signal-red",  // brand-creation only; CONSTANT (locked) in brand-provided
+      "type":"grotesk display + serif body" } // brand-creation only; CONSTANT (locked) in brand-provided
+  ]
+}
+```
+
+The mode-aware validity rule (enforced byte-identically by `hooks/palate-pretooluse.mjs`
+at write-time and `scripts/gate-novelty.mjs --require-diverge` at done-time):
+
+- **Both modes**: `>= 8` concepts, each with a `conventionality` self-tag and a creative
+  axis tag; a conventionality spread (`max - min >= 0.4`); a low-typicality tail
+  (`>= 1` concept at `<= 0.3`); and `converge.advanced >= 1`. `diverge.mode` must equal
+  the marker's `brandMode` (anti-tamper: you cannot record one mode to dodge the other's
+  bar).
+- **brand-creation**: the FULL identity space must vary. `colour` AND `type` must be in
+  `axes_varied`, and the concepts must show `>= 3` distinct `colourway` values AND `>= 3`
+  distinct `type` directions, plus distinct `lens|analogical_seed` signatures (`>= 6`). So
+  the single-default-style failure (one colourway + one type pairing across all 8) cannot
+  be recorded as valid.
+- **brand-provided**: `colour` + `type` are LOCKED. They MUST NOT appear in `axes_varied`;
+  `locked.colour` and `locked.type` must be `true`; and `colourway` / `type` must be
+  constant across concepts (`<= 1` distinct each). Distinctness is judged on the allowed
+  within-brand axes (`layout`, `composition`, `section_logic`, `motion`, `density`,
+  `art_direction`): `>= 2` of them declared in `axes_varied` and `>= 6` distinct skins.
+  The brand colour and fonts are never varied away from the brand.
+
+Thresholds are env-tunable (`PALATE_MIN_DIVERGE`, `PALATE_MIN_DISTINCT_SIGS`,
+`PALATE_MIN_CONV_SPREAD`, `PALATE_LOW_TAIL_MAX`, `PALATE_MIN_AXIS_DISTINCT`). The escape
+hatch for a non-standard need is `PALATE_GATE_OFF=1`; the wall only fires inside an active
+build site (a `.palate-skill-state.json` marker), so non-build sessions are never trapped.
+
+## What reads it
+
+`scripts/gate-mcp-depth.sh` (the portable gate) asserts the build surveyed enough
+references, read some deeply (`refs_get`), viewed enough inner pages, and used a
+spread of tools. The Pre/Stop hooks call that gate. Thresholds are overridable via
+`PALATE_MIN_REFS` / `PALATE_MIN_INNER` / `PALATE_MIN_TOOLS`.

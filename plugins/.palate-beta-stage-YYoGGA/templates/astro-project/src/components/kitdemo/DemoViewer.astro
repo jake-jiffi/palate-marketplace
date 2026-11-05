@@ -1,0 +1,476 @@
+---
+/**
+ * THE STATE BROWSER'S CHROME. One piece, one state, at a width you choose.
+ *
+ * The piece itself is rendered in an <iframe> rather than inline, and that is the whole design
+ * rather than a convenience. Three things follow from it and none of them is available inline:
+ *
+ *   - MEDIA QUERIES KEY ON THE VIEWPORT, NOT ON A CONTAINER. A mobile menu that only exists below
+ *     900px cannot be shown at all on a 1280px page, so before this the one state a nav most
+ *     needs reviewing in was the one nobody could open. Inside a frame the frame IS the viewport,
+ *     so phone and desktop are one click apart on the same page.
+ *   - THE CHROME STOPS INTERFERING. A sticky navigation pinned under a breadcrumb bar is not the
+ *     piece a client will get, and a page carrying two <main> elements is not the document the
+ *     piece was written for.
+ *   - THE DRIVER RUNS AGAINST THE PIECE ALONE, so "the first control in the piece" means what it
+ *     says instead of accidentally meaning a link in the chrome.
+ *
+ * The frame reports its own height and what it drove, so the reader is told what was done to the
+ * piece rather than left to infer it from a picture.
+ */
+import { kit, type KitVariation, type KitPiece } from "../../lib/kit";
+import { STATE_KIND, STATE_NOTE, NARROW_BY_DEFAULT, MOBILE_ONLY, orderedStates, type KitDemoState } from "../../lib/kit-states";
+
+interface Props {
+  piece: KitPiece;
+  variation: KitVariation;
+  /** "rest" is the piece as it ships. Anything else is one of its declared states. */
+  state: string;
+}
+const { piece, variation, state } = Astro.props;
+
+const isRest = state === "rest";
+const demoState = state as KitDemoState;
+const kind = isRest ? "content" : STATE_KIND[demoState];
+const note = isRest
+  ? "The piece with the content a real client would give it, at rest, with nothing driven."
+  : STATE_NOTE[demoState];
+
+const frameSrc = `/kit-frame/${piece.id}/${variation.id}/${state}`;
+// A piece with no desktop presence starts narrow in EVERY state, not only when something is
+// being opened: at full width its page is a blank frame, which reads as a broken demo.
+const startNarrow =
+  MOBILE_ONLY.has(variation.id) || (!isRest && NARROW_BY_DEFAULT.has(variation.id) && state === "open");
+
+// Every state this variation declares, plus rest, in the one order the whole kit prints them in,
+// so the row does not reshuffle between two pieces or between this page and the index.
+const states = orderedStates(variation.states);
+
+const pieceIndex = kit.findIndex((p) => p.id === piece.id);
+---
+<div class="dvw">
+  <nav class="dvw__bar" aria-label="Kit">
+    <a class="kit-link" href="/kit">All pieces</a>
+    <span class="dvw__crumb">{piece.name}</span>
+    {/* THE PAGE'S ONE HEADING. This was a <strong>, so all 188 viewer pages had no heading at all
+        and axe reported page-has-heading-one on every one of them, at both widths: the frames were
+        given a hidden h1 for exactly that reason and the pages a person opens never were. It is
+        small because it sits in a breadcrumb bar, and it is an h1 because it names the document. */}
+    <h1 class="dvw__title">{variation.name}{!isRest && `, ${state}`}</h1>
+    <span class="dvw__count">Piece {pieceIndex + 1} of {kit.length}</span>
+  </nav>
+
+  <div class="dvw__meta">
+    <p class="dvw__line"><strong>When:</strong> {variation.when}</p>
+    <p class="dvw__line"><strong>Needs:</strong> {variation.needs.join(", ")}</p>
+    <p class="dvw__line"><strong>Where:</strong> {piece.where}</p>
+  </div>
+
+  <div class="dvw__controls">
+    <div class="dvw__group">
+      <span class="kit-label" id="dvw-states">States</span>
+      <ul class="dvw__tabs" aria-labelledby="dvw-states">
+        <li>
+          <a
+            class="dvw__tab"
+            href={`/kit/${piece.id}/${variation.id}`}
+            aria-label={`at rest, ${variation.name}`}
+            aria-current={isRest ? "page" : undefined}
+          >
+            at rest
+          </a>
+        </li>
+        {states.map((s) => (
+          <li>
+            <!-- The visible word is the state; the accessible name carries the piece it belongs
+                 to, because "empty" read out of context in a list of links names nothing. The
+                 visible text stays inside the accessible name, which is what WCAG 2.5.3 asks. -->
+            <a
+              class="dvw__tab"
+              href={`/kit/${piece.id}/${variation.id}/${s}`}
+              aria-label={`${s}, ${variation.name}`}
+              aria-current={s === state ? "page" : undefined}
+            >
+              {s}
+            </a>
+          </li>
+        ))}
+        {states.length === 0 && <li class="dvw__none">this piece declares no states beyond resting</li>}
+      </ul>
+    </div>
+
+    <div class="dvw__group">
+      <span class="kit-label" id="dvw-widths">Width</span>
+      <div class="dvw__widths" role="group" aria-labelledby="dvw-widths">
+        <!-- The starting width is decided on the server, so the frame paints at the right size
+             once instead of painting full width and snapping to a phone a moment later. -->
+        <button type="button" class="dvw__width" data-width="390" data-height="844" aria-pressed={startNarrow ? "true" : "false"}>Phone, 390</button>
+        <button type="button" class="dvw__width" data-width="768" data-height="1024" aria-pressed="false">Tablet, 768</button>
+        <button type="button" class="dvw__width" data-width="1024" data-height="768" aria-pressed="false">Laptop, 1024</button>
+        <button type="button" class="dvw__width" data-width="full" aria-pressed={startNarrow ? "false" : "true"}>Full width</button>
+      </div>
+      <!-- A width button names a device, and a device has a height too. By default the frame is as
+           tall as the content, which is right for reading a section and wrong for anything sized in
+           vh: a 72vh hero measured against its own height can never bind the way it does on a phone.
+           This gives the frame the device's height and lets the piece scroll inside it. -->
+      <label class="dvw__device">
+        <input type="checkbox" name="device-height" data-viewer-device />
+        Device height
+      </label>
+    </div>
+  </div>
+
+  <div class="dvw__how" data-kind={kind}>
+    <div class="dvw__howin">
+    <p class="dvw__kind">
+      {kind === "content" && "Content state, rendered from a fixture"}
+      {kind === "driven" && "Driven through the piece's own mechanism"}
+      {kind === "unforceable" && "Cannot be forced, and is not faked"}
+    </p>
+    <p class="dvw__note">{note}</p>
+    <!-- A live region rather than a hidden box that is later revealed: a screen reader
+         announces a change to text that was already on the page, and reveals of freshly
+         populated hidden nodes are announced by some and not by others. -->
+    <p class="dvw__status" data-viewer-status role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="dvw__stage">
+    <div class="dvw__scaler" data-viewer-scaler>
+      <iframe
+        class="dvw__frame"
+        data-viewer-frame
+        src={frameSrc}
+        title={`${variation.name}, ${isRest ? "at rest" : state}`}
+        loading="eager"
+        style={startNarrow ? "width: 390px" : undefined}
+      ></iframe>
+    </div>
+  </div>
+  <p class="dvw__fit" data-viewer-fit role="status" aria-live="polite"></p>
+  {MOBILE_ONLY.has(variation.id) && (
+    <p class="dvw__only" data-viewer-only hidden>
+      This piece is the small-screen half of a navigation and has no desktop presence at all: above
+      the breakpoint its own stylesheet hides it, so a wide frame is correctly an empty bar rather
+      than a broken render.
+    </p>
+  )}
+
+  <p class="dvw__escape">
+    <a class="kit-link" href={frameSrc}>Open this render on its own</a>, with no chrome around it,
+    which is what a screenshot or a colleague on a phone wants.
+  </p>
+</div>
+
+<style>
+  .dvw { display: grid; gap: var(--kit-space-md); min-width: 0; }
+  .dvw__bar,
+  .dvw__meta,
+  .dvw__controls,
+  .dvw__how,
+  .dvw__escape { max-width: var(--kit-page-max); margin-inline: auto; padding-inline: var(--kit-page-pad); width: 100%; }
+
+  .dvw__bar { display: flex; flex-wrap: wrap; gap: var(--kit-space-sm); align-items: baseline; font-size: var(--kit-text-sm); padding-top: var(--kit-space-md); }
+  .dvw__crumb { color: var(--kit-text-muted); }
+  .dvw__title { font-size: var(--kit-text-sm); font-weight: var(--kit-weight-strong); margin: 0; font-family: inherit; line-height: inherit; }
+  .dvw__count { color: var(--kit-text-muted); margin-inline-start: auto; }
+
+  .dvw__meta { display: grid; gap: var(--kit-space-2xs); }
+  .dvw__line { margin: 0; font-size: var(--kit-text-sm); color: var(--kit-text-muted); }
+
+  .dvw__controls { display: flex; flex-wrap: wrap; gap: var(--kit-space-lg) var(--kit-space-2xl); }
+  .dvw__group { display: grid; gap: var(--kit-space-2xs); align-content: start; }
+
+  .dvw__tabs { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--kit-space-2xs); }
+  .dvw__tab {
+    display: inline-block;
+    padding: var(--kit-space-2xs) var(--kit-space-sm);
+    border: var(--kit-border-width) solid var(--kit-control-border);
+    border-radius: var(--kit-radius-sm);
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text);
+    text-decoration: none;
+  }
+  .dvw__tab:hover { border-color: var(--kit-text); }
+  .dvw__tab[aria-current="page"] { background: var(--kit-text); color: var(--kit-bg); border-color: var(--kit-text); }
+  .dvw__none { font-size: var(--kit-text-sm); color: var(--kit-text-muted); }
+
+  .dvw__widths { display: flex; flex-wrap: wrap; gap: var(--kit-space-2xs); }
+  .dvw__width {
+    font: inherit;
+    font-size: var(--kit-text-sm);
+    padding: var(--kit-space-2xs) var(--kit-space-sm);
+    border: var(--kit-border-width) solid var(--kit-control-border);
+    border-radius: var(--kit-radius-sm);
+    background: transparent;
+    color: var(--kit-text);
+    cursor: pointer;
+  }
+  .dvw__width[aria-pressed="true"] { background: var(--kit-text); color: var(--kit-bg); border-color: var(--kit-text); }
+  .dvw__device {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kit-space-xs);
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+    margin-top: var(--kit-space-2xs);
+    min-height: var(--kit-target);
+    cursor: pointer;
+  }
+  .dvw__device input { accent-color: var(--kit-accent); inline-size: 1rem; block-size: 1rem; margin: 0; }
+  .dvw__device input:focus-visible { outline: var(--kit-focus-width) solid var(--kit-focus-ring); outline-offset: var(--kit-focus-offset); }
+
+  .dvw__howin {
+    border-inline-start: var(--kit-border-width) solid var(--kit-accent);
+    padding-inline-start: var(--kit-space-md);
+    padding-block: var(--kit-space-2xs);
+    display: grid;
+    gap: var(--kit-space-2xs);
+  }
+  .dvw__kind { margin: 0; font-size: var(--kit-text-sm); font-weight: var(--kit-weight-strong); }
+  .dvw__note { margin: 0; font-size: var(--kit-text-sm); color: var(--kit-text-muted); max-width: var(--kit-measure); }
+  .dvw__status { margin: 0; font-size: var(--kit-text-sm); color: var(--kit-text); max-width: var(--kit-measure); }
+  .dvw__status:empty { display: none; }
+
+  .dvw__stage {
+    background: var(--kit-bg-subtle);
+    border-block: var(--kit-border-width) solid var(--kit-border);
+    padding: var(--kit-space-md) var(--kit-space-md) var(--kit-space-xl);
+    display: flex;
+    justify-content: center;
+    /**
+     * THE STAGE MUST NOT GROW TO ITS CONTENT, or the measurement it is asked for is the answer it
+     * already gave. A 1024px frame inside a 390px window widened the stage to 1056, the scale
+     * maths then read the stage as wide enough, nothing was scaled, and the page scrolled sideways
+     * on a phone. A grid item is `min-width: auto` by default, which is what let it happen.
+     */
+    min-width: 0;
+    overflow: hidden;
+  }
+  /**
+   * THE SCALER IS WHAT MAKES A WIDTH BUTTON TELL THE TRUTH.
+   *
+   * `max-width: 100%` on the frame meant the browser clamped a requested 1024 to whatever the
+   * stage could give, so on a phone all four buttons delivered the same 356px viewport while the
+   * one you pressed reported itself as applied. The piece is now laid out at the FULL requested
+   * width and the whole frame is scaled down to fit, so `contentWindow.innerWidth` really is the
+   * width on the button and a reviewer on a laptop can still see 1024.
+   */
+  .dvw__scaler {
+    transform-origin: top center;
+    /* Nothing here paints; the frame does. Sizing lives on the element being scaled. */
+    line-height: 0;
+  }
+  .dvw__frame {
+    width: 100%;
+    /* NOT 60vh. A viewport-sized floor set the frame's height before anything had been measured,
+       and the frame's own measurement could then never fall below it, so a 77px navigation bar sat
+       in a 600px white box. A small floor is enough to stop a flash of nothing. */
+    min-height: 4rem;
+    background: var(--kit-bg);
+    display: block;
+    /* NO BORDER. A 1px border plus border-box made "Phone, 390" deliver a 388px viewport and left
+       the content box two pixels shorter than the document it was sized to hold. The edge belongs
+       to the stage, which is not the thing being measured. */
+    border: 0;
+  }
+  .dvw__stage > .dvw__scaler { outline: var(--kit-border-width) solid var(--kit-border); }
+  .dvw__fit,
+  .dvw__only {
+    max-width: var(--kit-page-max);
+    margin: var(--kit-space-xs) auto 0;
+    padding-inline: var(--kit-page-pad);
+    width: 100%;
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+  }
+  .dvw__fit:empty { display: none; }
+  .dvw__escape { font-size: var(--kit-text-sm); color: var(--kit-text-muted); max-width: var(--kit-measure); padding-bottom: var(--kit-space-2xl); }
+</style>
+
+<script>
+  /**
+   * BOUND PER DOCUMENT, NOT PER SESSION.
+   *
+   * Every kit page carries the ClientRouter, so clicking a state tab or a variation link is a soft
+   * navigation: the body is swapped and a module script runs once per session. The first version
+   * bound on first execution only, so after the first click the width handlers, the message listener
+   * and apply() all belonged to a discarded document: the driver in the frame kept reporting and
+   * nobody was listening, every page after the first rendered in a 300 x 150 letterbox at a width no
+   * button offers, and "Full width" went on reporting itself pressed. Found by clicking through the
+   * surface the way a reviewer does rather than loading each URL cold.
+   *
+   * So: bind on `astro:page-load`, which fires on the first load and after every swap, and give each
+   * document's listeners an AbortController so the previous document's are gone before the next
+   * document's are added.
+   */
+  let teardown: AbortController | null = null;
+
+  const bind = () => {
+    teardown?.abort();
+    const root = document.querySelector<HTMLElement>(".dvw");
+    const scaler = document.querySelector<HTMLElement>("[data-viewer-scaler]");
+    const frame = document.querySelector<HTMLIFrameElement>("[data-viewer-frame]");
+    const status = document.querySelector<HTMLElement>("[data-viewer-status]");
+    const fit = document.querySelector<HTMLElement>("[data-viewer-fit]");
+    const only = document.querySelector<HTMLElement>("[data-viewer-only]");
+    const device = document.querySelector<HTMLInputElement>("[data-viewer-device]");
+    if (!root || !frame || !scaler) return;
+    teardown = new AbortController();
+    const { signal } = teardown;
+
+    let requested: string = frame.style.width === "390px" ? "390" : "full";
+    let frameHeight = 0;
+    const MOBILE_BREAKPOINT = 768; // 48em, the sheet's own breakpoint
+
+    const deviceHeightFor = (width: string): number => {
+      const button = root.querySelector<HTMLButtonElement>(`.dvw__width[data-width="${width}"]`);
+      return Number(button?.dataset.height || 0);
+    };
+
+    /**
+     * Lay the piece out at the width that was ASKED FOR, then scale the whole frame to fit the
+     * stage. Every button therefore delivers the width printed on it, whatever the window is
+     * doing, which is the only way `aria-pressed` can be honest.
+     */
+    const apply = () => {
+      const stage = scaler.parentElement?.clientWidth || 0;
+      const target = requested === "full" ? stage : Number(requested);
+      frame.style.width = `${target}px`;
+      const scale = target > stage && stage > 0 ? stage / target : 1;
+      scaler.style.transform = scale === 1 ? "" : `scale(${scale})`;
+
+      // Height is the device's when asked, otherwise the content's as the frame reported it.
+      const deviceHeight = device?.checked ? deviceHeightFor(requested) : 0;
+      const height = deviceHeight || frameHeight;
+      frame.style.height = height ? `${height}px` : "";
+      frame.style.minHeight = height ? "0" : "";
+      // The scaled frame occupies less room than it measures, so the wrapper is told the height it
+      // will actually take. Without this the page keeps a gap the size of the part scaled away.
+      scaler.style.height = height ? `${Math.ceil(height * scale)}px` : "";
+      scaler.style.width = `${target}px`;
+      scaler.style.marginInline = "auto";
+
+      root.querySelectorAll<HTMLButtonElement>(".dvw__width").forEach((button) => {
+        button.setAttribute("aria-pressed", button.dataset.width === requested ? "true" : "false");
+      });
+      // The toggle means nothing at full width, where there is no device to name.
+      if (device) device.disabled = requested === "full";
+      // The mobile-only note explains an EMPTY wide frame, so it is shown only when the frame is wide.
+      if (only) only.hidden = target < MOBILE_BREAKPOINT;
+
+      if (fit) {
+        const lines: string[] = [];
+        if (scale !== 1) {
+          lines.push(`The piece is laid out at ${target}px and shown at ${Math.round(scale * 100)}% so it fits this window. What you are looking at is the ${target}px layout.`);
+        }
+        if (requested !== "full") {
+          lines.push(
+            deviceHeight
+              ? `Height is the device's, ${target} x ${deviceHeight}, and the piece scrolls inside the frame, so anything sized in vh renders as it would on that device.`
+              : `Height follows the content, so anything sized in vh is measured against the content rather than a device; turn on Device height to see it at ${target} x ${deviceHeightFor(requested)}.`,
+          );
+        }
+        fit.textContent = lines.join(" ");
+      }
+    };
+
+    /**
+     * A WIDTH CHANGE RELOADS THE FRAME, AND THAT IS THE FIX RATHER THAN THE COST.
+     *
+     * The driver runs once, when the frame loads. Resizing without reloading let the piece's own
+     * resize handling close what had been opened while the live region went on announcing that it
+     * was open: a state browser telling the reader the opposite of what is on screen, which is the
+     * exact failure this whole surface exists to avoid. Reloading re-drives the state at the new
+     * width, and the status is cleared until the driver reports again.
+     */
+    const layoutWidth = () => Math.round(parseFloat(frame.style.width) || 0);
+    let delivered = 0;
+
+    const redrive = () => {
+      if (status) status.textContent = "";
+      frameHeight = 0;
+      // eslint-disable-next-line no-self-assign
+      frame.src = frame.src;
+    };
+
+    const setWidth = (value: string) => {
+      const changed = value !== requested;
+      requested = value;
+      apply();
+      // The resize handler compares against the last DELIVERED width, so a button press has to
+      // record what it delivered: without this the first window drag after pressing "Laptop, 1024"
+      // compared 1024 against the old full width and reloaded a frame whose viewport had not moved.
+      delivered = layoutWidth();
+      if (!changed) return;
+      redrive();
+    };
+
+    root.querySelectorAll<HTMLButtonElement>(".dvw__width").forEach((button) => {
+      button.addEventListener("click", () => setWidth(button.dataset.width || "full"), { signal });
+    });
+    // Device height changes the frame's viewport height, which is a real change for anything sized
+    // in vh, so it re-drives too; the piece must not be shown mid-transition at the old height.
+    device?.addEventListener("change", () => { apply(); delivered = layoutWidth(); redrive(); }, { signal });
+
+    /**
+     * A WINDOW DRAG IS A WIDTH CHANGE TOO, BUT ONLY WHEN THE PIECE'S VIEWPORT MOVED.
+     *
+     * The reload-and-re-drive was first bound to the BUTTON, and `apply()` also runs on resize, so
+     * dragging the window across a piece's breakpoint reproduced the fault the buttons were fixed
+     * for. The second version compared the frame's VISUAL width, which on a scaled frame changes with
+     * every drag while the piece's own viewport never moves, so a reviewer who had opened three
+     * accordions by hand lost them to a resize that changed nothing inside the frame. The trigger is
+     * the LAYOUT width, the number the piece actually sees.
+     */
+    const onResize = () => {
+      apply();
+      const after = layoutWidth();
+      if (delivered && Math.abs(after - delivered) >= 2) redrive();
+      delivered = after;
+    };
+    window.addEventListener("resize", onResize, { signal });
+    apply();
+    delivered = layoutWidth();
+
+    /**
+     * ASK THE FRAME TO SAY IT AGAIN. The frame's driver and its height report can both fire before
+     * this document has bound (the frame is already loading while this script is evaluated, and
+     * after a swap the new frame may finish first), and a message nobody was listening for is
+     * gone. So the frame keeps its last height and its last driver sentence and re-posts both when
+     * the viewer announces itself, which makes the order of the two documents irrelevant.
+     */
+    const askFrame = () => {
+      try {
+        frame.contentWindow?.postMessage({ kitViewerReady: true }, window.location.origin);
+      } catch {
+        /* A frame that has not started yet answers on its own load. */
+      }
+    };
+    frame.addEventListener("load", askFrame, { signal });
+    askFrame();
+
+    window.addEventListener(
+      "message",
+      (event) => {
+        if (event.origin !== window.location.origin) return;
+        // Only the frame on THIS page. A stale frame mid-swap must not size the new one.
+        if (event.source !== frame.contentWindow) return;
+        const data = event.data as { kitFrameHeight?: number; kitDriver?: boolean; message?: string };
+        if (typeof data?.kitFrameHeight === "number") {
+          frameHeight = Math.max(48, Math.ceil(data.kitFrameHeight));
+          apply();
+        }
+        if (data?.kitDriver && status) {
+          status.textContent = `What was driven: ${data.message ?? ""}`;
+        }
+      },
+      { signal },
+    );
+  };
+
+  // Bind now, while the frame may still be loading, and again after every swap. A second call is
+  // harmless because bind() aborts whatever it bound before.
+  bind();
+  document.addEventListener("astro:page-load", bind);
+</script>

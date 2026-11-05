@@ -1,0 +1,315 @@
+---
+/**
+ * THE KIT INDEX. Every piece, every variation, and where each one's contract comes from.
+ *
+ * It exists so the kit can be JUDGED rather than asserted: a reviewer, a client or a gate can
+ * open one URL and see all fifty variations, at any width, in every state, and under each piece
+ * the references whose own notes the contract was read from. A section library nobody can look
+ * at is a section library nobody trusts, and a rule nobody can trace is taste.
+ *
+ * The grounding shown here is data (src/lib/kit-grounding.ts), held to the recorder's own survey
+ * (src/lib/kit-survey.json) by gate-kit-complete: a slug that was never deep-read cannot appear
+ * on this page, because the build fails first.
+ *
+ * noindex, and gate-shipready FAILS a production-stage hand-over that still carries any of it:
+ * /kit, /kit-frame, the demo artwork and the sample files. It is a working document, not a page
+ * of the client's site.
+ */
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
+import { orderedStates } from "../../lib/kit-states";
+import { kitGrounding, kitRhythms } from "../../lib/kit-grounding";
+import survey from "../../lib/kit-survey.json";
+
+const read = new Set(survey.references.map((r: { slug: string }) => r.slug));
+const cited = new Set<string>();
+for (const piece of kit) for (const v of piece.variations) for (const s of v.evidence) cited.add(s);
+const libraryPieces = kit.filter((p) => p.origin === "library").length;
+const rhythmFor = (slug: string) => kitRhythms.filter((r) => r.slugs.includes(slug)).map((r) => r.name);
+// A proof build stamps the commit it was built from, so a review can say which source it judged.
+const builtFrom = import.meta.env.PUBLIC_KIT_BUILD || "";
+const pages = [
+  { href: "/kit/product", name: "A product home page", rhythm: "repeated-shape", business: "Paddockline, stock and paddock records" },
+  { href: "/kit/service", name: "A service home page", rhythm: "values-and-locality", business: "Thistlewood Gardens, design and build" },
+  { href: "/kit/campaign", name: "A campaign landing page", rhythm: "paid-landing", business: "Northaven Home Energy, a winter assessment" },
+];
+---
+<BaseLayout
+  title="Website kit"
+  description="Every section piece and variation in the kit, and the library references each one's contract was read from."
+  noindex={true}
+>
+  <section class="kit-section kit-section--tight">
+    <div class="kit-container">
+      <h1 class="kit-display">The website kit</h1>
+      <p class="kit-lede" style="margin-top: var(--kit-space-md)">
+        {kit.length} pieces, {KIT_VARIATION_COUNT} variations, every one built to work at any
+        width, with real content of any length, in every state it can be in. Open a variation to
+        see it at rest, at three widths, and in each state listed under it: the content states are
+        rendered from a fixture and the runtime states are driven through the piece's own controls,
+        so nothing on these pages is a picture of a state rather than the state itself. The one
+        exception is <code>hover</code>, which no script can force, so those pages render at rest
+        and say so.
+      </p>
+      <p class="kit-body ix__note">
+        <strong>Where the contracts come from.</strong> Every piece's <em>when</em>, every rule
+        about what sits beside what, was read from the <span translate="no">Palate</span> library and is cited below to a
+        reference whose recorded read carried notes on the layer cited; a reference that answered with an
+        empty template cannot be cited at all, and the gate holds both. The survey behind this page read{" "}
+        {survey.references.length} references across the {survey.layers_read.join(", ")} layers,
+        in {survey.calls} recorded calls by the builder ({survey.excluded_calls ?? 0} verification reads by
+        the critic passes are recorded in the same manifest and declared as excluded); {cited.size} of them stand as evidence for a variation,
+        and {libraryPieces === 1 ? "one piece exists" : `${libraryPieces} pieces exist`} only because
+        the library showed a beat the original sixteen could not compose. A citation outside that
+        survey fails the build, so nothing here is remembered or assumed.
+        {builtFrom && <span class="mono"> Built from commit {builtFrom}.</span>}
+      </p>
+      <p class="kit-body kit-muted ix__note">
+        Every piece also takes <code>tone</code>, which puts it on the default, subtle or inverse
+        ground, and <code>id</code>, which anchors the section so a link can point at it. Nothing
+        here defaults a person, a firm or a file: leave a name or a photograph out and the piece
+        shows an empty state rather than an invented one.
+      </p>
+    </div>
+  </section>
+
+  <section class="kit-section kit-section--subtle kit-section--tight" aria-labelledby="ix-pages">
+    <div class="kit-container">
+      <h2 class="kit-h2" id="ix-pages">Three pages, three rhythms</h2>
+      <p class="kit-body kit-muted ix__note">
+        Each example page is composed only from kit pieces and follows one of the rhythms below
+        step for step. The rhythm a page follows is declared at the top of its source.
+      </p>
+      <ul class="ix__pages" role="list">
+        {pages.map((p) => {
+          const r = kitRhythms.find((x) => x.id === p.rhythm);
+          return (
+            <li class="ix__page">
+              <a class="kit-link ix__pagename" href={p.href}>{p.name}</a>
+              <p class="kit-body kit-muted ix__pagebiz">{p.business}</p>
+              <p class="ix__pagerhythm"><span class="kit-label">Rhythm</span> {r?.name}, after {r?.slugs.join(", ")}</p>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </section>
+
+  <section class="kit-section" aria-labelledby="ix-pieces">
+    <div class="kit-container">
+      <h2 class="kit-h2" id="ix-pieces">The pieces</h2>
+      <ol class="ix">
+        {kit.map((piece) => {
+          const g = kitGrounding[piece.id];
+          return (
+            <li class="ix__piece">
+              <div class="ix__head">
+                <h3 class="kit-h3" id={`p-${piece.id}`}>
+                  {piece.name}
+                  {piece.origin === "library" && <span class="ix__origin">added from the library</span>}
+                </h3>
+                <p class="kit-body kit-muted ix__meta">{piece.when}</p>
+                <p class="kit-body kit-muted ix__meta"><strong>Where:</strong> {piece.where}</p>
+              </div>
+
+              <ul class="ix__vars">
+                {piece.variations.map((v) => (
+                  <li class="ix__var">
+                    <a class="kit-link ix__name" href={`/kit/${piece.id}/${v.id}`}>{v.name}</a>
+                    <p class="kit-body kit-muted ix__when">{v.when}</p>
+                    <p class="ix__needs"><span class="kit-label">Needs</span> {v.needs.join(", ")}</p>
+                    <p class="ix__needs"><span class="kit-label">Read from</span> {v.evidence.join(", ")}</p>
+                    <ul class="ix__states">
+                      {orderedStates(v.states).map((s) => (
+                        <li class="ix__state">
+                          <a class="ix__statelink" href={`/kit/${piece.id}/${v.id}/${s}`} aria-label={`${s}, ${v.name}`}>{s}</a>
+                        </li>
+                      ))}
+                      {v.states.length === 0 && <li class="ix__state ix__state--none">resting only</li>}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+
+              {g && (
+                <details class="ix__ground">
+                  <summary class="ix__groundsum">
+                    Grounding: {g.donors.length} donors, {g.rules.length} rules, {g.avoid.length} to avoid
+                  </summary>
+                  <div class="ix__groundbody">
+                    <div class="ix__groundcol">
+                      <h4 class="kit-label ix__groundhead">Donors, in the library's own section names</h4>
+                      <dl class="ix__donors">
+                        {g.donors.map((d) => (
+                          <div class="ix__donor">
+                            <dt class="ix__slug">{d.slug}{!read.has(d.slug) && " (not in survey)"}</dt>
+                            <dd class="ix__donornote">{d.note}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                    <div class="ix__groundcol">
+                      <h4 class="kit-label ix__groundhead">Rules the notes state or demonstrate</h4>
+                      <ul class="ix__rules" role="list">
+                        {g.rules.map((r) => (
+                          <li class="ix__rule">
+                            <p class="kit-body ix__ruletext">{r.text}</p>
+                            <p class="ix__rulecites">{r.slugs.join(", ")}</p>
+                          </li>
+                        ))}
+                      </ul>
+                      <h4 class="kit-label ix__groundhead">What the same notes warn against</h4>
+                      <ul class="ix__rules" role="list">
+                        {g.avoid.map((r) => (
+                          <li class="ix__rule">
+                            <p class="kit-body ix__ruletext">{r.text}</p>
+                            <p class="ix__rulecites">{r.slugs.join(", ")}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </details>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  </section>
+
+  <section class="kit-section kit-section--subtle" aria-labelledby="ix-rhythms">
+    <div class="kit-container">
+      <h2 class="kit-h2" id="ix-rhythms">The rhythms</h2>
+      <p class="kit-body kit-muted ix__note">
+        How the pieces sit together, read from the library's own "rhythm to borrow" notes rather
+        than invented. A composed page declares which one it follows.
+      </p>
+      <ol class="ix__rhythms">
+        {kitRhythms.map((r) => (
+          <li class="ix__rhythm" id={`r-${r.id}`}>
+            <div class="ix__rhythmhead">
+              <h3 class="kit-h3">{r.name}</h3>
+              <p class="kit-body kit-muted">{r.when}</p>
+              <p class="ix__rulecites">After {r.slugs.join(", ")}</p>
+            </div>
+            <ol class="ix__steps">
+              {r.steps.map((s) => <li class="kit-body ix__step">{s}</li>)}
+            </ol>
+            <p class="kit-body kit-muted ix__caution"><strong>Caution:</strong> {r.caution}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="kit-section kit-section--tight" aria-labelledby="ix-survey">
+    <div class="kit-container">
+      <h2 class="kit-h3" id="ix-survey">The survey behind this page</h2>
+      <p class="kit-body kit-muted ix__note">
+        Generated from the build manifest by <code>scripts/kit-survey-snapshot.mjs</code>, never by
+        hand. Deep reads only: a reference seen in a search result and never opened is not here.
+      </p>
+      <ul class="ix__survey" role="list">
+        {survey.references.map((ref: { slug: string; layers: string[]; reads: number }) => (
+          <li class="ix__ref">
+            <span class="ix__slug">{ref.slug}</span>
+            <span class="ix__reflayers">{ref.layers.join(", ")}</span>
+            {rhythmFor(ref.slug).length > 0 && <span class="ix__refrhythm">{rhythmFor(ref.slug).join("; ")}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</BaseLayout>
+<style>
+  .ix__note { margin-top: var(--kit-space-md); max-width: var(--kit-measure); }
+  .ix__note code, .ix__note .mono { font-family: var(--kit-font-mono); font-size: var(--kit-text-sm); }
+
+  .ix__pages { list-style: none; margin: var(--kit-space-lg) 0 0; padding: 0; display: grid; gap: var(--kit-gutter); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+  .ix__page { display: grid; gap: var(--kit-space-2xs); border-top: var(--kit-border-width) solid var(--kit-border-strong); padding-top: var(--kit-space-md); }
+  .ix__pagename { font-weight: var(--kit-weight-strong); font-size: var(--kit-text-lg); }
+  .ix__pagebiz { margin: 0; }
+  .ix__pagerhythm { margin: 0; font-size: var(--kit-text-sm); color: var(--kit-text-muted); }
+
+  .ix { list-style: none; margin: var(--kit-space-xl) 0 0; padding: 0; display: grid; gap: var(--kit-space-3xl); }
+  .ix__piece { display: grid; gap: var(--kit-space-lg); }
+  .ix__head { display: grid; gap: var(--kit-space-2xs); border-top: var(--kit-border-width) solid var(--kit-border-strong); padding-top: var(--kit-space-md); }
+  .ix__origin {
+    display: inline-block;
+    margin-inline-start: var(--kit-space-sm);
+    font-family: var(--kit-font-mono);
+    font-size: var(--kit-text-xs);
+    font-weight: var(--kit-weight-body);
+    color: var(--kit-text-muted);
+    border: var(--kit-border-width) solid var(--kit-control-border);
+    border-radius: var(--kit-radius-pill);
+    padding: var(--kit-space-2xs) var(--kit-space-sm);
+    vertical-align: middle;
+  }
+  .ix__meta { font-size: var(--kit-text-sm); }
+  .ix__vars { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--kit-gutter); grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); }
+  .ix__var { display: grid; gap: var(--kit-space-xs); align-content: start; border: var(--kit-border-width) solid var(--kit-border); padding: var(--kit-space-lg); border-radius: var(--kit-radius); }
+  .ix__name { font-weight: var(--kit-weight-strong); font-size: var(--kit-text-base); }
+  .ix__when { font-size: var(--kit-text-sm); }
+  .ix__needs { font-size: var(--kit-text-sm); color: var(--kit-text-muted); margin: 0; }
+  .ix__states { list-style: none; margin: var(--kit-space-2xs) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--kit-space-2xs); }
+  .ix__state { display: flex; }
+  /* The chip IS the link, so the whole chip is the target rather than the four characters
+     inside it, and it carries the full text colour: a control at 12px cannot also be muted. */
+  .ix__statelink {
+    font-family: var(--kit-font-mono);
+    font-size: var(--kit-text-xs);
+    color: var(--kit-text);
+    text-decoration: none;
+    border: var(--kit-border-width) solid var(--kit-control-border);
+    border-radius: var(--kit-radius-sm);
+    padding: var(--kit-space-2xs) var(--kit-space-xs);
+    line-height: 1;
+    /* A thumb-sized target: 160 of these at 22px passed axe on the spacing exception and failed a thumb. */
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
+  }
+  .ix__statelink:hover { border-color: var(--kit-text); text-decoration: underline; }
+  .ix__state--none {
+    font-family: var(--kit-font-mono);
+    font-size: var(--kit-text-xs);
+    color: var(--kit-text-muted);
+    padding: var(--kit-space-2xs) 0;
+    line-height: 1;
+  }
+
+  .ix__ground { border: var(--kit-border-width) solid var(--kit-border); border-radius: var(--kit-radius); background: var(--kit-bg-subtle); }
+  .ix__groundsum {
+    cursor: pointer;
+    padding: var(--kit-space-md) var(--kit-space-lg);
+    font-weight: var(--kit-weight-medium);
+    min-height: var(--kit-target);
+    display: flex;
+    align-items: center;
+  }
+  .ix__groundsum:focus-visible { outline: var(--kit-focus-width) solid var(--kit-focus-ring); outline-offset: var(--kit-focus-offset); border-radius: var(--kit-radius); }
+  .ix__groundbody { display: grid; gap: var(--kit-space-xl); padding: 0 var(--kit-space-lg) var(--kit-space-lg); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+  .ix__groundcol { display: grid; gap: var(--kit-space-sm); align-content: start; }
+  .ix__groundhead { margin: 0; }
+  .ix__donors { margin: 0; display: grid; gap: var(--kit-space-sm); }
+  .ix__donor { display: grid; gap: var(--kit-space-2xs); }
+  .ix__slug { font-family: var(--kit-font-mono); font-size: var(--kit-text-sm); font-weight: var(--kit-weight-medium); }
+  .ix__donornote { margin: 0; font-size: var(--kit-text-sm); }
+  .ix__rules { list-style: none; margin: 0 0 var(--kit-space-md); padding: 0; display: grid; gap: var(--kit-space-sm); }
+  .ix__rule { display: grid; gap: var(--kit-space-2xs); }
+  .ix__ruletext { margin: 0; font-size: var(--kit-text-sm); }
+  .ix__rulecites { margin: 0; font-family: var(--kit-font-mono); font-size: var(--kit-text-xs); color: var(--kit-text-muted); }
+
+  .ix__rhythms { list-style: none; margin: var(--kit-space-xl) 0 0; padding: 0; display: grid; gap: var(--kit-space-2xl); }
+  .ix__rhythm { display: grid; gap: var(--kit-space-md); border-top: var(--kit-border-width) solid var(--kit-border-strong); padding-top: var(--kit-space-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+  .ix__rhythmhead { display: grid; gap: var(--kit-space-2xs); align-content: start; }
+  .ix__steps { margin: 0; padding-inline-start: 1.25em; display: grid; gap: var(--kit-space-2xs); }
+  .ix__step { font-size: var(--kit-text-sm); }
+  .ix__caution { grid-column: 1 / -1; margin: 0; font-size: var(--kit-text-sm); max-width: var(--kit-measure); }
+
+  .ix__survey { list-style: none; margin: var(--kit-space-lg) 0 0; padding: 0; display: grid; gap: var(--kit-space-2xs) var(--kit-space-lg); grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); }
+  .ix__ref { display: flex; flex-wrap: wrap; gap: var(--kit-space-xs); align-items: baseline; font-size: var(--kit-text-sm); }
+  .ix__reflayers, .ix__refrhythm { color: var(--kit-text-muted); font-size: var(--kit-text-xs); }
+</style>

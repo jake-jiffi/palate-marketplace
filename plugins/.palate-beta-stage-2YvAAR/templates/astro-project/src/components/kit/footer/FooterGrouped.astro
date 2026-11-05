@@ -1,0 +1,374 @@
+---
+/**
+ * Larger footer, with grouped links and the company's own details.
+ *
+ * Use this on a site with real depth, or for a business whose registrations are worth showing.
+ *
+ * THE COMPANY DETAILS ARE THE POINT OF THIS VARIATION. An ABN, a builder's licence, an electrical
+ * contractor number: for a trade these are often the only claim on the whole site a stranger can
+ * independently check, and setting them in grey at the smallest size on the page tells the reader
+ * they are boilerplate. They are rendered as a definition list at body-adjacent size, with the
+ * number itself in the same colour as ordinary text, because somebody is going to copy it into a
+ * licence register and that is exactly the behaviour worth making easy.
+ *
+ * Groups collapse to one column on a narrow screen and spread as the width allows, without a
+ * breakpoint deciding it for them, so four short groups and two long ones both come out
+ * deliberate. The active link is marked by comparing the URL being rendered.
+ */
+export interface FooterLink {
+  label: string;
+  href: string;
+}
+
+export interface FooterGroup {
+  heading: string;
+  links: FooterLink[];
+}
+
+export interface CompanyDetail {
+  /** "ABN", "Builder's licence", "Electrical contractor". */
+  term: string;
+  value: string;
+  /** A register the number can be checked against. Optional, and rarer than it should be. */
+  href?: string;
+}
+
+export interface Props {
+  businessName?: string;
+  /** A sentence, not a paragraph. What the business does and where. */
+  description?: string;
+  /** Phone, email, address. Real links where a link is possible. */
+  contacts?: FooterLink[];
+  /** Two to four. More than four and the footer has become a sitemap. */
+  groups?: FooterGroup[];
+  /** Registrations and numbers a stranger can verify. */
+  companyDetails?: CompanyDetail[];
+  legalLinks?: FooterLink[];
+  /** Overrides the build year. */
+  year?: number;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  businessName = "",
+  description = "",
+  contacts = [],
+  groups = [
+    {
+      heading: "Services",
+      links: [
+        { label: "Roof replacement", href: "/services/roof-replacement" },
+        { label: "Leak repairs", href: "/services/leak-repairs" },
+        { label: "Gutters and downpipes", href: "/services/gutters" },
+        { label: "Roof inspections", href: "/services/inspections" },
+      ],
+    },
+    {
+      heading: "Company",
+      links: [
+        { label: "About us", href: "/about" },
+        { label: "Recent work", href: "/work" },
+        { label: "Reviews", href: "/reviews" },
+        { label: "Careers", href: "/careers" },
+      ],
+    },
+    {
+      heading: "Get in touch",
+      links: [
+        { label: "Request a quote", href: "/contact" },
+        { label: "Book an inspection", href: "/book" },
+        { label: "Service areas", href: "/areas" },
+      ],
+    },
+  ],
+  companyDetails = [],
+  legalLinks = [
+    { label: "Privacy", href: "/privacy" },
+    { label: "Terms", href: "/terms" },
+  ],
+  year = new Date().getFullYear(),
+  tone = "inverse",
+  class: className,
+  id,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const tidy = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
+const here = tidy(Astro.url.pathname);
+const isHere = (href: string) => !/^[a-z]+:/i.test(href) && tidy(href) === here;
+
+const shownGroups = (groups ?? []).filter((group) => group.links && group.links.length > 0);
+const details = companyDetails ?? [];
+/** With no name, no description and no contact route the brand column holds nothing. */
+const hasBrand = Boolean(businessName || description || (contacts ?? []).length);
+/* The caller's id anchors the footer. The group headings are prefixed from it, falling back to a
+   per-render value so two footers in one document cannot share a heading id. */
+const uid = id || `fg-${Math.random().toString(36).slice(2, 8)}`;
+/* Only split the row when there is something on both sides of it: with one child, an explicit
+   one-third / two-thirds template would pin that child to a third of the footer. */
+const splitInner = hasBrand && shownGroups.length > 0;
+/*
+ * THE COLUMN COUNT IS THE GROUP COUNT, not whatever auto-fit works out.
+ *
+ * auto-fit picks the most tracks that fit and then leaves the remainder stranded, so three groups
+ * came out as two across and one alone beside a hole. The manifest allows two to four, and at
+ * those counts an explicit count always fills. Anything outside that range keeps the single
+ * column, which is tall but never holed.
+ */
+const groupCols = shownGroups.length >= 2 && shownGroups.length <= 4 ? shownGroups.length : 0;
+---
+
+<footer class:list={["kit-section", toneClass, "kit-footg", className]} id={id || undefined}>
+  <div class:list={["kit-container", "kit-footg__inner", splitInner && "kit-footg__inner--split"]}>
+    {hasBrand && (
+      <div class="kit-footg__brand">
+        {businessName && <p class="kit-footg__name">{businessName}</p>}
+        {description && <p class="kit-footg__desc kit-muted">{description}</p>}
+        {contacts.length > 0 && (
+          <ul class="kit-footg__contacts" role="list">
+            {contacts.map((route) => (
+              <li><a class="kit-link kit-link--target kit-footg__contact" href={route.href}>{route.label}</a></li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )}
+
+    {shownGroups.length > 0 && (
+      <div class:list={["kit-footg__groups", groupCols && `kit-footg__groups--g${groupCols}`]}>
+        {shownGroups.map((group, index) => (
+          <nav class="kit-footg__group" aria-labelledby={`${uid}-group-${index}`}>
+            {/*
+              NOT A HEADING, AND THAT IS THE POINT.
+              It was an <h2>, which put every footer link group into the document outline at the
+              same level as the page's real sections: on a page with three sections and three
+              footer groups, half of what a screen reader user hears when they list the headings
+              is the footer. It is also 13px uppercase, so it never looked like a heading either.
+              The <nav> already carries the group's name through aria-labelledby, which works with
+              any element, so the landmark is still announced as "Everything we make and fit" and
+              the outline is left to the page.
+            */}
+            <p class="kit-label kit-footg__group-head" id={`${uid}-group-${index}`}>{group.heading}</p>
+            <ul class="kit-footg__links" role="list">
+              {group.links.map((link) => (
+                <li>
+                  <a
+                    class="kit-footg__link"
+                    href={link.href}
+                    aria-current={isHere(link.href) ? "page" : undefined}
+                  >{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))}
+      </div>
+    )}
+  </div>
+
+  {details.length > 0 && (
+    <div class="kit-container kit-footg__details">
+      <dl class="kit-footg__dl">
+        {details.map((detail) => (
+          <div class="kit-footg__detail">
+            <dt class="kit-footg__term">{detail.term}</dt>
+            <dd class="kit-footg__value">
+              {detail.href
+                ? <a class="kit-link kit-link--target" href={detail.href}>{detail.value}</a>
+                : detail.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )}
+
+  <div class="kit-container kit-footg__base">
+    <p class="kit-footg__copy kit-muted">
+      &copy; {year}{businessName ? ` ${businessName}.` : "."} All rights reserved.
+    </p>
+    {legalLinks.length > 0 && (
+      <ul class="kit-footg__legal" role="list">
+        {legalLinks.map((link) => (
+          <li>
+            <a
+              class="kit-footg__link kit-muted"
+              href={link.href}
+              aria-current={isHere(link.href) ? "page" : undefined}
+            >{link.label}</a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</footer>
+
+<style>
+  .kit-footg__inner {
+    display: grid;
+    gap: var(--kit-space-2xl) var(--kit-space-3xl);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 26ch), 1fr));
+    align-items: start;
+  }
+  /*
+   * THE LINK GROUPS NEED TWO THIRDS, NOT A HALF.
+   *
+   * auto-fit split the row evenly between the brand column and the whole group block, which left
+   * the groups about 526px at 1440 and fitted exactly two of them. The manifest allows two to
+   * four, so a third group dropped to a second row and left a visible hole beside it. The brand
+   * column is one name, one sentence and two contact routes; the groups are the reason a larger
+   * footer exists, so they get the larger share.
+   */
+  @media (min-width: 64em) {
+    .kit-footg__inner--split { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+    /* Four groups need more than two thirds, or every column comes out too narrow to read. */
+    .kit-footg__inner--split:has(.kit-footg__groups--g4) {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+    }
+  }
+
+  .kit-footg__brand { display: grid; gap: var(--kit-space-sm); align-content: start; }
+  .kit-footg__name {
+    font-family: var(--kit-font-display);
+    font-size: var(--kit-text-xl);
+    font-weight: var(--kit-weight-strong);
+    line-height: var(--kit-leading-snug);
+    margin: 0;
+  }
+  .kit-footg__desc {
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-body);
+    margin: 0;
+    max-width: var(--kit-measure);
+    text-wrap: pretty;
+  }
+  .kit-footg__contacts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-space-2xs);
+    font-size: var(--kit-text-sm);
+  }
+
+  .kit-footg__groups {
+    display: grid;
+    gap: var(--kit-space-xl) var(--kit-space-2xl);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Two and four halve cleanly on a tablet; three does not, so three waits for the wide step
+     rather than going two across and one alone. */
+  @media (min-width: 48em) {
+    .kit-footg__groups--g2,
+    .kit-footg__groups--g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 64em) {
+    .kit-footg__groups--g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .kit-footg__groups--g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  .kit-footg__group { display: grid; gap: var(--kit-space-sm); align-content: start; }
+  /* A real heading for the group, rather than a label floated above one. */
+  .kit-footg__group-head { color: var(--kit-text); }
+  .kit-section--inverse .kit-footg__group-head { color: var(--kit-text-inverse); }
+
+  .kit-footg__links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-space-2xs);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-footg__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: calc(var(--kit-target) * 0.7);
+    color: inherit;
+    text-decoration: none;
+  }
+  .kit-footg__link:hover { text-decoration: underline; text-underline-offset: var(--kit-space-2xs); }
+  .kit-footg__link[aria-current="page"] {
+    font-weight: var(--kit-weight-strong);
+    text-decoration: underline;
+    text-underline-offset: var(--kit-space-2xs);
+  }
+
+  /* The verifiable numbers. Ordinary text colour and size, because somebody is going to read one
+     out or copy it into a register. */
+  .kit-footg__details {
+    margin-top: var(--kit-space-2xl);
+    padding-top: var(--kit-space-lg);
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-footg__dl {
+    margin: 0;
+    display: grid;
+    gap: var(--kit-space-md) var(--kit-space-2xl);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22ch), 1fr));
+  }
+  .kit-footg__detail { display: grid; gap: var(--kit-space-2xs); }
+  .kit-footg__term {
+    font-size: var(--kit-text-xs);
+    letter-spacing: var(--kit-tracking-label);
+    text-transform: uppercase;
+    color: var(--kit-text-muted);
+  }
+  .kit-footg__value {
+    margin: 0;
+    font-size: var(--kit-text-sm);
+    font-family: var(--kit-font-mono);
+  }
+
+  .kit-footg__base {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--kit-space-xs) var(--kit-space-xl);
+    margin-top: var(--kit-space-xl);
+    padding-top: var(--kit-space-md);
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-footg__copy { font-size: var(--kit-text-xs); margin: 0; }
+  .kit-footg__legal {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-xs) var(--kit-space-lg);
+    font-size: var(--kit-text-xs);
+  }
+
+  .kit-section--inverse .kit-footg__details,
+  .kit-section--inverse .kit-footg__base {
+    border-top-color: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent);
+  }
+  .kit-section--inverse .kit-footg__term {
+    color: color-mix(in srgb, var(--kit-text-inverse) 72%, transparent);
+  }
+
+  .kit-footg a:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  /* .kit-link on an inverse section resolves to --kit-accent-lift, which falls back to
+     the accent a brand picked for a LIGHT ground. Measured at 1.06:1 on the default
+     tokens, which is an invisible phone number in a footer, so the colour is forced to
+     the inverse ink here. The UNDERLINE that used to sit in this rule has gone back to
+     foundations, which now carries it for every .kit-link: written as a shorthand it
+     reset text-decoration-thickness to auto, and being later in source order it beat the
+     kit's own hover, so this footer's phone number was the last link with no hover at all. */
+  .kit-section--inverse .kit-footg__contact { color: var(--kit-text-inverse); }
+  .kit-section--inverse a:focus-visible { outline-color: var(--kit-text-inverse); }
+</style>

@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="One Roundhouse job, showing the accepted quote beside the site notes and two photographs">
+  <title>One Roundhouse job, showing the accepted quote beside the site notes and two photographs</title>
+  <style>
+    svg{--ink:var(--kit-text,#1b1d21);--muted:var(--kit-text-muted,#6e737b);--paper:var(--kit-bg,#ffffff);--panel:var(--kit-bg-subtle,#f3f4f6);--line:var(--kit-border,#dfe2e6);--steel:#46525d;--sand:#e6dccc;--sage:#dbe4dc;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    text{fill:var(--ink)}
+    .m{fill:var(--muted)}
+    .w{fill:#fff}
+    .lbl{font-size:19px;letter-spacing:.06em;text-transform:uppercase}
+    .sm{font-size:20px}
+    .md{font-size:24px}
+    .lg{font-size:30px;font-weight:600}
+    .xl{font-size:40px;font-weight:600;letter-spacing:-.01em}
+    .num{font-variant-numeric:tabular-nums}
+    .ln{stroke:var(--line);stroke-width:2}
+  </style>
+  <rect x="0" y="0" width="1600" height="1000" fill="var(--paper)"/>
+  <rect x="0" y="0" width="248" height="1000" fill="var(--panel)"/>
+  <line x1="248" y1="0" x2="248" y2="1000" class="ln"/>
+  <rect x="0" y="0" width="1600" height="78" fill="var(--paper)"/>
+  <line x1="0" y1="78" x2="1600" y2="78" class="ln"/>
+  <rect x="40" y="26" width="26" height="26" fill="var(--steel)" rx="6"/>
+  <text x="80" y="48" class="md" font-weight="600">Roundhouse</text>
+  <rect x="640" y="20" width="520" height="40" fill="var(--panel)" rx="20"/>
+  <text x="668" y="47" class="sm m">Search jobs, customers or quotes</text>
+  <rect x="1494" y="22" width="38" height="38" fill="var(--steel)" rx="19"/>
+  <text x="1513" y="48" class="sm w" text-anchor="middle">PR</text>
+  <text x="40" y="122" class="lbl m">Fernbrook depot</text>
+  <rect x="40" y="160" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="178" class="sm m">Schedule</text>
+  <rect x="20" y="206" width="208" height="50" fill="var(--paper)" rx="8"/><rect x="40" y="222" width="18" height="18" fill="var(--steel)" rx="4"/><text x="72" y="240" class="sm" font-weight="600">Jobs</text>
+  <rect x="40" y="284" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="302" class="sm m">Quotes</text>
+  <rect x="40" y="346" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="364" class="sm m">Customers</text>
+  <rect x="40" y="408" width="18" height="18" fill="var(--muted)" rx="4"/><text x="72" y="426" class="sm m">Invoices</text>
+  <line x1="20" y1="470" x2="228" y2="470" class="ln"/>
+  <text x="40" y="512" class="sm m">3 vans on the road</text>
+  <text x="40" y="548" class="sm m">1 unassigned job</text>
+  <text x="280" y="148" class="xl">Ferndale Community Housing</text>
+  <text x="280" y="190" class="md m">Block C, 14 Ferndale Road · Job 2418</text>
+  <rect x="1330" y="116" width="230" height="46" fill="var(--steel)" rx="8"/>
+  <text x="1445" y="146" class="sm w" text-anchor="middle" font-weight="600">Start the job</text>
+  <rect x="280" y="232" width="1280" height="68" fill="var(--panel)" rx="10"/>
+  <rect x="304" y="254" width="14" height="14" fill="#5c7d5f" rx="7"/>
+  <text x="332" y="272" class="sm" font-weight="600">Quote accepted 2 October</text>
+  <text x="640" y="272" class="sm m">Scheduled Tue 14 Oct, Van 2</text>
+  <text x="1020" y="272" class="sm m">Priya Raghavan</text>
+  <text x="300" y="380" class="lg">Accepted quote</text>
+  <text x="1100" y="380" class="lg">Site notes</text>
+  <rect x="1100" y="446" width="4" height="68" fill="var(--line)"/><text x="1124" y="470" class="sm">Side access is 780mm at the gate, so the</text><text x="1124" y="500" class="sm m">scaffold goes in through the carport.</text>
+  <rect x="1100" y="542" width="4" height="68" fill="var(--line)"/><text x="1124" y="566" class="sm">Dog is friendly but bolts. Ring before</text><text x="1124" y="596" class="sm m">opening the side gate.</text>
+  <rect x="1100" y="638" width="4" height="68" fill="var(--line)"/><text x="1124" y="662" class="sm">Owner works nights. No noise before</text><text x="1124" y="692" class="sm m">8:30am, agreed in writing.</text>
+  <text x="300" y="428" class="lbl m">Item</text>
+  <text x="880" y="428" class="lbl m" text-anchor="end">Qty</text>
+  <text x="1030" y="428" class="lbl m" text-anchor="end">Amount</text>
+  <line x1="300" y1="444" x2="1030" y2="444" class="ln"/>
+  <text x="300" y="470" class="sm">Valley iron replacement, 11.4m</text>
+  <text x="880" y="470" class="sm m num" text-anchor="end">1</text>
+  <text x="1030" y="470" class="sm num" text-anchor="end">$1,482.00</text>
+  <line x1="300" y1="492" x2="1030" y2="492" class="ln"/>
+  <text x="300" y="532" class="sm">Ridge capping, re-bed and point</text>
+  <text x="880" y="532" class="sm m num" text-anchor="end">18m</text>
+  <text x="1030" y="532" class="sm num" text-anchor="end">$1,116.00</text>
+  <line x1="300" y1="554" x2="1030" y2="554" class="ln"/>
+  <text x="300" y="594" class="sm">Scaffold hire, three days</text>
+  <text x="880" y="594" class="sm m num" text-anchor="end">3</text>
+  <text x="1030" y="594" class="sm num" text-anchor="end">$690.00</text>
+  <line x1="300" y1="616" x2="1030" y2="616" class="ln"/>
+  <text x="300" y="656" class="sm">Waste removal and make good</text>
+  <text x="880" y="656" class="sm m num" text-anchor="end">1</text>
+  <text x="1030" y="656" class="sm num" text-anchor="end">$240.00</text>
+  <line x1="300" y1="678" x2="1030" y2="678" class="ln"/>
+  <text x="300" y="786" class="md" font-weight="600">Total including GST</text>
+  <text x="1030" y="786" class="md num" text-anchor="end" font-weight="600">$3,528.00</text>
+  <text x="1100" y="792" class="lbl m">From the last visit</text>
+  <g clip-path="url(#c1)"><rect x="1100" y="812" width="200" height="132" fill="var(--panel)"/><path d="M1100 944 L1168 867.44 L1220 944 Z" fill="var(--muted)" opacity=".5"/><path d="M1184 944 L1248 848.96 L1300 944 Z" fill="var(--ink)" opacity=".35"/><circle cx="1144" cy="846.32" r="14.52" fill="var(--muted)" opacity=".45"/></g><rect x="1100" y="812" width="200" height="132" fill="none" stroke="var(--line)" stroke-width="2"/><defs><clipPath id="c1"><rect x="1100" y="812" width="200" height="132"/></clipPath></defs>
+  <g clip-path="url(#c2)"><rect x="1320" y="812" width="200" height="132" fill="var(--panel)"/><rect x="1344" y="851.6" width="60" height="92.39999999999999" fill="var(--ink)" opacity=".3"/><rect x="1420" y="830.48" width="72" height="113.52" fill="var(--muted)" opacity=".5"/><rect x="1320" y="907.04" width="200" height="36.96" fill="var(--ink)" opacity=".18"/></g><rect x="1320" y="812" width="200" height="132" fill="none" stroke="var(--line)" stroke-width="2"/><defs><clipPath id="c2"><rect x="1320" y="812" width="200" height="132"/></clipPath></defs>
+</svg>

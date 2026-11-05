@@ -1,0 +1,304 @@
+---
+/**
+ * BenefitCards: three to eight peers of roughly equal weight.
+ *
+ * The column count is chosen from the item count rather than handed to `auto-fit`, because
+ * auto-fit will happily leave one card alone on the last row and that always reads as a mistake
+ * rather than as a decision. Seven items get four columns (4 + 3), eight get four (4 + 4), five
+ * get three (3 + 2). Where no divisor avoids a lone card at a given width, the last card spans the
+ * row instead, which looks deliberate.
+ *
+ * Cards are drawn with a border and no fill. A filled card has to know what it is sitting on, and
+ * the same fill that reads as a card on white is invisible on a subtle section and glares on an
+ * inverse one. The border works on all three grounds with no per-ground override.
+ *
+ * A card with an `href` becomes clickable across its whole area through a stretched pseudo-element
+ * on the title link. That keeps exactly one thing in the tab order per card, and keeps the
+ * accessible name the title rather than "read more".
+ */
+export interface BenefitCard {
+  title: string;
+  /** One or two sentences. Longer than that and the piece to reach for is BenefitAlternating. */
+  body: string;
+  /** Inline SVG markup, authored at build time. There is no icon library in this kit. */
+  icon?: string;
+  href?: string;
+}
+
+export interface Props {
+  /** Section heading. Pass an empty string to keep it for assistive technology only. */
+  heading?: string;
+  lede?: string;
+  items?: BenefitCard[];
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  /**
+   * Which ground this section sits on. One name and one vocabulary across the whole kit, so a
+   * page can alternate grounds without having to remember which piece calls it what. Every
+   * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  emptyMessage?: string;
+}
+
+const {
+  heading = "What you get when the job is run properly",
+  lede = "Six things that sound obvious and are the reason most jobs run late.",
+  items = [
+    {
+      title: "A scope you can hold someone to",
+      body: "Materials named, exclusions listed, and a figure that does not move unless you approve a variation first.",
+    },
+    {
+      title: "One person who answers",
+      body: "The same name from the first call to the final invoice, so nothing gets explained twice.",
+    },
+    {
+      title: "Dates in writing",
+      body: "A start date confirmed by email, and a call the moment anything shifts. Silence is not a schedule.",
+    },
+    {
+      title: "Photographs as it goes",
+      body: "Progress shots the same afternoon, so you can see the work whether or not you are on site.",
+    },
+    {
+      title: "Licences and cover, up front",
+      body: "Licence number, public liability and workers compensation sent before anyone starts, not after you ask.",
+    },
+    {
+      title: "The site left clean",
+      body: "Rubbish removed, surfaces swept and offcuts taken away on the last day, not the following week.",
+    },
+  ],
+  id,
+  tone = "default",
+  emptyMessage = "What you get from this is being written up.",
+} = Astro.props;
+
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `bc-${Math.random().toString(36).slice(2, 8)}`;
+const titleId = `${uid}-title`;
+const headingText = heading?.trim() || "What you get";
+const headingHidden = !heading?.trim();
+
+const cards = (Array.isArray(items) ? items : []).filter((item) => item && item.title);
+
+/**
+ * Pick a column count that never leaves exactly one card alone on the final row. Two and four
+ * items read better in pairs than strung across, so they are named rather than derived.
+ */
+const columnsFor = (n: number, max: number): number => {
+  if (n <= 1) return 1;
+  if (n === 2) return 2;
+  if (n === 4) return 2;
+  if (max >= 4 && n === 8) return 4;
+  if (n % 3 !== 1) return Math.min(3, max);
+  if (max >= 4 && n % 4 !== 1) return 4;
+  return 2;
+};
+
+const colsLg = columnsFor(cards.length, 4);
+/* Tablet is narrow enough that three padded cards get cramped, so an even count pairs up and only
+   an odd count that divides cleanly goes to three. */
+const colsMd = cards.length % 2 === 0 ? 2 : cards.length % 3 !== 1 ? 3 : 2;
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+  ]}
+  aria-labelledby={titleId}
+>
+  <div class="kit-container">
+    <div class="bc__head">
+      <h2 id={titleId} class:list={["kit-h2", headingHidden && "kit-visually-hidden"]}>{headingText}</h2>
+      {lede && <p class="kit-lede bc__lede">{lede}</p>}
+    </div>
+
+    {cards.length === 0 ? (
+      <p class="kit-empty bc__empty">{emptyMessage}</p>
+    ) : (
+      <ul class="bc__grid" role="list" data-cols={colsLg} data-cols-md={colsMd}>
+        {cards.map((card) => (
+          <li class:list={["bc__item", card.href && "bc__item--linked"]}>
+            {card.icon && <span class="bc__icon" aria-hidden="true" set:html={card.icon} />}
+            <h3 class="kit-h3 bc__title">
+              {card.href ? (
+                <a class="bc__link" href={card.href}>{card.title}</a>
+              ) : (
+                card.title
+              )}
+            </h3>
+            <p class="bc__body">{card.body}</p>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  /* --kit-accent-lift is the variant meant for dark grounds, but its fallback chain ends at
+     --kit-accent, which is near-black by default and therefore invisible on --kit-bg-inverse.
+     That takes the accent text, the stars and every focus ring down with it. Re-resolving it
+     here reads the brand's own lifted accent when there is one and falls back to the inverse
+     text colour, which the same ground already guarantees. Delete this once foundations gives
+     the token a fallback suited to the ground it exists for. */
+  .kit-section--inverse {
+  }
+
+  .bc__head {
+    display: grid;
+    gap: var(--kit-space-md);
+    max-width: var(--kit-measure);
+  }
+
+  .bc__lede {
+    color: var(--kit-text-muted);
+  }
+
+  .kit-section--inverse .bc__lede {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+
+  .bc__empty,
+  .bc__grid {
+    margin-block-start: var(--kit-space-2xl);
+  }
+
+  .bc__grid {
+    list-style: none;
+    margin-inline: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--kit-gutter);
+  }
+
+  .bc__item {
+    position: relative;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-sm);
+    padding: var(--kit-space-lg);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    transition: border-color var(--kit-duration) var(--kit-ease),
+      box-shadow var(--kit-duration) var(--kit-ease);
+  }
+
+  .bc__item--linked:hover {
+    border-color: var(--kit-border-strong);
+    box-shadow: var(--kit-shadow-raised);
+  }
+
+  .bc__item--linked:focus-within {
+    border-color: var(--kit-accent-ink);
+  }
+
+  .kit-section--inverse .bc__item {
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 25%, transparent);
+  }
+
+  .kit-section--inverse .bc__item--linked:hover {
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 55%, transparent);
+  }
+
+  .kit-section--inverse .bc__item--linked:focus-within {
+    border-color: var(--kit-accent-lift);
+  }
+
+  .bc__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--kit-accent-ink);
+    font-size: var(--kit-text-xl);
+  }
+
+  .kit-section--inverse .bc__icon {
+    color: var(--kit-accent-lift);
+  }
+
+  .bc__icon :global(svg) {
+    width: 1em;
+    height: 1em;
+    display: block;
+  }
+
+  .bc__title {
+    text-wrap: balance;
+  }
+
+  /* One tab stop per card, the whole card clickable, and the accessible name stays the title. */
+  .bc__link {
+    color: inherit;
+    text-decoration: none;
+    border-radius: var(--kit-radius);
+  }
+
+  .bc__link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--kit-radius);
+  }
+
+  .bc__link:hover {
+    text-decoration: underline;
+  }
+
+  .bc__link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .kit-section--inverse .bc__link:focus-visible {
+    outline-color: var(--kit-accent-lift);
+  }
+
+  .bc__body {
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    color: var(--kit-text-muted);
+    margin: 0;
+    max-width: var(--kit-measure);
+    text-wrap: pretty;
+  }
+
+  .kit-section--inverse .bc__body {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+
+  @media (min-width: 48rem) {
+    .bc__grid[data-cols-md="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bc__grid[data-cols-md="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .bc__grid[data-cols-md="2"] > .bc__item:last-child:nth-child(2n + 1) { grid-column: span 2; }
+    .bc__grid[data-cols-md="3"] > .bc__item:last-child:nth-child(3n + 1) { grid-column: span 3; }
+  }
+
+  @media (min-width: 64rem) {
+    .bc__grid[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bc__grid[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .bc__grid[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .bc__grid[data-cols="2"] > .bc__item:last-child:nth-child(2n + 1) { grid-column: span 2; }
+    .bc__grid[data-cols="3"] > .bc__item:last-child:nth-child(3n + 1) { grid-column: span 3; }
+    .bc__grid[data-cols="4"] > .bc__item:last-child:nth-child(4n + 1) { grid-column: span 4; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bc__item {
+      transition: none;
+    }
+  }
+</style>

@@ -1,0 +1,13 @@
+---
+/**
+ * CMS visual-editing overlay. A NO-OP until a CMS is wired in.
+ *
+ * BaseLayout mounts this unconditionally so that adding a CMS never has to
+ * patch the layout (which is customised per build). `scripts/add-sanity.sh`
+ * replaces this file with the Sanity <VisualEditing /> version.
+ *
+ * The PUBLIC_SANITY_VISUAL_EDITING_ENABLED flag BaseLayout reads stays false
+ * without a CMS, so the draft-preview behaviours it gates (no-store, noindex,
+ * analytics suppressed) are all inert here.
+ */
+---

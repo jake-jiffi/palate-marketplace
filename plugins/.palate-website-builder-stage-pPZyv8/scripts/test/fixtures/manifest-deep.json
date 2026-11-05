@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "business": "a dentist",
+  "signature_move": {
+    "source_slug": "smile-co",
+    "name": "split editorial hero"
+  },
+  "references_surveyed": [
+    "smile-co",
+    "bright-dental",
+    "north-ortho",
+    "lumen-clinic",
+    "atelier-skin",
+    "form-studio",
+    "ridgeline-co",
+    "salt-cafe"
+  ],
+  "inner_pages_viewed": [
+    {
+      "slug": "smile-co",
+      "page": "pricing"
+    },
+    {
+      "slug": "bright-dental",
+      "page": "booking"
+    },
+    {
+      "slug": "north-ortho",
+      "page": "contact"
+    }
+  ],
+  "mcp_calls": [
+    {
+      "tool": "mcp__palate__refs_search",
+      "args": {
+        "query": "dental clinic"
+      },
+      "slugs": [
+        "smile-co",
+        "bright-dental",
+        "north-ortho",
+        "lumen-clinic"
+      ]
+    },
+    {
+      "tool": "mcp__palate__refs_get",
+      "args": {
+        "slugs": [
+          "smile-co",
+          "bright-dental"
+        ],
+        "layer": [
+          "do_dont",
+          "component_prompts",
+          "signature_moves"
+        ]
+      },
+      "slugs": [
+        "smile-co",
+        "bright-dental"
+      ]
+    },
+    {
+      "tool": "mcp__palate__refs_get_screenshot",
+      "args": {
+        "slug": "smile-co",
+        "page": "pricing"
+      },
+      "slugs": [
+        "smile-co"
+      ]
+    },
+    {
+      "tool": "mcp__palate__refs_similar",
+      "args": {
+        "slug": "smile-co"
+      },
+      "slugs": [
+        "atelier-skin",
+        "form-studio",
+        "ridgeline-co",
+        "salt-cafe"
+      ]
+    }
+  ],
+  "files_written": [
+    "src/pages/index.astro"
+  ]
+}

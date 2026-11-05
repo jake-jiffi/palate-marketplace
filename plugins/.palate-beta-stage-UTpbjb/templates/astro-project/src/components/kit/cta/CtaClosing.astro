@@ -1,0 +1,133 @@
+---
+/**
+ * Full-width closing section.
+ *
+ * The last thing before the footer, on a page long enough that the reader has finished the
+ * argument and needs somewhere to go. One primary action and at most one secondary: a second
+ * primary is two primaries, and the reader picks neither.
+ *
+ * Left-aligned by default. A centred stack of headline, sentence and buttons is the single most
+ * recognisable template shape on the web and Palate's own gate treats it as a tell, so `align`
+ * exists for a build whose art direction genuinely wants it, rather than as the default nobody
+ * chose.
+ */
+export interface Props {
+  headline?: string;
+  /** One sentence. What happens when they act, or what it costs them, not a summary of the page. */
+  body?: string;
+  primary?: { label: string; href: string };
+  /** The lower-commitment route for someone not ready: a price list, a phone number, a sample. */
+  secondary?: { label: string; href: string };
+  /** A line under the buttons: hours, response time, whatever removes the last hesitation. */
+  note?: string;
+  tone?: "default" | "subtle" | "inverse";
+  align?: "start" | "centre";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  headline = "Tell us what needs doing",
+  body = "Send through the job and we will come and look at it. The quote is free, it is written down, and it holds for 30 days.",
+  primary = { label: "Request a quote", href: "/contact" },
+  secondary,
+  note,
+  tone = "inverse",
+  align = "start",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const slug = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "cta";
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `cta-${slug(headline)}`;
+const headingId = `${uid}-heading`;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "kit-ctac", align === "centre" && "kit-ctac--centre", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container kit-ctac__inner">
+    <h2 class="kit-h2 kit-ctac__headline" id={headingId}>{headline}</h2>
+    {body && <p class="kit-lede kit-ctac__body">{body}</p>}
+
+    <div class="kit-ctac__actions">
+      <a class="kit-btn kit-btn--primary" href={primary.href}>
+        <span class="kit-btn__label">{primary.label}</span>
+      </a>
+      {secondary && (
+        <a class="kit-btn kit-btn--secondary" href={secondary.href}>
+          <span class="kit-btn__label">{secondary.label}</span>
+        </a>
+      )}
+    </div>
+
+    {note && <p class="kit-ctac__note kit-muted">{note}</p>}
+  </div>
+</section>
+
+<style>
+  .kit-ctac__inner {
+    display: grid;
+    justify-items: start;
+    gap: var(--kit-space-lg);
+    max-width: var(--kit-measure-wide);
+    margin-inline: auto;
+  }
+
+  .kit-ctac--centre .kit-ctac__inner { justify-items: center; text-align: center; }
+  .kit-ctac--centre .kit-ctac__body { margin-inline: auto; }
+  .kit-ctac--centre .kit-ctac__actions { justify-content: center; }
+
+  /* A long headline wraps and balances instead of running to the full page width. */
+  .kit-ctac__headline { max-width: 22ch; }
+  .kit-ctac__body { text-wrap: pretty; }
+
+  .kit-ctac__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-md);
+    margin-top: var(--kit-space-xs);
+  }
+
+  .kit-ctac__note { font-size: var(--kit-text-sm); margin: 0; max-width: var(--kit-measure); }
+
+  .kit-ctac .kit-btn { max-width: 100%; }
+
+  .kit-ctac .kit-btn:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-section--inverse .kit-btn:focus-visible { outline-color: var(--kit-text-inverse); }
+
+  /* On the dark ground the brand accent has to move the other way or the primary button is the
+     one control on the page that fails contrast. */
+  /* On a dark ground the primary button is drawn in the inverse text colour rather than in the
+     accent. --kit-accent-lift falls back to --kit-accent, which a brand chooses for a LIGHT
+     ground, so on the default token set an accent button is a near-invisible shape carrying
+     legible text. A brand that wants its own colour here overrides .kit-btn--primary inside
+     .kit-section--inverse in its own layer. */
+  /* .kit-lede pins its own colour to --kit-text, so on a dark ground it lands as
+     near-black on near-black. Measured at 1.06:1 before this line existed. */
+  .kit-section--inverse .kit-ctac__body { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-btn--primary {
+    background: var(--kit-text-inverse);
+    color: var(--kit-bg-inverse);
+  }
+  .kit-section--inverse .kit-btn--primary:hover {
+    background: color-mix(in srgb, var(--kit-text-inverse) 86%, var(--kit-bg-inverse));
+  }
+</style>

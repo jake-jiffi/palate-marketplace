@@ -1,0 +1,360 @@
+---
+/**
+ * TestimonialVideo: a filmed customer, with the words available to people who will not press play.
+ *
+ * A video testimonial outperforms text when a real one exists. It also fails completely for the
+ * larger group who are scrolling on a phone with the sound off, on a train, at work, or on a
+ * connection that will not carry it. So `pullQuote` is a required prop rather than a nicety: the
+ * quote is rendered as text underneath the frame, always, and the section still makes its point
+ * with the video never loaded. If you cannot supply the quote, you do not have the testimonial.
+ *
+ * THESE ARE SOMEBODY ELSE'S WORDS AND THE COMPONENT TREATS THEM THAT WAY.
+ * The pull quote is transcribed from what the person actually said on camera, verbatim or cut. It
+ * is never a paraphrase, never a tidier version, and never a line written for them. A name is
+ * never attached to words the person did not say, and a role, company or location is never added
+ * to a quote that did not carry one.
+ *
+ * Loading and error are real states, not decoration. The video ships `preload="none"`, so nothing
+ * downloads until somebody asks for it: pressing play is the first time the file is touched, and
+ * that gap is exactly where a slow connection or a dead URL shows up. The status line is an
+ * aria-live region so the wait and the failure are both announced, and a failure falls back to a
+ * plain link to the file rather than leaving a dead rectangle on the page.
+ *
+ * Supply `captions` wherever you can. A testimonial nobody can hear is not proof of anything.
+ *
+ * The <video> is named with `aria-labelledby` pointing at a hidden line naming the speaker. Strict
+ * validators discourage naming a media element that way and prefer it to inherit from adjacent
+ * visible copy. That is overridden on purpose: once playback starts the overlay button is gone and
+ * the native controls are the only stop in the tab order, and an unnamed media player announced as
+ * just "video" tells a listener nothing about which of several it has landed on.
+ */
+interface Props {
+  /**
+   * Frame shown before play. A real still from the video, not a stock portrait. NO DEFAULT: a
+   * defaulted path 404s on every site that does not carry that exact file, and a broken-image
+   * marker where a customer's face should be is worse than an empty frame.
+   */
+  poster?: string;
+  /** An MP4 or WebM the browser can play directly. No default, for the same reason. */
+  videoUrl?: string;
+  videoType?: string;
+  captions?: { src: string; srclang: string; label: string };
+  /** Words the person actually said, transcribed. Required. */
+  pullQuote?: string;
+  name?: string;
+  role?: string;
+  company?: string;
+  location?: string;
+  /** Spoken length, so nobody has to guess what pressing play costs them. */
+  duration?: string;
+  heading?: string;
+  accessibleName?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+/*
+ * NO IDENTITY FIELD HAS A DEFAULT, and that is a correctness rule rather than a style choice.
+ *
+ * This component's own header already says a role, a company or a location is never added to a
+ * quote that did not come with one. Its destructure then defaulted a company anyway, so a build
+ * passing a real quote, a real name and a real location, and simply not passing `company`,
+ * silently attributed those words to a firm nobody named. That is fabricated testimony produced
+ * by omission, which is the same class this project has already had to correct once, and it is
+ * worse than the original because nothing in the calling code looks wrong.
+ *
+ * Sample COPY is fine: a quote with nothing attached to it attributes nothing to anybody. It is
+ * the ATTRIBUTION that must never be invented.
+ */
+const {
+  poster = "",
+  videoUrl = "",
+  videoType = "video/mp4",
+  captions,
+  pullQuote = "We had been quoted twice for a full replacement. They repaired it, told us how long the repair would realistically last, and put that in writing.",
+  name,
+  role,
+  company,
+  location,
+  duration = "2 min 10 sec",
+  heading,
+  accessibleName = "A customer on video",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `tv-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const statusId = `${uid}-status`;
+const quoteId = `${uid}-quote`;
+const videoLabelId = `${uid}-label`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const detail = [role, company, location].filter(Boolean).join(", ");
+/**
+ * WITH NO FILE THERE IS NOTHING TO PLAY. The frame stays at its ratio so the hole is the right
+ * size before the footage arrives, but the play control and the download link go, because a
+ * control that cannot do its job is worse than no control.
+ */
+const playable = Boolean(videoUrl);
+const speaker = name ? `the video from ${name}` : "the video";
+const videoLabel = name ? `Video testimonial from ${name}` : "Video testimonial";
+const playLabel = duration ? `Play ${speaker}, ${duration}` : `Play ${speaker}`;
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container tv">
+    <h2 id={headingId} class:list={["kit-h2", !heading && "kit-visually-hidden"]}>
+      {heading ?? accessibleName}
+    </h2>
+
+    <figure class:list={["tv__figure", heading && "tv__figure--after-heading"]}>
+      <span id={videoLabelId} class="kit-visually-hidden">{videoLabel}</span>
+
+      <div class="tv__frame kit-media kit-media--wide" data-kit-tv>
+        {playable && (
+          <video
+            class="tv__video"
+            poster={poster || undefined}
+            preload="none"
+            playsinline
+            aria-labelledby={videoLabelId}
+            aria-describedby={pullQuote ? quoteId : undefined}
+            data-kit-tv-video
+          >
+            <source src={videoUrl} type={videoType} />
+            {captions && (
+              <track kind="captions" src={captions.src} srclang={captions.srclang} label={captions.label} default />
+            )}
+          </video>
+        )}
+
+        {playable && (
+          <button
+            type="button"
+            class="tv__play"
+            aria-describedby={statusId}
+            data-kit-tv-play
+          >
+            <span class="tv__play-mark" aria-hidden="true"></span>
+            <span class="tv__play-text">
+              <span class="tv__play-label">Play the video</span>
+              {duration && <span class="tv__play-duration">{duration}</span>}
+            </span>
+            <span class="kit-visually-hidden">{playLabel}</span>
+          </button>
+        )}
+
+        <p class="tv__spinner-wrap" data-kit-tv-loading hidden>
+          <span class="kit-spinner" aria-hidden="true"></span>
+        </p>
+      </div>
+
+      <p id={statusId} class="tv__status kit-muted" role="status" aria-live="polite" data-kit-tv-status></p>
+
+      {playable && (
+        <p class="tv__fallback" data-kit-tv-fallback hidden>
+          <a class="kit-link kit-link--target" href={videoUrl} download>Download the video file instead</a>
+        </p>
+      )}
+
+      {pullQuote && (
+        <blockquote class="tv__quote" id={quoteId}>
+          <p class="tv__text">{pullQuote}</p>
+        </blockquote>
+      )}
+
+      {(name || detail) && (
+        <figcaption class="tv__by">
+          {name && <cite class="tv__name">{name}</cite>}
+          {detail && <span class="kit-muted tv__detail">{detail}</span>}
+        </figcaption>
+      )}
+    </figure>
+  </div>
+</section>
+
+<script>
+  /* Delegated and guarded, because Astro's ClientRouter swaps the document on navigation: a
+     listener bound to the element would be thrown away, and a second copy of this script would
+     otherwise bind twice and play the video twice on one click. Plain DOM, no dependency.
+
+     Typed against the real DOM interfaces rather than left implicit. That is not tidiness: the
+     handlers below run on events from the WHOLE document, so `event.target` is genuinely any
+     node on the page, and the narrowing that keeps this correct (an Element before `closest`,
+     an HTMLVideoElement before `play`) is the same narrowing the checker asks for. */
+  interface KitTestimonialVideoWindow extends Window {
+    __kitTestimonialVideoBound?: boolean;
+  }
+
+  (() => {
+    const scope = window as KitTestimonialVideoWindow;
+    if (scope.__kitTestimonialVideoBound) return;
+    scope.__kitTestimonialVideoBound = true;
+
+    /** The ratio box around one video. Reached from anything inside it, or from the video itself. */
+    const frameOf = (node: EventTarget | null): HTMLElement | null => {
+      if (!(node instanceof Element)) return null;
+      const frame = node.closest("[data-kit-tv]");
+      return frame instanceof HTMLElement ? frame : null;
+    };
+
+    /** The status line and the fallback link are SIBLINGS of the frame, not children of it. */
+    const partOf = (frame: HTMLElement, selector: string): HTMLElement | null => {
+      const wrap = frame.parentElement;
+      const found = wrap ? wrap.querySelector(selector) : null;
+      return found instanceof HTMLElement ? found : null;
+    };
+
+    const setStatus = (frame: HTMLElement, text: string): void => {
+      const status = partOf(frame, "[data-kit-tv-status]");
+      if (status) status.textContent = text;
+    };
+
+    const setLoading = (frame: HTMLElement, on: boolean): void => {
+      const spinner = frame.querySelector("[data-kit-tv-loading]");
+      if (spinner instanceof HTMLElement) spinner.hidden = !on;
+      frame.toggleAttribute("data-loading", on);
+    };
+
+    const fail = (frame: HTMLElement): void => {
+      setLoading(frame, false);
+      frame.setAttribute("data-error", "");
+      const button = frame.querySelector("[data-kit-tv-play]");
+      if (button instanceof HTMLElement) button.hidden = false;
+      setStatus(frame, "The video could not be played. You can download the file instead.");
+      const fallback = partOf(frame, "[data-kit-tv-fallback]");
+      if (fallback) fallback.hidden = false;
+    };
+
+    document.addEventListener("click", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      const button = origin ? origin.closest("[data-kit-tv-play]") : null;
+      if (!button) return;
+      const frame = frameOf(button);
+      const video = frame ? frame.querySelector("[data-kit-tv-video]") : null;
+      if (!frame || !(video instanceof HTMLVideoElement)) return;
+
+      frame.removeAttribute("data-error");
+      const fallback = partOf(frame, "[data-kit-tv-fallback]");
+      if (fallback) fallback.hidden = true;
+
+      setLoading(frame, true);
+      setStatus(frame, "Loading the video.");
+      video.controls = true;
+
+      const started = video.play();
+      if (started && typeof started.catch === "function") {
+        started.catch(() => { fail(frame); });
+      }
+    });
+
+    /* Media events do not bubble, so both of these listen in the capture phase. */
+    document.addEventListener("playing", (event) => {
+      const frame = frameOf(event.target);
+      if (!frame) return;
+      setLoading(frame, false);
+      setStatus(frame, "");
+      const button = frame.querySelector("[data-kit-tv-play]");
+      if (button instanceof HTMLElement) button.hidden = true;
+    }, true);
+
+    document.addEventListener("error", (event) => {
+      const frame = frameOf(event.target);
+      if (frame) fail(frame);
+    }, true);
+  })();
+</script>
+
+<style>
+  .tv__figure { margin: 0; display: grid; gap: var(--kit-space-lg); max-width: var(--kit-page-max); }
+  .tv__figure--after-heading { margin-block-start: var(--kit-space-xl); }
+
+  .tv__frame { position: relative; }
+  .tv__video { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--kit-bg-inverse); }
+
+  /* The play control covers the frame, so the whole poster is the target, but it is a real
+     <button>: keyboard reachable, and announced as a control rather than as an image. The scrim
+     is the shared token, so text over a poster reads the same here as over any other photograph. */
+  .tv__play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kit-space-sm);
+    width: 100%;
+    min-height: var(--kit-target);
+    padding: var(--kit-space-md);
+    border: 0;
+    background: var(--kit-scrim);
+    color: var(--kit-text-inverse);
+    font-family: var(--kit-font-body);
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-strong);
+    cursor: pointer;
+    transition: background-color var(--kit-duration) var(--kit-ease);
+  }
+  .tv__play:hover { background: color-mix(in srgb, var(--kit-bg-inverse) 72%, transparent); }
+  /* The one exception to the shared focus ring: the button sits ON the poster, so the ring has to
+     read against a photograph rather than against the page, and it has to sit inside the frame
+     because the button is flush to its edges. */
+  .tv__play:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: calc(var(--kit-focus-offset) * -1);
+  }
+
+  /* A drawn triangle, so no icon font and no asset. */
+  .tv__play-mark {
+    flex: none;
+    width: 0;
+    height: 0;
+    border-block: var(--kit-space-sm) solid transparent;
+    border-inline-start: var(--kit-space-md) solid currentColor;
+    border-inline-end: 0;
+  }
+  .tv__play-text { display: grid; gap: var(--kit-space-2xs); text-align: start; }
+  .tv__play-duration { font-weight: var(--kit-weight-body); font-size: var(--kit-text-xs); }
+
+  .tv__spinner-wrap {
+    position: absolute;
+    inset-block-end: var(--kit-space-md);
+    inset-inline-end: var(--kit-space-md);
+    margin: 0;
+    color: var(--kit-text-inverse);
+    font-size: var(--kit-text-lg);
+  }
+
+  .tv__status { margin: 0; font-size: var(--kit-text-sm); }
+  .tv__status:empty { display: none; }
+  .tv__fallback { margin: 0; font-size: var(--kit-text-sm); }
+
+  .tv__quote { margin: 0; }
+  .tv__text {
+    margin: 0;
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-xl);
+    line-height: var(--kit-leading-snug);
+    text-wrap: pretty;
+    max-width: var(--kit-measure);
+  }
+  .tv__text::before { content: "“"; }
+  .tv__text::after { content: "”"; }
+
+  .tv__by { display: flex; flex-wrap: wrap; gap: var(--kit-space-xs) var(--kit-space-sm); align-items: baseline; font-size: var(--kit-text-sm); }
+  .tv__name { font-style: normal; font-weight: var(--kit-weight-strong); color: var(--kit-text); }
+
+  @media (min-width: 48rem) {
+    .tv__text { font-size: var(--kit-text-2xl); }
+  }
+</style>

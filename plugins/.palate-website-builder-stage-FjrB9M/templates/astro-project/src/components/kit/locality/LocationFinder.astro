@@ -1,0 +1,139 @@
+---
+/**
+ * LOCATION FINDER. The places a visitor can go, each with its page, and the booking action beside
+ * the one they choose.
+ *
+ * In the survey the finder is a CONVERSION surface, not a directory: barrys puts a studio finder
+ * (search, nearest, book) inside the hero; unoit's Locations sit directly before the closing
+ * booking CTA and each shop has its own page; aesop's "Find a store" is a city list with a route
+ * to the full locator; lava-dental closes on "We are right here" with a map; vivvi and myodetox
+ * are built book-by-location. The kit could compose none of this.
+ *
+ * NO LOCATIONS ARE DEFAULTED. An invented address on a real client's site sends somebody to a door
+ * that is not there. The demo passes samples from kit-sample.ts.
+ */
+export interface Location {
+  name: string;
+  address: string;
+  href: string;
+  hours?: string;
+  phone?: string;
+}
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  locations?: Location[];
+  /** The booking action shown beside every location, when the business books by location. */
+  bookLabel?: string;
+  /** Where the full map or locator lives, when there are more places than fit here. */
+  allHref?: string;
+  allLabel?: string;
+  tone?: "default" | "subtle" | "inverse";
+  id?: string;
+  class?: string;
+  emptyMessage?: string;
+}
+
+const {
+  heading = "Find us",
+  lede = "",
+  locations = [],
+  bookLabel = "",
+  allHref = "",
+  allLabel = "See every location",
+  tone = "default",
+  id,
+  class: className,
+  emptyMessage = "Our locations are being written up. Ring us and we will point you to the nearest one.",
+} = Astro.props as Props;
+
+const items = (Array.isArray(locations) ? locations : []).filter((l) => l && l.name && l.address && l.href);
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+const uid = id || `lf-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "kit-lf", className]}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="kit-lf__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {items.length === 0 ? (
+      <p class="kit-empty kit-lf__empty">{emptyMessage}</p>
+    ) : (
+      <ol class="kit-lf__list" role="list">
+        {items.map((place, index) => (
+          <li class="kit-lf__row">
+            <div class="kit-lf__main">
+              <h3 class="kit-h3 kit-lf__name" id={`${uid}-place-${index}`}>
+                <a class="kit-lf__namelink" href={place.href}>{place.name}</a>
+              </h3>
+              <p class="kit-body kit-lf__address">{place.address}</p>
+              {(place.hours || place.phone) && (
+                <p class="kit-body kit-muted kit-lf__meta">
+                  {place.hours && <span>{place.hours}</span>}
+                  {place.hours && place.phone && <span aria-hidden="true"> · </span>}
+                  {place.phone && <a class="kit-link kit-link--target" href={telHref(place.phone)}>{place.phone}</a>}
+                </p>
+              )}
+            </div>
+            {bookLabel && (
+              <p class="kit-lf__act">
+                <a class="kit-btn kit-btn--secondary" href={place.href} aria-describedby={`${uid}-place-${index}`}>
+                  <span class="kit-btn__label">{bookLabel}</span>
+                </a>
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+    )}
+
+    {items.length > 0 && allHref && (
+      <p class="kit-lf__all">
+        <a class="kit-link kit-link--target" href={allHref}>{allLabel}</a>
+      </p>
+    )}
+  </div>
+</section>
+
+<style>
+  .kit-lf__head { display: grid; gap: var(--kit-space-sm); max-width: var(--kit-measure); }
+  .kit-lf__list {
+    list-style: none;
+    margin: var(--kit-space-xl) 0 0;
+    padding: 0;
+    display: grid;
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-lf__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-md) var(--kit-space-xl);
+    align-items: center;
+    justify-content: space-between;
+    padding-block: var(--kit-space-lg);
+    border-bottom: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-lf__main { display: grid; gap: var(--kit-space-2xs); flex: 1 1 18rem; min-width: 0; }
+  .kit-lf__name { margin: 0; }
+  .kit-lf__namelink { color: inherit; text-decoration: none; }
+  .kit-lf__namelink:hover { text-decoration: underline; text-underline-offset: var(--kit-underline-offset); }
+  .kit-lf__namelink:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-lf__address, .kit-lf__meta { margin: 0; }
+  .kit-lf__act { margin: 0; flex: none; }
+  .kit-lf__all { margin: var(--kit-space-lg) 0 0; }
+  .kit-lf__empty { margin-top: var(--kit-space-xl); }
+</style>

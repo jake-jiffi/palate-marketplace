@@ -1,0 +1,73 @@
+# Lighthouse CI assertions for a Palate-built site.
+#
+# WHY THIS FILE EXISTS
+# `lhci autorun` with no assert config silently falls back to
+# `--preset=lighthouse:recommended`: roughly 140 audits, every one of them at
+# minScore 0.9. That preset fails a perfectly good site, so a repo that adopted
+# it would go red on its first pull request and the whole gate would be switched
+# off within the week. This file replaces the preset with a short list a real
+# Palate build actually passes, so a red run means a real defect.
+#
+# WHERE THE NUMBERS COME FROM
+# Measured with Lighthouse 12.6.1 (the version @lhci/cli 0.15.1 pins) at mobile
+# lab defaults, against five live Palate-built pages: aralia-skincare.vercel.app,
+# axis-object.vercel.app, and palatemcp.com at /, /pricing and /web-design-mcp.
+# Every audit in the `error` list below scored 1 on all five, or was
+# notApplicable (which lhci scores as a pass). The accessibility category scored
+# exactly 1.00 on all five, so the 0.9 floor has real headroom.
+#
+# WHAT IS DELIBERATELY NOT ASSERTED, because it would cry wolf
+#   errors-in-console       scored 0 on three of the five pages, from a
+#                           third-party analytics request that 404s off its own
+#                           host. Asserting it would bury the real signal.
+#   categories:performance  ranged 0.47 to 0.97 across those same five pages. It
+#                           is a function of the throttled lab and the network on
+#                           the day, so it warns and never fails.
+#   categories:best-practices  is dragged under 0.9 by errors-in-console alone
+#                           (measured 0.75 on three pages). Warn only.
+#   categories:seo          is-crawlable fails on any deployment serving
+#                           noindex, which most preview URLs do. The category
+#                           warns; the SEO audits that do not depend on the
+#                           environment are asserted individually instead.
+#
+# BEFORE BUMPING @lhci/cli
+# An audit id that does not exist in the pinned Lighthouse version is a HARD
+# failure ('"x" is not a known audit'), not a skip. `tap-targets` is already gone
+# in Lighthouse 12, replaced by `target-size`. Re-measure against real pages
+# before changing the pin in .github/workflows/ci.yml.
+ci:
+  collect:
+    # The URL comes from the workflow (--collect.url). This scaffold is
+    # output: "server" with nothing prerendered, so there is no static HTML in
+    # dist/ to point Lighthouse at: it has to audit a deployed URL.
+    numberOfRuns: 3
+  assert:
+    # optimistic = the best of the three runs must pass. This is what stops one
+    # flaky run failing the build.
+    aggregationMethod: optimistic
+    assertions:
+      # --- Accessibility: real defects, and measured clean on every Palate page.
+      color-contrast: ["error", {}]
+      image-alt: ["error", {}]
+      link-name: ["error", {}]
+      button-name: ["error", {}]
+      label: ["error", {}]
+      heading-order: ["error", {}]
+      list: ["error", {}]
+      target-size: ["error", {}]
+      aria-allowed-attr: ["error", {}]
+      html-has-lang: ["error", {}]
+      categories:accessibility: ["error", { minScore: 0.9 }]
+
+      # --- Layout stability and mobile rendering.
+      unsized-images: ["error", {}]
+      viewport: ["error", {}]
+
+      # --- The two SEO facts a page controls itself, whatever it is deployed on.
+      document-title: ["error", {}]
+      meta-description: ["error", {}]
+
+      # --- Reported, never enforced. See the note above each one.
+      categories:performance: ["warn", { minScore: 0.8 }]
+      categories:best-practices: ["warn", { minScore: 0.9 }]
+      categories:seo: ["warn", { minScore: 0.9 }]

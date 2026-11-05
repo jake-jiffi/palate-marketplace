@@ -1,0 +1,32 @@
+---
+/**
+ * ONE STATE OF ONE VARIATION, browsable without editing code.
+ *
+ * Spec section 7 names this in acceptance and the manifest has always declared, per variation,
+ * the states the piece must handle. Until this page existed that declaration was a list of words:
+ * a reviewer could read "handles empty, long, open" and had no way to see any of them.
+ */
+import BaseLayout from "../../../../layouts/BaseLayout.astro";
+import DemoViewer from "../../../../components/kitdemo/DemoViewer.astro";
+import { kit } from "../../../../lib/kit";
+
+export function getStaticPaths() {
+  return kit.flatMap((piece) =>
+    piece.variations.flatMap((v) =>
+      v.states.map((state) => ({
+        params: { piece: piece.id, variation: v.id, state },
+        props: { piece, variation: v, state },
+      })),
+    ),
+  );
+}
+
+const { piece, variation, state } = Astro.props;
+---
+<BaseLayout
+  title={`${variation.name}, ${state} - ${piece.name}`}
+  description={variation.when}
+  noindex={true}
+>
+  <DemoViewer piece={piece} variation={variation} state={state} />
+</BaseLayout>

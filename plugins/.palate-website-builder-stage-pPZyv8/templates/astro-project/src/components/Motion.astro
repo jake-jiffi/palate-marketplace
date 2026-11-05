@@ -1,0 +1,21 @@
+---
+// Tier-0 / Tier-1 motion wrapper (see references/motion-and-3d.md).
+// Mount ONCE in BaseLayout.astro right after <ExploreSwitcher />. It boots the
+// motion floor (Lenis + GSAP ScrollTrigger reveals + the View-Transitions bridge)
+// from src/lib/motion.ts. initMotion() early-returns under prefers-reduced-motion,
+// so this is safe to mount unconditionally.
+//
+// data-brand-mode on <html> is the intensity hook if a build wants to dial motion
+// up or down per design mode (read it inside motion.ts if needed).
+//
+// This loads ONLY the Tier-0/1 floor (gsap + lenis, already installed). The Tier-2
+// 3D tier (components/ThreeScene.tsx) is opt-in and is NOT loaded here, so the
+// default template never ships a WebGL bundle.
+---
+<script>
+  import { initMotion } from "../lib/motion";
+  initMotion();
+  // Re-arm after a View-Transition navigation (the module is idempotent and
+  // re-attaches its own after-swap listener once).
+  document.addEventListener("astro:page-load", () => initMotion());
+</script>

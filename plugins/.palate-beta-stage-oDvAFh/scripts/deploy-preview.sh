@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Deploy the current scaffolded project to a Vercel PREVIEW deployment and print
+# a shareable URL for client feedback. This is the default preview handover:
+# every pause point (Explore variants, Composed site) is shared as a live
+# *.vercel.app link with the Vercel Toolbar (point-and-click Comments).
+#
+# It is NOT a production deploy: no --prod, no custom domain, and no Sanity
+# project is required - the build runs on the src/lib/content.ts fallback layer.
+# Idempotent (env upserts; `vercel link --yes` reuses the link).
+#
+#   Usage: deploy-preview.sh <project-dir> <slug> [--explore]
+#
+#   --explore  turn Explore mode ON (PUBLIC_EXPLORE_MODE=true) so `/explore`
+#              renders: the calibration row, the drawn ladder, and every board's
+#              still with its own argument. There is no picker and no board
+#              route. Omit it for the composed-site confirmation preview.
+#
+# Requires `vercel login` (assumed done). The shareable link opens WITHOUT a
+# Vercel login automatically: the script enables automation Protection Bypass
+# via the CLI (`vercel project protection enable ... --protection-bypass`) and
+# appends the secret to the URL. No dashboard step, no extra token.
+# See references/hosting-vercel.md.
+set -euo pipefail
+PROJ="${1:?project dir}"; SLUG="${2:?slug}"
+EXPLORE="false"
+for a in "$@"; do case "$a" in --explore) EXPLORE="true";; esac; done
+PROJECT="${SLUG}-site"
+
+command -v vercel >/dev/null 2>&1 \
+  || { echo "vercel CLI not installed. Run: npm i -g vercel" >&2; exit 1; }
+cd "$PROJ"
+[ -f package.json ] || { echo "DEPLOY_FAIL: no package.json in $PROJ (not a scaffolded site)" >&2; exit 1; }
+
+echo "linking Vercel project '${PROJECT}'..."
+vercel link --yes --project "$PROJECT" >/dev/null
+
+# Idempotent env upsert (vercel env add errors if the key exists).
+#
+# THE VALUE GOES IN --value, NEVER ON STDIN. The CLI used to read the value from stdin; from
+# v54 it answers `{"status":"action_required","reason":"git_branch_required"}` and exits
+# non-zero instead, so under `set -e` the whole deploy died BEFORE printing a URL, on a line
+# that looked like it had worked. Measured on vercel 54.4.1 against a real project.
+#
+# It can still refuse: a project with no linked Git repository has no branch to attach a
+# preview variable to, and the CLI asks for one it cannot infer. That is not fatal here, so
+# the failure is REPORTED and the build-time value is passed on the deploy instead
+# (see BUILD_ENV below). A preview that deploys with the right values beats a preview that
+# does not deploy at all.
+upsert_env() {
+  local key="$1" value="$2" target="$3"
+  [ -n "$value" ] || return 0
+  vercel env rm "$key" "$target" --yes >/dev/null 2>&1 || true
+  if ! vercel env add "$key" "$target" --value "$value" --yes >/dev/null 2>&1; then
+    echo "note: could not store $key on the project (no linked Git branch?); passing it at build time instead" >&2
+  fi
+}
+
+# Build-time vars for the PREVIEW environment. No Sanity project yet, so the
+# build renders from content.ts. The private brand package needs the token.
+upsert_env GITHUB_PACKAGES_TOKEN "${GITHUB_PACKAGES_TOKEN:-}" preview
+upsert_env PUBLIC_SANITY_VISUAL_EDITING_ENABLED "false"       preview
+upsert_env PUBLIC_EXPLORE_MODE "$EXPLORE"                      preview
+
+echo "deploying preview (explore=${EXPLORE})..."
+# --build-env is what actually binds these for THIS deployment, whether or not the project
+# env store accepted them above. PUBLIC_SITE_ENV is stated explicitly so the contact
+# endpoint's smoke guard knows this build is not production: an unknown environment is
+# closed, and a closed guard on a preview makes the post-deploy form check unrunnable.
+URL=$(vercel deploy --yes \
+  --build-env PUBLIC_EXPLORE_MODE="$EXPLORE" \
+  --build-env PUBLIC_SANITY_VISUAL_EDITING_ENABLED=false \
+  --build-env PUBLIC_SITE_ENV=preview \
+  | grep -oE 'https://[a-z0-9.-]+\.vercel\.app' | tail -1)
+[ -n "$URL" ] || { echo "DEPLOY_FAIL: no URL returned by vercel deploy" >&2; exit 1; }
+
+# Make the link open for ANYONE (a client not on the Vercel team) - fully
+# automatic, no dashboard step. Enable automation Protection Bypass with a
+# stable per-project secret (persisted + gitignored so previously shared links
+# keep working) and append it to the URL.
+SECRET_FILE=".palate-vercel-bypass"
+if [ -f "$SECRET_FILE" ]; then
+  BYPASS="$(cat "$SECRET_FILE")"
+else
+  BYPASS="$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 32)"
+  printf '%s' "$BYPASS" > "$SECRET_FILE"
+fi
+if vercel project protection enable "$PROJECT" --protection-bypass --protection-bypass-secret "$BYPASS" --non-interactive >/dev/null 2>&1; then
+  echo "PROTECTION_BYPASS:enabled"
+else
+  echo "PROTECTION_BYPASS:reused-existing"
+fi
+SHARE="${URL}?x-vercel-protection-bypass=${BYPASS}&x-vercel-set-bypass-cookie=true"
+
+echo "PREVIEW_DEPLOYED:${PROJECT}"
+echo "PREVIEW_URL:${URL}"
+echo "SHAREABLE_URL:${SHARE}"
+[ "$EXPLORE" = "true" ] && echo "EXPLORE_MODE:on (/explore renders the stills)" || echo "EXPLORE_MODE:off"
+echo "Send SHAREABLE_URL to the client: it opens with no Vercel login. Logged-in reviewers can also leave Toolbar Comments."

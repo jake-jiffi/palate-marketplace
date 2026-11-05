@@ -1,0 +1,199 @@
+---
+// Accessible contact form. POSTs JSON to /api/contact (src/pages/api/contact.ts):
+//   { name, email, message, turnstileToken } -> { ok: true } | { error }.
+// Built to the form-usability floor: a visible label above every field, the right
+// input type + inputmode + autocomplete, validation on blur (never mid-typing on an
+// empty required field), the error cleared the moment the field becomes valid, and
+// explicit submitting / success / failure states announced via aria-live.
+// Turnstile renders only when PUBLIC_TURNSTILE_SITE_KEY is set (provisioned by
+// scripts/optional-services.sh); without it the widget is absent and the token blank.
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+
+// STYLED FROM THE TOKEN CONTRACT, NOT FROM TAILWIND UTILITY NAMES.
+//
+// This form used to be written in `bg-brand-accent`, `rounded-brand`, `text-brand-text` and
+// friends, which exist only if the generated brand package's Tailwind preset happens to define
+// utilities by those exact names. A build whose preset names its colours differently, or which
+// vendors its own preset because the package was never published, rendered the WHOLE FORM
+// unstyled with no error anywhere: every input, label and the submit button came out as browser
+// defaults on an otherwise finished site, on the one page that has to convert. Measured on a
+// real client build. globals.css already reads --brand-bg / --brand-text / --brand-accent /
+// --brand-font-body WITH FALLBACKS, so those custom properties are the only thing every build
+// guarantees, and the scoped block below reads them with a literal fallback behind each one.
+---
+<form id="contact-form" class="cf" novalidate>
+  <div class="cf__f">
+    <label for="cf-name">Name</label>
+    <input
+      id="cf-name"
+      name="name"
+      type="text"
+      autocomplete="name"
+      required
+      aria-describedby="cf-name-error"
+    />
+    <p id="cf-name-error" class="cf__err" role="alert" hidden></p>
+  </div>
+
+  <div class="cf__f">
+    <label for="cf-email">Email</label>
+    <input
+      id="cf-email"
+      name="email"
+      type="email"
+      inputmode="email"
+      autocomplete="email"
+      required
+      aria-describedby="cf-email-error"
+    />
+    <p id="cf-email-error" class="cf__err" role="alert" hidden></p>
+  </div>
+
+  <div class="cf__f">
+    <label for="cf-message">Message</label>
+    <textarea
+      id="cf-message"
+      name="message"
+      rows="5"
+      required
+      aria-describedby="cf-message-error"
+    ></textarea>
+    <p id="cf-message-error" class="cf__err" role="alert" hidden></p>
+  </div>
+
+  {turnstileSiteKey && <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>}
+
+  <button
+    type="submit" class="cf__btn"
+  >
+    Send message
+  </button>
+
+  <p id="cf-status" class="cf__status" role="status" aria-live="polite"></p>
+</form>
+
+{turnstileSiteKey && (
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+)}
+
+<style>
+  /* Every value below reads a token with a literal fallback, so the form is styled on a build
+     with a full brand package, a partial one, or none at all. See the note in the frontmatter. */
+  .cf { display: grid; gap: 1.5rem; margin-top: 2.5rem;
+        font-family: var(--brand-font-body, system-ui, sans-serif); }
+  .cf__f { display: grid; gap: 0.5rem; }
+  .cf label { color: var(--brand-text, #111); font-size: 0.875rem; font-weight: 500; }
+  .cf input, .cf textarea, .cf select {
+    font: inherit; font-size: 1rem; width: 100%; padding: 0.75rem 1rem;
+    color: var(--brand-text, #111); background: var(--brand-bg, #fff);
+    border: 1px solid var(--brand-border, var(--brand-rule, #d4d4d4));
+    border-radius: var(--brand-radius, 0);
+  }
+  .cf input:focus-visible, .cf textarea:focus-visible, .cf select:focus-visible {
+    outline: 2px solid var(--brand-accent, currentColor); outline-offset: 2px;
+  }
+  .cf [aria-invalid="true"] { border-color: var(--brand-error, var(--brand-accent, #b00)); }
+  .cf textarea { resize: vertical; min-height: 8rem; }
+  .cf__err { color: var(--brand-error, var(--brand-accent, #b00)); font-size: 0.875rem; margin: 0; }
+  .cf__status { color: var(--brand-muted, var(--brand-text, #111)); font-size: 0.875rem; margin: 0; }
+  .cf__btn {
+    font: inherit; font-weight: 600; cursor: pointer; border: 0;
+    /* 44px of target, because a submit button is the one control on the page that must be hit. */
+    min-height: 44px; padding: 0.75rem 1.5rem;
+    color: var(--brand-inverse, #fff); background: var(--brand-accent, #111);
+    border-radius: var(--brand-radius, 0);
+  }
+  .cf__btn:disabled { opacity: 0.4; cursor: default; }
+  .cf__btn:focus-visible { outline: 2px solid var(--brand-text, #111); outline-offset: 3px; }
+</style>
+
+<script>
+  function initContactForm() {
+    const form = document.getElementById("contact-form") as HTMLFormElement | null;
+    if (!form || form.dataset.bound === "true") return;
+    form.dataset.bound = "true";
+
+    const fields = ["name", "email", "message"].map((key) => ({
+      key,
+      input: document.getElementById("cf-" + key) as HTMLInputElement | HTMLTextAreaElement,
+      error: document.getElementById("cf-" + key + "-error") as HTMLElement,
+    }));
+    const status = document.getElementById("cf-status") as HTMLElement;
+    const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    function validate(field: (typeof fields)[number], allowEmpty: boolean) {
+      const value = field.input.value.trim();
+      if (!value) return allowEmpty ? "" : "Please enter your " + field.key + ".";
+      if (field.key === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return "Please enter a valid email address.";
+      }
+      return "";
+    }
+
+    function showError(field: (typeof fields)[number], message: string) {
+      if (message) {
+        field.error.textContent = message;
+        field.error.hidden = false;
+        field.input.setAttribute("aria-invalid", "true");
+      } else {
+        field.error.textContent = "";
+        field.error.hidden = true;
+        field.input.removeAttribute("aria-invalid");
+      }
+    }
+
+    for (const field of fields) {
+      // Validate on blur, but only once the field has a value, so an empty required
+      // field is never flagged mid-flow.
+      field.input.addEventListener("blur", () => showError(field, validate(field, true)));
+      // Clear the error the moment a flagged field becomes valid.
+      field.input.addEventListener("input", () => {
+        if (field.input.getAttribute("aria-invalid") === "true") {
+          showError(field, validate(field, true));
+        }
+      });
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      let firstInvalid: HTMLElement | null = null;
+      for (const field of fields) {
+        const message = validate(field, false);
+        showError(field, message);
+        if (message && !firstInvalid) firstInvalid = field.input;
+      }
+      if (firstInvalid) {
+        firstInvalid.focus();
+        return;
+      }
+
+      const turnstile = form.querySelector('[name="cf-turnstile-response"]') as HTMLInputElement | null;
+      button.disabled = true;
+      status.textContent = "Sending...";
+      try {
+        const res = await fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: fields[0].input.value.trim(),
+            email: fields[1].input.value.trim(),
+            message: fields[2].input.value.trim(),
+            turnstileToken: turnstile?.value || "",
+          }),
+        });
+        if (res.ok) {
+          form.reset();
+          status.textContent = "Thanks, your message is on its way. We will reply soon.";
+        } else {
+          status.textContent = "Something went wrong sending that. Please try again.";
+        }
+      } catch {
+        status.textContent = "We could not reach the server. Check your connection and try again.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
+  document.addEventListener("astro:page-load", initContactForm);
+</script>

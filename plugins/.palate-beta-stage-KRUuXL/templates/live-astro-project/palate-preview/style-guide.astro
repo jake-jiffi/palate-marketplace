@@ -1,0 +1,15 @@
+---
+// The site's hidden style guide, served only by the local preview at /_palate/style-guide.
+// src/style-guide/index.astro (the site's layout, <SystemSpecimen> and its real components) is
+// preferred; without it the generated specimen stands alone.
+import SystemSpecimen from './SystemSpecimen.astro';
+import.meta.glob(['/src/styles/system.css'], { eager: true });
+const pages = import.meta.glob('/src/style-guide/index.astro');
+const load = pages['/src/style-guide/index.astro'];
+let Page;
+let problem = '';
+if (load) { try { Page = (await load() as { default: any }).default; } catch (error) { problem = (error as Error).message; } }
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+---
+{Page ? <Page /> : <html lang="en-AU"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="robots" content="noindex" /><title>Style guide</title></head><body>{problem && <p>src/style-guide/index.astro failed to load: {problem}</p>}<SystemSpecimen /></body></html>}

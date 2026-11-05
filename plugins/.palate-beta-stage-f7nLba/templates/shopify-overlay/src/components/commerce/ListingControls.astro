@@ -1,0 +1,13 @@
+---
+const { filters = [], connection, collection = false } = Astro.props;
+const url = Astro.url;
+const currentFilters = url.searchParams.getAll('filter');
+const next = new URL(url); if (connection?.pageInfo?.endCursor) next.searchParams.set('after', connection.pageInfo.endCursor);
+---
+<form method="get" class="commerce-controls">
+  {!collection && <label>Search products <input type="search" name="q" value={url.searchParams.get('q') || ''} maxlength="200" /></label>}
+  <label>Sort <select name="sort"><option value={collection ? 'featured' : 'relevance'} selected={!url.searchParams.get('sort') || url.searchParams.get('sort') === (collection ? 'featured' : 'relevance')}>{collection ? 'Featured' : 'Relevance'}</option><option value="price-asc" selected={url.searchParams.get('sort') === 'price-asc'}>Price, low to high</option><option value="price-desc" selected={url.searchParams.get('sort') === 'price-desc'}>Price, high to low</option>{collection && <><option value="newest" selected={url.searchParams.get('sort') === 'newest'}>Newest</option><option value="title" selected={url.searchParams.get('sort') === 'title'}>Title</option></>}</select></label>
+  {filters.map((filter: any) => <fieldset><legend>{filter.label}</legend>{filter.values.map((value: any) => <label><input type="checkbox" name="filter" value={value.input} checked={currentFilters.includes(value.input)} /> {value.label} ({value.count})</label>)}</fieldset>)}
+  <button>Apply choices</button><a href={collection ? url.pathname : `${url.pathname}?q=${encodeURIComponent(url.searchParams.get('q') || '')}`}>Clear filters</a>
+</form>
+{connection?.pageInfo?.hasNextPage && <a class="commerce-next" href={next.pathname + next.search}>Next page</a>}

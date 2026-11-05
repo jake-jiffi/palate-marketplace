@@ -1,0 +1,224 @@
+---
+/**
+ * HeroServicePhoto: a full-bleed photograph of the work, with the claim over it.
+ *
+ * Reach for this only when the business has genuinely good photography of its own jobs. On stock
+ * imagery it does the opposite of what it is for: a generic photograph blown up to full bleed is
+ * the loudest possible statement that there is nothing real to show, and HeroTextImage or
+ * HeroCentredPreview will serve that business better.
+ *
+ * THE PHOTOGRAPH MUST BE 1600px WIDE OR MORE. It is displayed edge to edge and cropped to the
+ * viewport, so anything smaller is visibly soft on an ordinary laptop and worse on a retina one.
+ * Supply a landscape frame with room at the bottom: the text sits over the lower half.
+ *
+ * THE SCRIM IS NOT OPTIONAL. Light text over an unknown photograph is unreadable the moment the
+ * photograph has a bright patch where the headline lands, and no build can promise it does not.
+ * The scrim is mixed from the kit's own inverse background, so it darkens with the brand rather
+ * than with a hardcoded black, and it is a gradient so the top of the picture stays legible as a
+ * picture. foundations.css has no scrim token, so this piece mixes one; if a --kit-scrim token is
+ * ever added, this is the first thing that should read it.
+ */
+export interface HeroCta {
+  label: string;
+  href: string;
+  variant?: "primary" | "secondary";
+}
+export interface HeroPhoto {
+  /** 1600px wide or more. See the note above; this is the piece's one hard requirement. */
+  src: string;
+  /** Empty when the headline already says what the picture shows, which is the usual case. */
+  alt?: string;
+  srcset?: string;
+  sizes?: string;
+  width?: number;
+  height?: number;
+}
+export interface Props {
+  headline?: string;
+  lede?: string;
+  /** One call to action, or two if there is a real second job to do. */
+  ctas?: HeroCta[];
+  photo?: HeroPhoto | null;
+  level?: 1 | 2;
+  /**
+   * Which ground this piece sits on. One name and one vocabulary across the whole kit, so a page
+   * can alternate grounds without having to remember which piece calls it what. Every semantic
+   * token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  headline = "Hand-built kitchens, fitted by the people who made them",
+  lede = "Twenty-two years of joinery across Sydney's inner west. Every job measured, made and installed by our own team.",
+  ctas = [{ label: "Request a quote", href: "/contact" }],
+  photo = null,
+  level = 1,
+  id,
+  tone = "inverse",
+} = Astro.props;
+
+const Heading = level === 2 ? "h2" : "h1";
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `hsp-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const calls = ctas.slice(0, 2);
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section class:list={["kit-section", toneClass, "hero-photo"]} aria-labelledby={headingId} id={id || undefined}>
+  {photo && (
+    <img
+      class="hero-photo__img"
+      src={photo.src}
+      srcset={photo.srcset}
+      sizes={photo.sizes}
+      alt={photo.alt ?? ""}
+      width={photo.width}
+      height={photo.height}
+      loading="eager"
+      fetchpriority="high"
+      decoding="async"
+    />
+  )}
+  <div class="hero-photo__scrim" aria-hidden="true"></div>
+
+  <div class="kit-container hero-photo__inner">
+    <Heading id={headingId} class="kit-display">{headline}</Heading>
+    {lede && <p class="kit-lede hero-photo__lede">{lede}</p>}
+    {calls.length > 0 && (
+      <div class="hero-photo__ctas">
+        {calls.map((cta, index) => (
+          <a
+            class:list={[
+              "kit-btn",
+              (cta.variant ?? (index === 0 ? "primary" : "secondary")) === "primary"
+                ? "kit-btn--primary"
+                : "kit-btn--secondary",
+              "hero-photo__cta",
+            ]}
+            href={cta.href}
+          >
+            {cta.label}
+          </a>
+        ))}
+      </div>
+    )}
+  </div>
+</section>
+
+<style>
+  .hero-photo {
+    position: relative;
+    /* isolate, so the scrim's stacking context cannot escape and sit over the nav. */
+    isolation: isolate;
+    display: grid;
+    align-items: end;
+    /* Tall enough to read as a photograph, short enough that the next section is findable. */
+    min-height: 72vh;
+    overflow: hidden;
+  }
+
+  .hero-photo__img {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Strongest where the words are, lightest at the top, so the picture is still a picture. */
+  .hero-photo__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--kit-bg-inverse) 86%, transparent),
+      color-mix(in srgb, var(--kit-bg-inverse) 62%, transparent) 45%,
+      color-mix(in srgb, var(--kit-bg-inverse) 28%, transparent)
+    );
+  }
+
+  .hero-photo__inner {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-lg);
+    /* The words keep to a column even on a very wide screen, so a long headline does not run
+       the full width of a very wide monitor. */
+    max-width: var(--kit-page-max);
+  }
+  .hero-photo__lede {
+    margin: 0;
+    color: var(--kit-text-inverse);
+    /* Slightly held back from the headline without dropping to a muted grey, which loses too
+       much contrast over a photograph. */
+    opacity: 0.9;
+  }
+
+  /* THE PRIMARY BUTTON CANNOT USE THE ACCENT HERE. --kit-accent-lift falls back to --kit-accent
+     when a brand has not defined a lifted accent, and --kit-accent defaults to the same near-black
+     as --kit-bg-inverse, so a stock build renders a black button on a black scrim: the label reads,
+     the button has no shape at all. Verified at 390, 768 and 1440. The page's own background and
+     text are the one pair guaranteed to contrast with each other AND with the inverse ground, so
+     over a photograph the primary action is a solid light chip. A brand that wants its accent here
+     should set --brand-accent-lift and this rule can then read --kit-accent-lift. */
+  /* THE CHIP MUST NOT BE PAINTED IN TOKENS THE GROUND HAS ALREADY REMAPPED.
+     This asked for the page background and the page ink to make a light chip on the dark scrim,
+     but the hero sits inside .kit-section--inverse, which remaps exactly those two tokens to the
+     inverse pair. The two cancelled and the primary call to action rendered near-black on
+     near-black: measured rgb(22,24,26) on rgb(22,24,26), border included, at both widths. The
+     label passed contrast against its own fill, so axe stayed silent about an invisible button.
+     --kit-bg-inverse and --kit-text-inverse are the two that do NOT remap, so they are the only
+     pair safe to reach for inside an inverse band. */
+  .hero-photo .kit-btn--primary {
+    background: var(--kit-text-inverse);
+    color: var(--kit-bg-inverse);
+    border-color: var(--kit-text-inverse);
+  }
+  .hero-photo .kit-btn--primary:hover {
+    background: color-mix(in srgb, var(--kit-text-inverse) 86%, transparent);
+    border-color: var(--kit-bg-subtle);
+  }
+
+  .hero-photo__ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kit-space-md);
+    margin-top: var(--kit-space-xs);
+  }
+  .hero-photo__cta { flex: 1 1 auto; }
+
+  /* A RING DRAWN IN currentColor MOVES WHENEVER THE FILL CHANGES.
+     Fixing the invisible button set this element's `color` to var(--kit-bg-inverse), which made
+     the ring near-black, and the offset then put it in the gap OUTSIDE the white chip, directly
+     on the near-black band: measured 1.00:1 with focus applied. The fill fix had moved the
+     defect rather than removed it. --kit-focus-ring is defined per ground in foundations and is
+     the lift on an inverse band, so the ring reads against the band whatever the button is
+     painted in. */
+  .hero-photo__cta:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  @media (min-width: 40em) {
+    .hero-photo__cta { flex: 0 0 auto; }
+  }
+
+  @media (min-width: 56em) {
+    .hero-photo__inner > * { max-width: var(--kit-measure); }
+  }
+</style>

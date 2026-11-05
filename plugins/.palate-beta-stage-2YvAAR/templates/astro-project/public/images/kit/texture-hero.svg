@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="An abstract layered landscape standing in for a photograph">
+<title>An abstract layered landscape standing in for a photograph</title>
+<rect width="1920" height="1080" fill="#4a525a"/>
+<rect width="1920" height="1080" fill="url(#wash1)"/>
+<path d="M345.59999999999997,0 L883.2,0 L1728,1080 L960,1080 Z" fill="#8f9aa4" opacity=".22"/>
+<path d="M0,1080 L0.0,453.6 L384.0,501.7 L768.0,497.3 L1152.0,445.1 L1536.0,402.2 L1920.0,415.5 L1920,1080 Z" fill="#3d444b"/>
+<path d="M0,1080 L0.0,639.4 L384.0,640.6 L768.0,590.8 L1152.0,544.5 L1536.0,552.3 L1920.0,605.6 L1920,1080 Z" fill="#31373d"/>
+<path d="M0,1080 L0.0,783.5 L384.0,736.6 L768.0,687.3 L1152.0,689.5 L1536.0,740.7 L1920.0,785.1 L1920,1080 Z" fill="#262b30"/>
+<path d="M0,1080 L0.0,882.4 L384.0,830.6 L768.0,827.1 L1152.0,875.7 L1536.0,923.3 L1920.0,917.9 L1920,1080 Z" fill="#1b1f23"/>
+<defs><linearGradient id="wash1" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#8f9aa4" stop-opacity=".45"/><stop offset="1" stop-color="#8f9aa4" stop-opacity="0"/>
+</linearGradient></defs>
+</svg>

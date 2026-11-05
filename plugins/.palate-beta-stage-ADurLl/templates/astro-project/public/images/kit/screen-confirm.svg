@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="The customer's confirmation screen, showing an arrival window and the technician's name">
+  <title>The customer's confirmation screen, showing an arrival window and the technician's name</title>
+  <style>
+    svg{--ink:var(--kit-text,#1b1d21);--muted:var(--kit-text-muted,#6e737b);--paper:var(--kit-bg,#ffffff);--panel:var(--kit-bg-subtle,#f3f4f6);--line:var(--kit-border,#dfe2e6);--steel:#46525d;--sand:#e6dccc;--sage:#dbe4dc;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    text{fill:var(--ink)}
+    .m{fill:var(--muted)}
+    .w{fill:#fff}
+    .lbl{font-size:19px;letter-spacing:.06em;text-transform:uppercase}
+    .sm{font-size:20px}
+    .md{font-size:24px}
+    .lg{font-size:30px;font-weight:600}
+    .xl{font-size:40px;font-weight:600;letter-spacing:-.01em}
+    .num{font-variant-numeric:tabular-nums}
+    .ln{stroke:var(--line);stroke-width:2}
+  </style>
+  <rect x="0" y="0" width="1600" height="1000" fill="var(--panel)"/>
+  <rect x="0" y="0" width="1600" height="300" fill="var(--steel)"/>
+  <text x="120" y="150" class="md w" font-weight="600">Roundhouse</text>
+  <text x="120" y="218" class="xl w">You are booked in</text>
+  <rect x="120" y="340" width="1000" height="520" fill="var(--paper)" rx="16"/>
+  <text x="168" y="416" class="lbl m">Arrival window</text>
+  <text x="168" y="470" class="lg num">Tuesday 14 October, 8:00am to 10:00am</text>
+  <text x="168" y="512" class="sm m">We ring about twenty minutes out.</text>
+  <line x1="168" y1="560" x2="1072" y2="560" class="ln"/>
+  <text x="168" y="620" class="lbl m">Who is coming</text>
+  <rect x="168" y="640" width="56" height="56" fill="var(--steel)" rx="28"/>
+  <text x="196" y="678" class="sm w" text-anchor="middle">PR</text>
+  <text x="248" y="668" class="md" font-weight="600">Priya Raghavan</text>
+  <text x="248" y="700" class="sm m">Roofing lead, eleven years with us</text>
+  <text x="680" y="620" class="lbl m">Where</text>
+  <text x="680" y="668" class="md">12 Ashgrove Rise</text>
+  <text x="680" y="700" class="sm m">Fernbrook</text>
+  <rect x="168" y="754" width="300" height="60" fill="var(--steel)" rx="10"/>
+  <text x="318" y="792" class="sm w" text-anchor="middle" font-weight="600">Add to calendar</text>
+  <rect x="492" y="754" width="260" height="60" fill="var(--paper)" rx="10" stroke="var(--ink)" stroke-width="2"/>
+  <text x="622" y="792" class="sm" text-anchor="middle" font-weight="600">Reschedule</text>
+  <rect x="1180" y="340" width="300" height="520" fill="var(--paper)" rx="16"/>
+  <text x="1216" y="400" class="lbl m">Reference</text>
+  <text x="1216" y="440" class="md num" font-weight="600">RH-2418</text>
+  <line x1="1216" y1="480" x2="1444" y2="480" class="ln"/>
+  <text x="1216" y="532" class="lbl m">Quoted</text>
+  <text x="1216" y="572" class="md num">$863.00</text>
+  <text x="1216" y="606" class="sm m" font-size="18">Approved 2 October</text>
+  <line x1="1216" y1="646" x2="1444" y2="646" class="ln"/>
+  <text x="1216" y="698" class="lbl m">Questions</text>
+  <text x="1216" y="738" class="sm num">(02) 5550 0142</text>
+  <text x="1216" y="772" class="sm m" font-size="18">Weekdays, 7am to 5pm</text>
+  <text x="120" y="928" class="sm m">A confirmation goes out the moment a job is scheduled. Nothing here needs an account.</text>
+</svg>

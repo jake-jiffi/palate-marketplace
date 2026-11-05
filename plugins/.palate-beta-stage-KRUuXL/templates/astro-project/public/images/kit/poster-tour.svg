@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="A still frame of the Roundhouse schedule, dimmed behind the play control">
+<title>A still frame of the Roundhouse schedule, dimmed behind the play control</title>
+<rect width="1920" height="1080" fill="#20252a"/>
+<rect width="1920" height="1080" fill="url(#glow)"/>
+<g font-family="system-ui,-apple-system,&quot;Segoe UI&quot;,sans-serif">
+<rect x="120" y="104" width="1680" height="1060" rx="18" fill="#ffffff"/>
+<rect x="120" y="104" width="340" height="1060" rx="18" fill="#f3f4f6"/>
+<rect x="442" y="104" width="18" height="1060" fill="#f3f4f6"/>
+<rect x="120" y="104" width="1680" height="76" rx="18" fill="#ffffff"/>
+<line x1="120" y1="180" x2="1800" y2="180" stroke="#e2e5e9" stroke-width="2"/>
+<rect x="150" y="128" width="28" height="28" rx="7" fill="#46525d"/>
+<text x="192" y="151" font-size="25" font-weight="600" fill="#1b1d21">Roundhouse</text>
+<rect x="760" y="122" width="480" height="40" rx="20" fill="#f3f4f6"/>
+<rect x="150" y="254" width="18" height="18" rx="4" fill="#46525d"/>
+<text x="182" y="270" font-size="21" fill="#1b1d21" font-weight="600">Schedule</text>
+<rect x="150" y="312" width="18" height="18" rx="4" fill="#aeb4ba"/>
+<text x="182" y="328" font-size="21" fill="#6e737b">Jobs</text>
+<rect x="150" y="370" width="18" height="18" rx="4" fill="#aeb4ba"/>
+<text x="182" y="386" font-size="21" fill="#6e737b">Quotes</text>
+<rect x="150" y="428" width="18" height="18" rx="4" fill="#aeb4ba"/>
+<text x="182" y="444" font-size="21" fill="#6e737b">Customers</text>
+<rect x="150" y="486" width="18" height="18" rx="4" fill="#aeb4ba"/>
+<text x="182" y="502" font-size="21" fill="#6e737b">Invoices</text>
+<text x="460" y="254" font-size="46" font-weight="600" fill="#1b1d21">This week</text>
+<text x="460" y="294" font-size="24" fill="#6e737b">13 to 17 October, Fernbrook depot</text>
+<line x1="440" y1="324" x2="1760" y2="324" stroke="#e2e5e9" stroke-width="2"/>
+<line x1="440" y1="514" x2="1760" y2="514" stroke="#e2e5e9" stroke-width="2"/>
+<line x1="440" y1="704" x2="1760" y2="704" stroke="#e2e5e9" stroke-width="2"/>
+<line x1="440" y1="894" x2="1760" y2="894" stroke="#e2e5e9" stroke-width="2"/>
+<rect x="470" y="344" width="500" height="140" rx="10" fill="#e9ebee"/>
+<rect x="470" y="344" width="5" height="140" rx="3" fill="#46525d"/>
+<text x="492" y="392" font-size="22" font-weight="600" fill="#1b1d21">Ferndale Housing</text>
+<rect x="492" y="414" width="150" height="12" rx="6" fill="#c4c9cf"/>
+<rect x="492" y="442" width="110" height="12" rx="6" fill="#d5d9de"/>
+<rect x="730" y="534" width="240" height="140" rx="10" fill="#e9ebee"/>
+<rect x="730" y="534" width="5" height="140" rx="3" fill="#46525d"/>
+<text x="752" y="582" font-size="22" font-weight="600" fill="#1b1d21">Corbett St Dental</text>
+<rect x="752" y="604" width="150" height="12" rx="6" fill="#c4c9cf"/>
+<rect x="752" y="632" width="110" height="12" rx="6" fill="#d5d9de"/>
+<rect x="990" y="344" width="240" height="140" rx="10" fill="#e9ebee"/>
+<rect x="990" y="344" width="5" height="140" rx="3" fill="#46525d"/>
+<text x="1012" y="392" font-size="22" font-weight="600" fill="#1b1d21">M. Sowden</text>
+<rect x="1012" y="414" width="150" height="12" rx="6" fill="#c4c9cf"/>
+<rect x="1012" y="442" width="110" height="12" rx="6" fill="#d5d9de"/>
+<rect x="990" y="724" width="500" height="140" rx="10" fill="#e9ebee"/>
+<rect x="990" y="724" width="5" height="140" rx="3" fill="#46525d"/>
+<text x="1012" y="772" font-size="22" font-weight="600" fill="#1b1d21">Copperline Brewing</text>
+<rect x="1012" y="794" width="150" height="12" rx="6" fill="#c4c9cf"/>
+<rect x="1012" y="822" width="110" height="12" rx="6" fill="#d5d9de"/>
+<rect x="1510" y="534" width="240" height="140" rx="10" fill="#e9ebee"/>
+<rect x="1510" y="534" width="5" height="140" rx="3" fill="#46525d"/>
+<text x="1532" y="582" font-size="22" font-weight="600" fill="#1b1d21">Harbourline</text>
+<rect x="1532" y="604" width="150" height="12" rx="6" fill="#c4c9cf"/>
+<rect x="1532" y="632" width="110" height="12" rx="6" fill="#d5d9de"/>
+</g>
+<rect width="1920" height="1080" fill="#0d1013" opacity=".34"/>
+<defs><radialGradient id="glow" cx=".5" cy=".38" r=".75">
+<stop offset="0" stop-color="#5b6975" stop-opacity=".65"/><stop offset="1" stop-color="#20252a" stop-opacity="0"/>
+</radialGradient></defs>
+</svg>

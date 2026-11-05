@@ -1,0 +1,28 @@
+/* The intentional-craft alternative: a small CASED label in the brand sans,
+   medium weight, near-zero tracking, no uppercase. Must NOT fire. */
+.eyebrow {
+  font-family: var(--pl-font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pl-accent);
+}
+
+/* Decoy 1: a genuinely tiny nav micro-label - caps + a hair of tracking, but
+   set in the brand sans, not mono. One device only, so it is allowed. */
+.nav-micro {
+  font-family: var(--pl-font-sans);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Decoy 2: a mono code tag - mono + caps, but tracking is near zero. One
+   device (mono), so it is allowed. */
+.code-tag {
+  font-family: var(--pl-font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}

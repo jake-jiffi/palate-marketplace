@@ -1,0 +1,232 @@
+---
+/**
+ * DETAILED ONBOARDING OR DELIVERY PROCESS.
+ *
+ * Use this for a considered purchase, where the visitor is not deciding whether to buy so much as
+ * working out what they are signing up for. Four to eight stages. Under four, use the three-step
+ * variation; over eight and you are describing an internal procedure rather than answering a
+ * question someone actually has.
+ *
+ * The order is real, so this is an <ol> with visible numerals, and `role="list"` restores the list
+ * semantics that removing the marker takes away in WebKit. The numeral lives inside the heading so
+ * it is announced with its stage and so nothing small sits directly above a heading.
+ *
+ * DURATION IS PRINTED AS A CAPTION, NOT AS A CLAIM. Each stage carries a prefix ("Typically") and
+ * the section carries one note saying what the timings assume. A bare "2 weeks" beside a stage is
+ * read as a commitment, and the first time one slips it is the sentence the client quotes back.
+ * Duration is optional per stage: a stage whose timing genuinely varies should simply omit it
+ * rather than invent a range.
+ *
+ * The connecting rule is drawn per stage with no gap between stages, so the segments join into one
+ * continuous line and the last one stops at the centre of the final marker instead of running off
+ * the end.
+ *
+ * Content note: the defaults describe a plainly fictional implementation. Replace them.
+ */
+
+export interface Stage {
+  title: string;
+  /** What happens, and what it needs from them. */
+  body: string;
+  /** How long it usually takes, in words. Omit it rather than guess. */
+  duration?: string;
+}
+
+export interface Props {
+  heading?: string;
+  lede?: string;
+  /** Four to eight stages, in the order they happen. */
+  stages?: Stage[];
+  /** Prefix printed before every duration, so none of them reads as a promise. */
+  durationPrefix?: string;
+  /** One line under the list saying what the timings depend on. */
+  durationNote?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  class?: string;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "What the first eight weeks look like",
+  lede = "Six stages. At every one you will know what we need from you and what happens if it is late.",
+  stages = [
+    {
+      title: "Scoping call",
+      body: "We go through your current setup, your reporting deadlines and who needs access to what. You get a written summary the same day.",
+      duration: "45 minutes",
+    },
+    {
+      title: "Data review",
+      body: "We take a copy of your last two years and tell you what will move across cleanly, what needs a decision from you, and what is better left behind.",
+      duration: "three to five days",
+    },
+    {
+      title: "Build and configure",
+      body: "Accounts, approval rules, templates and permissions set up against the scoping summary, then walked through with you before anything goes live.",
+      duration: "two weeks",
+    },
+    {
+      title: "Parallel run",
+      body: "Both systems run side by side for a full cycle, so the numbers can be checked against each other before you commit to one of them.",
+      duration: "one month",
+    },
+    {
+      title: "Handover and training",
+      body: "Two sessions for the team, one for whoever owns reporting, and a written runbook that stays yours.",
+      duration: "one week",
+    },
+    {
+      title: "Your first close together",
+      body: "We sit in on the first month end and fix anything the parallel run did not surface.",
+      duration: "two days",
+    },
+  ],
+  durationPrefix = "Typically",
+  durationNote = "Timings assume the data and the decisions reach us when we ask for them. If something is going to slip, we say so early rather than at the end.",
+  emptyMessage = "The stages for this engagement are being written up.",
+  tone = "default",
+  class: className,
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `pd-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const list = stages ?? [];
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", toneClass, "pd", className]}
+  data-tone={tone}
+  aria-labelledby={headingId}
+>
+  <div class="kit-container">
+    <div class="pd-intro kit-stack">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {list.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ol class="pd-list" role="list">
+        {list.map((stage, index) => (
+          <li class="pd-item">
+            <span class="pd-marker" aria-hidden="true">{index + 1}</span>
+            <div class="pd-content">
+              <h3 class="kit-h3 pd-heading">
+                <span class="kit-visually-hidden">Stage {index + 1}. </span>
+                <span class="pd-title">{stage.title}</span>
+              </h3>
+              <p class="kit-body pd-body">{stage.body}</p>
+              {stage.duration && (
+                <p class="pd-when">
+                  {durationPrefix} <span class="pd-when__value">{stage.duration}</span>
+                </p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    )}
+
+    {list.length > 0 && durationNote && <p class="pd-note kit-muted">{durationNote}</p>}
+  </div>
+</section>
+
+<style>
+  .pd { --pd-surface: var(--kit-bg); }
+  .pd[data-tone="subtle"] { --pd-surface: var(--kit-bg-subtle); }
+
+  .pd-intro { margin-block-end: var(--kit-space-2xl); }
+
+  .pd-list {
+    --pd-marker: var(--kit-target);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: var(--kit-page-max);
+  }
+
+  /* No gap between items on purpose: each item draws its own segment of the connecting rule, and
+     a gap would break the line into dashes. The breathing room is padding instead. */
+  .pd-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--pd-marker) minmax(0, 1fr);
+    gap: var(--kit-gutter);
+    padding-block: var(--kit-space-lg);
+  }
+
+  .pd-item::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--pd-marker) / 2);
+    width: var(--kit-border-width);
+    background: var(--kit-border);
+  }
+
+  /* The last segment stops at the centre of the last marker rather than running past it. */
+  .pd-item:last-child::before {
+    inset-block-end: auto;
+    block-size: calc(var(--kit-space-lg) + var(--kit-target) / 2);
+  }
+
+  .pd-marker {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: var(--pd-marker);
+    height: var(--kit-target);
+    background: var(--pd-surface);
+    border: var(--kit-border-width) solid var(--kit-border-strong);
+    border-radius: var(--kit-radius);
+    color: var(--kit-accent-ink);
+    font-family: var(--kit-font-display);
+    font-size: var(--kit-text-lg);
+    font-weight: var(--kit-weight-display);
+    line-height: var(--kit-leading-tight);
+  }
+
+  .pd-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-sm);
+    min-width: 0;
+    padding-block-start: var(--kit-space-2xs);
+  }
+
+  .pd-title { text-wrap: pretty; }
+
+  .pd-body { color: var(--kit-text-muted); text-wrap: pretty; }
+
+  .pd-when {
+    margin: 0;
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-snug);
+    color: var(--kit-text-muted);
+  }
+
+  .pd-when__value { font-family: var(--kit-font-mono); color: var(--kit-text); }
+
+  .pd-note {
+    margin-block-start: var(--kit-space-xl);
+    max-width: var(--kit-measure);
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-body);
+    text-wrap: pretty;
+  }
+</style>

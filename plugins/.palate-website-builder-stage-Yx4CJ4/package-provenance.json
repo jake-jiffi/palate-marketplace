@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "track": "prod",
+  "sourceCommit": "c4079f99e6eadadac0c56502d1b58722453b10c1",
+  "sourceVersion": "2.0.0",
+  "version": "2.0.0",
+  "rollback": false,
+  "sourceDigest": "9b17c9a7a725cbf06b15bd90f8b1bc872c56f62bb153a65c726216b0ee4d764b",
+  "contentDigest": "413be7c01d609e884ac2a587f31674ddc2decd1060c60c860859af78ffb2f371",
+  "entry": "skills/palate-website-builder/SKILL.md",
+  "rebasedLinks": [
+    "commands/jury.md",
+    "references/live-build.md",
+    "references/live-build.md",
+    "LEGACY.md",
+    "references/generated-media.md",
+    "references/site-system.md",
+    "references/critic-review.md"
+  ]
+}

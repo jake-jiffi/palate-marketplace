@@ -1,0 +1,21 @@
+# Cloudflare Workers Static Assets headers. See references/connective-tissue.md.
+
+# Hashed build assets - cache hard, forever.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# API routes - never cache.
+/api/*
+  Cache-Control: no-store
+
+# Security headers for every response.
+# X-Frame-Options is SAMEORIGIN (not DENY) so the same-origin Sanity
+# Presentation preview iframe still works; cross-origin framing stays blocked.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

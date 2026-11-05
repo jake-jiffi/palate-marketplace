@@ -1,0 +1,13 @@
+---
+import CommerceLayout from '../../layouts/CommerceLayout.astro';
+import ProductGrid from '../../components/commerce/ProductGrid.astro';
+import ListingControls from '../../components/commerce/ListingControls.astro';
+import { privatePage, services, listingParams } from '../../lib/shopify/server';
+export const prerender = false;
+privatePage(Astro);
+let collection: any, error = '';
+let parameters;
+try { parameters = listingParams(Astro.url, true); } catch { error = 'These filters or sort options are invalid. Clear them to continue.'; Astro.response.status = 400; }
+if (!error) try { const { api } = await services(); collection = await api.collection(Astro.params.handle!, parameters); if (!collection) Astro.response.status = 404; } catch { error = 'This collection could not be loaded. Please retry.'; Astro.response.status = 503; }
+---
+<CommerceLayout title={collection?.title || 'Collection'}>{error ? <p role="alert">{error} <a href={Astro.url.pathname}>Reload collection</a></p> : collection ? <><h1>{collection.title}</h1><p>{collection.description}</p><ListingControls collection filters={collection.products.filters} connection={collection.products} /><ProductGrid products={collection.products.nodes} /></> : <><h1>Collection unavailable</h1><a href="/collections">Browse collections</a></>}</CommerceLayout>

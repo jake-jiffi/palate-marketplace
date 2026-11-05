@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "reviewed": "2026-09-25",
+  "about": "Which Higgsfield model serves each need, best first. The runtime takes the first candidate whose schema accepts the need's required inputs, whose price quote accepts the actual job, and whose price fits the remaining cap. Reorder or add candidates here when a better model ships; the doctrine names needs, never models. Candidate args are the model-specific flags; the job supplies only the shared flags in jobFlags.",
+  "jobFlags": ["--prompt", "--start-image", "--end-image", "--image", "--image-references", "--duration", "--aspect_ratio"],
+  "needs": {
+    "still": {
+      "kind": "image",
+      "use": "An illustrative scene, world, texture or atmosphere image with no text.",
+      "requires": ["prompt"],
+      "candidates": [
+        { "model": "gpt_image_2", "args": ["--quality", "high", "--resolution", "2k"] },
+        { "model": "gpt_image_2_5", "args": ["--quality", "high", "--resolution", "2k"] },
+        { "model": "nano_banana_pro", "args": ["--resolution", "2k"] }
+      ]
+    },
+    "still-matched": {
+      "kind": "image",
+      "use": "A still that must match approved reference images, so a set reads as one world.",
+      "requires": ["prompt", "image_references"],
+      "candidates": [
+        { "model": "nano_banana_pro", "args": ["--resolution", "2k"] },
+        { "model": "gpt_image_2_5", "args": ["--quality", "high", "--resolution", "2k"] },
+        { "model": "gpt_image_2", "args": ["--quality", "high", "--resolution", "2k"] }
+      ]
+    },
+    "cutout": {
+      "kind": "image",
+      "use": "An illustrative still with its background removed, to float over the page.",
+      "requires": ["image_references"],
+      "candidates": [
+        { "model": "image_background_remover", "args": [] }
+      ]
+    },
+    "film-leg": {
+      "kind": "video",
+      "use": "A camera move that continues from a start frame: walkthrough legs and dives.",
+      "requires": ["prompt", "start_image"],
+      "candidates": [
+        { "model": "seedance_2_5", "args": ["--resolution", "1080p", "--generate_audio", "false"] },
+        { "model": "seedance_2_0", "args": ["--mode", "std", "--resolution", "1080p", "--generate_audio", "false"] },
+        { "model": "kling3_0", "args": ["--mode", "std", "--sound", "off"] }
+      ]
+    },
+    "film-connector": {
+      "kind": "video",
+      "use": "A camera move locked to both a start frame and an end frame: the seams between dives.",
+      "requires": ["prompt", "start_image", "end_image"],
+      "candidates": [
+        { "model": "seedance_2_5", "args": ["--resolution", "1080p", "--generate_audio", "false"] },
+        { "model": "seedance_2_0", "args": ["--mode", "std", "--resolution", "1080p", "--generate_audio", "false"] },
+        { "model": "kling3_0", "args": ["--mode", "std", "--sound", "off"] }
+      ]
+    },
+    "film-draft": {
+      "kind": "video",
+      "use": "A cheap previz of a leg or connector, to prove a journey before the final render.",
+      "requires": ["prompt", "start_image", "end_image"],
+      "candidates": [
+        { "model": "seedance_2_0_mini", "args": ["--generate_audio", "false"] },
+        { "model": "kling3_0", "args": ["--mode", "std", "--sound", "off"] }
+      ]
+    },
+    "motion-loop": {
+      "kind": "video",
+      "use": "A short atmospheric move from a still, such as a hero background.",
+      "requires": ["prompt", "start_image"],
+      "candidates": [
+        { "model": "seedance_2_5", "args": ["--resolution", "1080p", "--generate_audio", "false"] },
+        { "model": "kling3_0", "args": ["--mode", "std", "--sound", "off"] }
+      ]
+    },
+    "object-3d": {
+      "kind": "model",
+      "use": "An illustrative 3D object (GLB) for a WebGL moment. Never a replica of the client's product.",
+      "requires": ["prompt"],
+      "candidates": [
+        { "model": "hunyuan3d_v3_1_text_to_3d", "args": [] },
+        { "model": "tripo_3d", "args": [] }
+      ]
+    }
+  }
+}

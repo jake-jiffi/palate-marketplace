@@ -1,0 +1,14 @@
+---
+// Custom 404. A real state that belongs to the site, not the generic host default
+// (audit-dimensions.md D6). The framework serves this for any unmatched route.
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+<BaseLayout title="Page not found" noindex={true}>
+  <section class="bg-brand-bg px-6 py-24 text-center">
+    <h1 class="font-display text-brand-text mx-auto max-w-2xl text-4xl md:text-5xl">Page not found</h1>
+    <p class="text-brand-muted mx-auto mt-6 max-w-lg text-lg">The page you are looking for does not exist or has moved.</p>
+    <div class="mt-8">
+      <a href="/" class="rounded-brand bg-brand-accent text-brand-inverse inline-flex px-6 py-3 font-semibold">Back to home</a>
+    </div>
+  </section>
+</BaseLayout>

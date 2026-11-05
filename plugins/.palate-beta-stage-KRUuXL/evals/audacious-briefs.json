@@ -1,0 +1,46 @@
+{
+  "note": "The AUDACIOUS golden set (Move 5, MOVE 5 §5.2). A small set of deliberately ambitious briefs whose success depends on the divergent concept spine and the buildability oracle, NOT on a safe template. Where golden-briefs.json over-represents the thin everyday verticals (proving the moat against generic slop), this set proves the OTHER failure mode: that the skill samples wide (DIVERGE), advances from the low-typicality tail (CONVERGE), decomposes ambition into buildable mechanics (the oracle), and still clears the visual loop + every gate. Each brief names a FEELING and a concrete moment so the model cannot dodge into the category default. Run this set as an on-demand eval (a full build per brief is heavy): one skill run per brief into <results>/<id>/, then `node scripts/eval-suite.mjs --briefs evals/audacious-briefs.json --results <dir>`. Run it on every skill change AND every model upgrade (VLM taste and sampling behaviour shift between models, which Moves 1 and 3 depend on). The detailed assertions live in evals/11-novelty.md. Same schema as golden-briefs.json plus audacious:true.",
+  "version": 1,
+  "briefs": [
+    {
+      "id": "tide-bait-shop",
+      "category": "fishing tackle shop",
+      "vertical": "retail",
+      "thinVertical": true,
+      "audacious": true,
+      "brief": "a suburban tide-and-bait shop that makes a city office worker feel the pull of the coast at 6pm on a Friday; the daily catch, the rigs, where to find us"
+    },
+    {
+      "id": "night-bakery",
+      "category": "bakery",
+      "vertical": "hospitality",
+      "thinVertical": true,
+      "audacious": true,
+      "brief": "a bakery that bakes through the night so the city wakes to warm bread; make the visitor feel the 3am quiet and the smell of proving dough; the daily range, pre-order, the bakers"
+    },
+    {
+      "id": "estate-auction-house",
+      "category": "auction house",
+      "vertical": "retail",
+      "thinVertical": false,
+      "audacious": true,
+      "brief": "a deceased-estate auction house that treats each lot as a small biography; make the visitor feel the weight of objects that outlived their owners; upcoming sales, how to consign, register to bid"
+    },
+    {
+      "id": "tidal-power-startup",
+      "category": "renewable energy",
+      "vertical": "saas-product",
+      "thinVertical": false,
+      "audacious": true,
+      "brief": "a tidal-energy startup whose whole product is the rhythm of the moon and the sea; make an investor feel inevitability, not hype; how it works, the science, the pipeline, talk to us"
+    },
+    {
+      "id": "grief-doula",
+      "category": "end-of-life care",
+      "vertical": "professional-services",
+      "thinVertical": true,
+      "audacious": true,
+      "brief": "an end-of-life doula who sits with the dying and their families; make the visitor feel held, never sold to; what the work is, how it helps, a gentle first conversation"
+    }
+  ]
+}

@@ -1,0 +1,488 @@
+{
+  "generated_at": "2026-09-10T16:13:05.978Z",
+  "until": "2026-09-10T16:13:05.969Z",
+  "excluded": [
+    {
+      "from": "2026-09-10T11:59:00.000Z",
+      "to": "2026-09-10T12:05:00.000Z",
+      "reason": "critic 8 verification reads (eleven detailed refs_get calls)"
+    },
+    {
+      "from": "2026-09-10T13:22:00.000Z",
+      "to": "2026-09-10T13:23:00.000Z",
+      "reason": "critic 9 verification reads (six detailed refs_get calls), not the builder's survey"
+    },
+    {
+      "from": "2026-09-10T14:17:00.000Z",
+      "to": "2026-09-10T14:50:00.000Z",
+      "reason": "critic 10 verification reads (six refs_get calls), not the builder's survey"
+    },
+    {
+      "from": "2026-09-10T15:11:00.000Z",
+      "to": "2026-09-10T15:16:00.000Z",
+      "reason": "critic 11 verification reads (three refs_get calls after the snapshot cut-off), not the builder's survey"
+    }
+  ],
+  "source": {
+    "manifest": "/Users/jakeshelley/dev/palate/build-manifest.json",
+    "plugin_version": "1.17.0-beta.12",
+    "mcp_version": null,
+    "library": null
+  },
+  "calls": 24,
+  "excluded_calls": 26,
+  "unabsorbed_calls": 0,
+  "calls_without_content": 7,
+  "searches": 11,
+  "layers_read": [
+    "component_prompts",
+    "do_dont",
+    "pages"
+  ],
+  "references": [
+    {
+      "slug": "1rebel",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "aesop",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "anthropic",
+      "layers": [
+        "do_dont",
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "attentive",
+      "layers": [
+        "do_dont",
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "avalon-accounting",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "barrys",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "basecamp",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "bellroy",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "block-renovation",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "caliber",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 4,
+      "notes": [
+        "component_prompts",
+        "do_dont"
+      ]
+    },
+    {
+      "slug": "crisp",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "dishoom",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 6,
+      "notes": [
+        "component_prompts",
+        "do_dont"
+      ]
+    },
+    {
+      "slug": "dropbox",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "glossier",
+      "layers": [
+        "do_dont",
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "greenwise-organic-lawn-care",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "gymshark",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "habito",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "headspace",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": []
+    },
+    {
+      "slug": "lanserring",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "lava-dental",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "linear",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "loom",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "lovevery",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "mejuri",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "mercury",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "myodetox",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "component_prompts",
+        "do_dont"
+      ]
+    },
+    {
+      "slug": "notion",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "one-medical",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": []
+    },
+    {
+      "slug": "parsley-health",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 5,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "pilot-accounting",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "pitch",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "plausible",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "posthog",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "re-bath",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "sealed-home",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "setia-law",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "swillhouse",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "unoit",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "vivvi",
+      "layers": [
+        "pages"
+      ],
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "warby-parker",
+      "layers": [
+        "component_prompts",
+        "do_dont",
+        "pages"
+      ],
+      "reads": 5,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "wealthsimple",
+      "layers": [
+        "do_dont",
+        "pages"
+      ],
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
+    },
+    {
+      "slug": "webflow",
+      "layers": [
+        "pages"
+      ],
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
+    }
+  ],
+  "seal": "6310baad9c88e655efa7a83da29946d37fc838580b3116903087a1daf0f7d55f"
+}

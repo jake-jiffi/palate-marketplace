@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "business": "a dentist",
+  "references_surveyed": ["smile-co"],
+  "inner_pages_viewed": [],
+  "mcp_calls": [
+    { "tool": "mcp__palate__refs_for_business", "args": { "category": "dentist" }, "slugs": ["smile-co"] },
+    { "tool": "mcp__palate__refs_get_screenshot", "args": { "slug": "smile-co" }, "slugs": ["smile-co"] }
+  ],
+  "files_written": ["src/pages/index.astro"]
+}

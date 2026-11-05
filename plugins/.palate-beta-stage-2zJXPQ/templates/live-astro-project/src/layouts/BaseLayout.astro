@@ -1,0 +1,23 @@
+---
+interface Props { title: string; description?: string; lang?: string }
+const { title, description, lang = 'en-AU' } = Astro.props;
+---
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <slot name="head" />
+  </head>
+  <body><slot /></body>
+</html>
+<style is:global>
+  :root { --colour-text: #171717; --colour-bg: #fff; }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; color: var(--colour-text); background: var(--colour-bg); }
+  img, video { max-width: 100%; height: auto; }
+  button, input, select, textarea { font: inherit; }
+  :focus-visible { outline: 3px solid currentColor; outline-offset: 4px; }
+</style>

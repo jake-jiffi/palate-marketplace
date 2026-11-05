@@ -1,0 +1,17 @@
+/* Base styles. Imports tokens and fonts, sets sensible defaults. */
+@import "../tokens/tokens.css";
+@import "../fonts/fonts.css";
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--brand-bg-default);
+  color: var(--brand-text-primary);
+  font-family: var(--brand-font-body);
+  font-size: var(--brand-text-base);
+  line-height: 1.6;
+}
+h1, h2, h3 { font-family: var(--brand-font-display); line-height: 1.15; }
+a { color: var(--brand-accent-default); }
+a:hover { color: var(--brand-accent-hover); }

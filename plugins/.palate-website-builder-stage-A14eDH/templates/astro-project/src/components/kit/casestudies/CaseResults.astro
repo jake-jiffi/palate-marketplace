@@ -1,0 +1,159 @@
+---
+/**
+ * CaseResults: the outcomes across several customers, as numbers.
+ *
+ * Use this when the evidence is comparable and numeric, and when the buyer is the kind who wants
+ * the figure before the story. It is the fastest proof section in the kit and the easiest one to
+ * misuse, so the shape enforces two things.
+ *
+ * EVERY FIGURE CARRIES ITS CUSTOMER. A number with no owner is a marketing claim; the same number
+ * with "Copperline Brewing" under it is a fact somebody could check, and `customer` is required for
+ * that reason. If a customer will not be named, say who they are generically ("a regional brewer")
+ * rather than dropping the attribution: an anonymous result is still better than an unowned one.
+ *
+ * `note` is where the qualification goes: the period, the baseline, the method. A figure that
+ * needs a caveat and does not have one is the figure that gets the business into trouble. Use it.
+ *
+ * Figures use tabular numerals so a column of them aligns on the digit rather than drifting, which
+ * is the difference between a results row that reads as measured and one that reads as decorative.
+ *
+ * The lists carry an explicit `role="list"` beside `list-style: none`. A strict validator calls
+ * that redundant, and it is not: Safari with VoiceOver drops list semantics from a list whose
+ * markers have been removed, so without it the items stop being announced as a list at all. Do
+ * not strip it to quieten a linter.
+ */
+interface Result {
+  /** The number, formatted the way it should read. "9 days", "0", "31%", "$18,400". */
+  figure: string;
+  /** What the number is. One short line. */
+  label: string;
+  /** Whose result it is. Required. */
+  customer: string;
+  /** The qualification: period, baseline, method. */
+  note?: string;
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  results?: Result[];
+  /** A single source or method note covering the whole set. */
+  sourceNote?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "What the work has actually changed",
+  lede,
+  /* Empty by default. These name real people and real firms, so an omitted prop must render the empty state rather than an invented one; the demo pages pass samples from src/lib/kit-sample.ts. */
+  results = [],
+  sourceNote,
+  emptyMessage = "Results will appear here once the figures have been confirmed with the customers they belong to.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `cr-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const rows = (results ?? []).filter((r) => r?.figure && r?.label && r?.customer);
+/* Three across reads as a results row; four or more wants a fourth column so nothing is orphaned. */
+const four = rows.length % 4 === 0 || rows.length > 6;
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container cr">
+    <div class="cr__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {rows.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ul class:list={["cr__grid", four && "cr__grid--four"]} role="list">
+        {rows.map((r) => (
+          <li class="cr__item">
+            <p class="cr__figure">{r.figure}</p>
+            <p class="cr__label">{r.label}</p>
+            <p class="cr__customer kit-muted">{r.customer}</p>
+            {r.note && <p class="cr__note kit-muted">{r.note}</p>}
+          </li>
+        ))}
+      </ul>
+    )}
+
+    {sourceNote && <p class="cr__source kit-muted">{sourceNote}</p>}
+  </div>
+</section>
+
+<style>
+  .cr__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
+
+  /* Intrinsic rather than breakpointed: three results and seven both lay out sensibly, and the
+     column count follows how much room a figure and its label actually need. */
+  .cr__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-space-xl) var(--kit-gutter);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20ch), 1fr));
+    align-items: start;
+  }
+
+  .cr__item {
+    display: grid;
+    gap: var(--kit-space-2xs);
+    align-content: start;
+    padding-block-start: var(--kit-space-md);
+    border-block-start: var(--kit-border-width) solid var(--kit-border);
+    min-width: 0;
+  }
+
+  .cr__figure {
+    margin: 0;
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-3xl);
+    line-height: var(--kit-leading-tight);
+    letter-spacing: var(--kit-tracking-tight);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cr__label {
+    margin: 0;
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-snug);
+    text-wrap: pretty;
+  }
+
+  .cr__customer {
+    margin: 0;
+    margin-block-start: var(--kit-space-xs);
+    font-size: var(--kit-text-sm);
+    font-weight: var(--kit-weight-medium);
+    line-height: var(--kit-leading-snug);
+  }
+
+  .cr__note { margin: 0; font-size: var(--kit-text-xs); line-height: var(--kit-leading-snug); }
+
+  .cr__source {
+    margin: 0;
+    margin-block-start: var(--kit-space-xl);
+    font-size: var(--kit-text-xs);
+    max-width: var(--kit-measure);
+  }
+</style>

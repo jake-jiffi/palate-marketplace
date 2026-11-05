@@ -1,0 +1,727 @@
+#!/usr/bin/env node
+/**
+ * hooks/palate-pretooluse.mjs - the build-site write gate (PreToolUse).
+ *
+ * Registered at the user level, matched on `Write|MultiEdit|Workflow`. It does FOUR things:
+ *
+ *  0. The ORCHESTRATION GUARD (build sites only). A Palate build must be driven by the
+ *     SKILL, because a workflow agent receives only its prompt and never loads the
+ *     doctrine. The two comparable real builds differ on exactly this and nothing else
+ *     that matters. See the block at the call site for the numbers.
+ *
+ *  1. The DIVERGE WALL (default-ON, but scoped to an active build site). A Palate
+ *     BUILD SITE must begin by diverging into 8-10 genuinely different directions
+ *     BEFORE any site source is written. This hook ENFORCES that: when an active
+ *     build-site marker (`.palate-skill-state.json`, written ONLY by the BUILD SITE
+ *     flow's scripts/state-init.sh, before scaffold) is present and the build has not
+ *     recorded a VALID diverge+converge in build-manifest.json, it BLOCKS the first
+ *     NEW page/section source Write. No env var enables it; it is on whenever a build
+ *     site is active. It NEVER traps a non-build: no marker => not a build => allow.
+ *     The validity bar is MODE-AWARE: the marker's `brandMode` (brand-creation when no
+ *     brand was provided, brand-provided when a brand package / real tokens / stated
+ *     colours+fonts exist) sets WHICH axes the 8-10 must diverge on. brand-creation
+ *     requires colour AND type to vary (the FULL identity space, since you are creating
+ *     the brand); brand-provided LOCKS colour + type and judges distinctness on the
+ *     within-brand axes (layout / composition / motion / density / art-direction).
+ *
+ *  2. The SURVEY WALL (default-ON on a build site, and ONLY once the MCP has proven
+ *     itself reachable). DIVERGE is a reasoning step; the SURVEY is where the library
+ *     actually enters the build, and this hook used to allow the write the moment DIVERGE
+ *     was valid, so nothing checked the survey before code existed. A real client build
+ *     reached eight finished variants on THREE Palate calls (one catalogue listing, two
+ *     hero screenshots) and its commission still cited a backbone as "the only reference in
+ *     the library that is literally the same machine", which is a claim about the whole
+ *     catalogue requiring a search nobody ran. The wall now runs the same depth gate the
+ *     Stop hook runs, at the moment it can still change the build. It binds ONLY when the
+ *     manifest records at least one Palate call that returned content, which is the proof
+ *     the MCP is connected: zero calls is the signature of a user with no token and allows
+ *     unchanged. It also stands down when refusals outnumber answers, so a degrading
+ *     connection cannot become a trap. Escape: PALATE_GATE_SURVEY=0.
+ *
+ *  3. The DEPTH NUDGE (unchanged, opt-in). When NO build-site marker is present the
+ *     hook falls through to the original behaviour: NON-BLOCKING by default (the depth
+ *     nudge is delivered by the skill and the Stop hook), HARD-BLOCK only under
+ *     PALATE_GATE_STRICT=1, and even then fail-OPEN when the gate cannot be satisfied.
+ *     An UNGROUNDED build (gate exit 3, zero recorded Palate MCP calls) is a LABEL and
+ *     never blocks a write here, even under strict; the Stop hook states it once.
+ *
+ * Escape hatches (so it can never trap an ordinary edit or a non-build session):
+ *   - PALATE_GATE_OFF=1 disables everything.
+ *   - No `.palate-skill-state.json` marker => not a build site => allow (the primary
+ *     scope wall: editing an existing app, a BUILD BRAND session, a small edit, or any
+ *     non-Palate work never sees the wall).
+ *   - Edit is never matched (only Write/MultiEdit), so editing an existing file is
+ *     structurally exempt; a Write OVER an already-scaffolded NON page/section file
+ *     (config, layout chrome, lib) is iteration and also allowed.
+ *   - DIVERGE is a reasoning step, NOT an MCP call, so THAT wall does not depend on MCP
+ *     liveness: the model writes manifest.diverge whether or not the MCP is connected.
+ *     The SURVEY wall is the opposite by design and is keyed on evidence the MCP answered,
+ *     never on a token, a config file or an env var, so it cannot fire on someone who has
+ *     no connection to satisfy it with.
+ *     A tooling failure (fs throw) falls through to the depth path (allow under
+ *     non-strict), so a failure can never wedge a write.
+ *
+ * DELIBERATELY DEPTH-ONLY for "done": this hook does NOT run the "done" gate
+ * (gate-done.sh). The done gate judges a RENDER (screenshots + a built preview), and
+ * at write-time nothing is rendered yet - so a done check here would trap every
+ * mid-build source write. "Done" enforcement belongs at Stop (hooks/palate-stop.mjs).
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { resolveBuildContext } from "./project-dir.mjs";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
+const MERGE = path.join(HERE, "..", "scripts", "manifest-merge.mjs");
+const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$|\.dc\.html$/i;
+const CONFIG = /(^|\/)(astro|tailwind|vite|postcss|package|tsconfig|eslint)\.[a-z.]+$/i;
+// Page/section source: the files the model HAND-AUTHORS to compose the site. A NEW one
+// (or overwriting one) is the act the DIVERGE wall guards; everything else (config,
+// layout chrome, lib, the manifest/state files) is exempt so the scaffold is free.
+// Canvas-first Explore: an artboard under .palate/explore/seed/ IS the first design write of a
+// build (a drawn hero and section), so it is page-and-section source for every wall.
+const PAGE_OR_SECTION = /(^|\/)src\/(pages|components)\/|(^|\/)\.palate\/explore\/seed\/[^/]+\.dc\.html$/i;
+
+// Thresholds for the divergeValid predicate (env-tunable, documented; defaults echo
+// references/story-engine.md's own numbers, N=6-8 sampled with >=2 concepts at
+// conventionality <= 0.3, spanning >= 2 lenses). MIN_DIVERGE defaults to 8 to make
+// SKILL.md's "8-10 directions" the hard floor, per Jake's directive that the 8-10
+// divergent directions must ALWAYS be the first step. Set PALATE_MIN_DIVERGE=6 to
+// relax to the sample floor.
+const MIN_DIVERGE       = Number(process.env.PALATE_MIN_DIVERGE       ?? 8);   // >= 8 directions
+const MIN_DISTINCT_SIGS = Number(process.env.PALATE_MIN_DISTINCT_SIGS ?? 6);   // distinct lens|seed fingerprints
+const MIN_CONV_SPREAD   = Number(process.env.PALATE_MIN_CONV_SPREAD   ?? 0.4); // max-min conventionality
+const LOW_TAIL_MAX      = Number(process.env.PALATE_LOW_TAIL_MAX      ?? 0.3); // a surprising-tail concept exists
+// MODE-AWARE AXIS FLOOR (brand-creation only): the set must show at least this many
+// DISTINCT colourways AND this many distinct type directions, so the single-default-style
+// failure (one colourway + one type pairing across all 8) cannot be recorded as valid.
+const MIN_AXIS_DISTINCT = Number(process.env.PALATE_MIN_AXIS_DISTINCT ?? 3);   // distinct colourways AND type dirs
+
+// The deny message is MODE-AWARE: brand-creation diverges the FULL identity space
+// (colour + type are required varied axes); brand-provided LOCKS colour + type and
+// diverges only within the brand (layout / composition / motion / density / art-direction).
+// Shared head + tail, a mode-specific axes block between. House rules: Australian English,
+// no em dashes, no AI-tell vocabulary.
+function DIVERGE_REQUIRED_MESSAGE(mode) {
+  const head =
+    "Palate BUILD SITE gate: DIVERGE has not run (validly). A Palate build MUST begin by\n" +
+    "diverging into 8 to 10 genuinely different directions BEFORE any site source is written.\n" +
+    "This is step one, not an option. It is what stops every build collapsing to one default\n" +
+    "style.\n" +
+    "\n" +
+    `This build is in ${mode} mode. Diverge on the axes for this mode, then this write passes.\n`;
+
+  const creation =
+    "\n" +
+    "NO brand was provided, so you are helping CREATE the brand. Diverge across the FULL\n" +
+    "identity space:\n" +
+    "  - colourway (vary it: at least 3 distinct colourways across the set),\n" +
+    "  - type / faces (vary them: at least 3 distinct type directions; do not reach for one\n" +
+    "    default pairing),\n" +
+    "  - mood, layout, composition, motion, density.\n" +
+    'Set diverge.mode = "brand-creation" and list these in diverge.axes_varied (colour and\n' +
+    "type are REQUIRED varied axes). Each concept records its colourway and type plus its\n" +
+    "layout and motion.\n";
+
+  const provided =
+    "\n" +
+    "A brand WAS provided, so LOCK it. Do NOT vary colour or fonts away from the brand: set\n" +
+    "diverge.locked = { colour: true, type: true } and record the palette source and faces.\n" +
+    "Do NOT put colour or type in diverge.axes_varied. Diverge ONLY within the brand, on:\n" +
+    "  - layout, composition, section logic,\n" +
+    "  - motion, density, art direction.\n" +
+    "At least 6 distinct layout/motion skins across the set, judged on those axes (not on\n" +
+    "colour or face).\n";
+
+  const tail =
+    "\n" +
+    "Steps:\n" +
+    "  1. SAMPLE 8 to 10 candidate concepts in ONE pass with constraints removed (Verbalized\n" +
+    "     Sampling). Self-tag each: conventionality 0..1 (carry a low-typicality tail, at least\n" +
+    "     one concept <= 0.3), the lens it came from (2 to 3 varied lenses), and a forced\n" +
+    "     cross-domain analogical_seed (print, signage, architecture, film).\n" +
+    "  2. Write manifest.diverge = { ran:true, n, mode, axes_varied, locked, concepts:[...] }.\n" +
+    "  3. CONVERGE: score originality (distance from the default) + craft-feasibility, advance\n" +
+    "     the best 1 to 2, write manifest.converge = { ran:true, scored, advanced:[ids] }.\n" +
+    "See references/story-engine.md (DIVERGE/CONVERGE) and references/build-commission.md.\n" +
+    "(Not a build site? This only fires when .palate-skill-state.json exists. Escape:\n" +
+    "PALATE_GATE_OFF=1.)";
+
+  return head + (mode === "brand-provided" ? provided : creation) + tail;
+}
+
+// The survey deny copy. It has to hand back the exact calls that clear the bar, because the
+// agent is mid-build and a vague "survey more" costs a round trip to work out what is missing.
+// House rules: Australian English, no em dashes, no AI-tell vocabulary.
+// ---------------------------------------------------------------------------------------
+// THE PLAN CHECKPOINT WALL. The doctrine has always said "before Phase A, show a short plan
+// and get a go-ahead": the pages, the brand source, the references, the host (ALWAYS asked),
+// whether Explore runs and at what count, the stage, who edits the copy. It was prose, and a
+// live client build skipped it whole: one sentence to the user in twenty-eight minutes, then
+// host, variant count and CMS decided alone. Every other rule that mattered here got a gate
+// after it was skipped silently. This is that gate.
+//
+// It reads manifest.plan_checkpoint and refuses the first page/section source write until the
+// block records WHAT was shown, the EXPLORE DECISION and a GO. Three Explore decisions are
+// valid, because not everyone wants variations: a LADDER of N boards (N >= 3), a NAMED
+// DIRECTION ("build it like the Northwind site"), or a SUPPLIED EXAMPLE (an HTML file, a
+// mock-up or a URL the client wants rebuilt in Astro as it is). The last two skip Explore and
+// must also be recorded on commission.explore_skip so the done gate agrees.
+//
+// A skip is allowed, and it is RECORDED, never silent: tiny reversible work, or a brief that
+// named its direction, writes { exempt, reason }. What the hook cannot verify is that a human
+// actually said yes: go.quote carries their words (or the clause of the brief that
+// pre-authorised the build) so the claim is visible in the manifest and the Stop summary.
+// PALATE_GATE_CHECKPOINT=0 releases it for a session that genuinely cannot ask.
+// ---------------------------------------------------------------------------------------
+const EXPLORE_MODES = ["ladder", "named-direction", "supplied-example"];
+const CHECKPOINT_EXEMPTIONS = ["tiny-work", "named-direction"];
+const nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
+const nonEmptyList = (v, min, max) =>
+  Array.isArray(v) && v.length >= min && v.length <= max && v.every(nonEmpty);
+
+// THE INTAKE. A ladder Explore is the one mode that DRAWS a range, and until now nothing about
+// that range came from the person: the v3 run asked the calibration question after the boards
+// were already on the canvas, so the answer arrived too late to steer the research it was for,
+// and the checkpoint was satisfied by a brief that named none of this. These six answers are
+// what the deep survey is steered by (the intensity facet, the sites to search, the donors ruled
+// out, the conversion spine), so they are recorded BEFORE the survey or they steer nothing.
+// Named directions and supplied examples draw no ladder and are not asked.
+function intakeValid(intake) {
+  if (!intake || typeof intake !== "object") return false;
+  const cal = intake.calibration;
+  if (!cal || typeof cal !== "object") return false;
+  if (!Number.isInteger(cal.position) || cal.position < 1 || cal.position > 4) return false;
+  if (!nonEmpty(cal.why)) return false;
+  // 1 to 20: one named site is enough to steer a search, and a list past twenty is a dump of
+  // somebody's bookmarks rather than an answer. The bound is stated in the deny message and in
+  // SKILL.md's checkpoint, so it refuses nothing an agent was not told about.
+  if (!nonEmptyList(intake.admired, 1, 20)) return false;
+  if (!nonEmptyList(intake.disliked, 1, 20)) return false;
+  if (!nonEmpty(intake.primary_action)) return false;
+  if (!nonEmpty(intake.wow)) return false;
+  // 3 to 5, the range the doctrine asks for: fewer is too thin to rule a donor out, more is a
+  // list nobody held to and the drawing quietly ignores.
+  return nonEmptyList(intake.avoid, 3, 5);
+}
+
+function checkpointValid(m) {
+  const c = m && m.plan_checkpoint;
+  if (!c || typeof c !== "object") return false;
+  if (c.exempt != null) {
+    return CHECKPOINT_EXEMPTIONS.includes(c.exempt) && nonEmpty(c.reason);
+  }
+  const shown = c.shown, go = c.go;
+  if (!shown || typeof shown !== "object" || !go || typeof go !== "object") return false;
+  if (!nonEmpty(shown.host) || !nonEmpty(shown.stage)) return false;
+  if (shown.cms === undefined || shown.cms === null) return false;
+  const ex = shown.explore;
+  if (!ex || typeof ex !== "object" || !EXPLORE_MODES.includes(ex.mode)) return false;
+  if (ex.mode === "ladder") {
+    if (!Number.isInteger(ex.count) || ex.count < 3) return false;
+    if (!intakeValid(shown.intake)) return false;
+  } else if (!nonEmpty(ex.source)) {
+    return false; // what was named, or what was supplied (a path or a URL)
+  }
+  if (go.given !== true) return false;
+  if (!["asked", "brief"].includes(go.how)) return false;
+  // A BRIEF PRE-AUTHORISES ONLY A NAMED DIRECTION OR A SUPPLIED EXAMPLE. The first live build
+  // after this wall shipped recorded how:"brief" quoting its opening prompt and asked nothing:
+  // host, CMS and rung count decided alone, on a ladder Explore, which is the case the doctrine
+  // says is ALWAYS asked. A ladder on a new site needs the person's own answer.
+  if (go.how === "brief" && ex.mode === "ladder") return false;
+  return nonEmpty(go.quote);
+}
+
+const CHECKPOINT_REQUIRED_MESSAGE =
+  "PLAN CHECKPOINT REQUIRED before any page or section source is written (SKILL.md, \"The plan\n" +
+  "checkpoint\", moment 1). Show the person a short plan and get a go, then record it:\n" +
+  "  manifest.plan_checkpoint = {\n" +
+  "    shown_at: ISO time,\n" +
+  "    shown: { pages:[...], brand_source, references:[...], industry,\n" +
+  "             host: \"vercel\"|\"cloudflare\" (ALWAYS asked, Vercel the default), stage: \"preview\"|\"production\",\n" +
+  "             cms: false | \"sanity\" (ask: who edits this copy in six months?),\n" +
+  "             explore: { mode: \"ladder\", count: N>=3 }\n" +
+  "                   | { mode: \"named-direction\", source: \"the site or direction they named\" }\n" +
+  "                   | { mode: \"supplied-example\", source: \"path or URL of the HTML / mock-up to rebuild in Astro\" },\n" +
+  "             intake: { ... } (a LADDER only, see below) },\n" +
+  "    go: { given: true, how: \"asked\"|\"brief\", quote: \"their words, or the brief clause that pre-authorised it\" } }\n" +
+  "  how: \"brief\" is accepted ONLY for named-direction and supplied-example; a ladder Explore must be ASKED.\n" +
+  "Not everyone wants variations: named-direction and supplied-example SKIP Explore (record the same\n" +
+  "reason on commission.explore_skip). Tiny reversible work, or a brief that names its direction, may\n" +
+  "record the skip instead: plan_checkpoint = { exempt: \"tiny-work\"|\"named-direction\", reason }.\n" +
+  "\n" +
+  "A LADDER ALSO NEEDS THE INTAKE, ASKED BEFORE THE DEEP SURVEY AND IN ONE ROUND. A ladder is\n" +
+  "the one decision that draws a RANGE, and until these are answered nothing about that range\n" +
+  "came from the person. The surveyor's first act is the calibration row only (3 or 4 real sites\n" +
+  "from their vertical, restrained to bold); show it, then ask all six in ONE round, in their own\n" +
+  "words, through AskUserQuestion where the harness has it and four questions to a call (SKILL.md,\n" +
+  "\"Asking the person\"):\n" +
+  "  1. Which of these is closest to how bold you want to be, and what do you dislike about it?\n" +
+  "  2. Two or three sites in your field you admire, and one you do not.\n" +
+  "  3. What is the one thing you want a visitor to do: call, fill in a form, book, or buy?\n" +
+  "  4. What should this site do that nothing else in your field does? (the wow moment)\n" +
+  "  5. Three to five things we must not do (\"no purple\", \"no stock people photos\").\n" +
+  "  6. Host, who edits the copy in six months, and how many directions you want to see.\n" +
+  "Then record their answers and run the deep survey with them:\n" +
+  "  shown.intake = { calibration: { position: 1..4, why },\n" +
+  "                   admired: [\"...\"] (1 to 20), disliked: [\"...\"] (1 to 20),\n" +
+  "                   primary_action: \"call\"|\"form\"|\"booking\"|\"buy\",\n" +
+  "                   wow: \"one sentence\", avoid: [\"...\"] (3 to 5) }\n" +
+  "Every field is required and none may be blank. named-direction and supplied-example draw no\n" +
+  "ladder, so neither is asked for an intake.\n" +
+  "PALATE_GATE_CHECKPOINT=0 releases this wall for a session that genuinely cannot ask.";
+
+function SURVEY_REQUIRED_MESSAGE(gateReason, calls) {
+  return (
+    "Palate BUILD SITE gate: the SURVEY is not deep enough to start writing code.\n" +
+    "\n" +
+    `The Palate MCP is connected and this build has used it ${calls} time(s), so the library is\n` +
+    "reachable and the taste layer is the whole point of building here. Survey properly FIRST:\n" +
+    "what you write next should be carrying craft you have actually read, not craft you\n" +
+    "remember.\n" +
+    "\n" +
+    (gateReason ? gateReason + "\n\n" : "") +
+    "What clears it, in order:\n" +
+    "  1. refs_search with CONCRETE lexical terms (the business category, a page type, a named\n" +
+    "     mechanic like \"preloader\" or \"GSAP\", a font) across more than one vertical, or\n" +
+    "     refs_for_business / refs_match_brief on the brief. Five distinct references minimum.\n" +
+    "  2. refs_get on your backbone and donors with a REAL layer: layer:\"do_dont\",\n" +
+    "     layer:\"component_prompts\", layer:\"signature_moves\", layer:\"pages\", or\n" +
+    "     format:\"design\". Raw tokens and concept do not count: numbers without the why are\n" +
+    "     the shallow read this gate exists to stop.\n" +
+    "  3. refs_get_screenshot on at least two INNER pages of your donors (pricing, menu,\n" +
+    "     booking), not only their home page. Two minimum.\n" +
+    "\n" +
+    "Running the palate-surveyor subagent does all three and keeps the raw JSON out of your\n" +
+    "context.\n" +
+    "\n" +
+    "This only fires on an active build site whose MCP has already answered. A build with no\n" +
+    "Palate connection is never held to it. Escape for this build: PALATE_GATE_SURVEY=0.\n" +
+    "Everything off: PALATE_GATE_OFF=1."
+  );
+}
+
+function readStdin() {
+  try {
+    const raw = fs.readFileSync(0, "utf8");
+    return raw.trim() ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function allow() {
+  process.exit(0);
+}
+
+/**
+ * PALATE_GATE_OFF=1 IS RECORDED, NEVER SILENT.
+ *
+ * This hook read the variable as its first act and allowed the write before touching anything,
+ * so a build run with the wall disabled left no trace. Weeks later the manifest read exactly
+ * like a build that had cleared it. The bypass is legitimate and stays; it just goes on the
+ * record. Written through manifest-merge.mjs so the stamp cannot clobber a concurrent hook
+ * write, and best-effort: a recording failure must never wedge the bypass it is recording.
+ */
+function recordGatesOff(startDir, hint) {
+  try {
+    const manifestPath = resolveBuildContext(startDir, { hint }).manifest;
+    if (!manifestPath || !fs.existsSync(manifestPath)) return;
+    execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
+      cwd: path.dirname(manifestPath),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch {
+    /* the bypass must work even when the record cannot be written */
+  }
+}
+
+function deny(reason) {
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: reason,
+      },
+    }),
+  );
+  process.exit(0);
+}
+
+// divergeValid: the manifest records a GENUINELY divergent set that was scored and
+// narrowed, on the axes appropriate to the build's BRAND MODE. It mirrors what
+// scripts/gate-novelty.mjs's --require-diverge copy validates, so the write-time wall
+// and the done-time novelty gate agree on what "valid" means; keep the two copies
+// byte-identical in logic (they share the PALATE_MIN_* env thresholds).
+//
+// ANTI-GAMING: it is not enough to set ran:true. The set must have >= MIN_DIVERGE
+// concepts, each carrying the divergence axes and a self-tagged conventionality, a
+// spread of conventionality, a low-typicality tail, and a CONVERGE that advanced >= 1.
+// (8 identical concepts, or 8 all clustered at the mode, both fail.) The DISTINCTNESS
+// check is MODE-AWARE:
+//   - brand-creation: the FULL identity space must vary. colour AND type must be in
+//     axes_varied, and the concepts must actually show >= MIN_AXIS_DISTINCT distinct
+//     colourways AND distinct type directions, plus the distinct lens|seed signatures.
+//     So the single-default-style failure (one colourway + Bricolage/Hanken everywhere)
+//     is structurally impossible to record as valid.
+//   - brand-provided: colour AND type are LOCKED. They MUST NOT be in axes_varied and
+//     MUST be ~constant across concepts; distinctness is judged on the allowed axes
+//     (layout / composition / section_logic / motion / density / art_direction). So the
+//     model is forced to diverge on the right axes and is blocked from drifting the brand.
+// A manifest whose self-declared diverge.mode disagrees with the build's mode is invalid
+// (anti-tamper: the agent cannot record one mode to dodge the other mode's bar).
+//
+// `mode` defaults to "brand-creation" (the stricter, safer default) when the marker
+// carries no brandMode, for back-compat with older state files.
+function divergeValid(m, mode = "brand-creation") {
+  if (!m || typeof m !== "object") return false;
+  const d = m.diverge, c = m.converge;
+  if (!d || d.ran !== true || !Array.isArray(d.concepts)) return false;
+  if (d.concepts.length < MIN_DIVERGE) return false; // >= 8 directions
+
+  // Mode consistency: a manifest that claims a different mode than the build is invalid.
+  // Only enforced when the manifest self-declares a mode (legacy manifests have none).
+  if (d.mode && d.mode !== mode) return false;
+
+  // Each concept must carry the divergence axes and a self-tagged conventionality.
+  const ok = d.concepts.filter((x) =>
+    x && typeof x === "object" &&
+    typeof x.conventionality === "number" &&
+    (x.mechanic || x.lens || x.analogical_seed),
+  );
+  if (ok.length < MIN_DIVERGE) return false;
+
+  // Conventionality spread + low tail (both modes): not 8 shades of one, a tail exists.
+  const convs = ok.map((x) => x.conventionality);
+  const spread = Math.max(...convs) - Math.min(...convs);
+  if (spread < MIN_CONV_SPREAD) return false;          // not all clustered at the mode
+  if (!convs.some((v) => v <= LOW_TAIL_MAX)) return false; // >= 1 surprising-tail concept
+
+  // axes_varied: the declared intent. Lower-cased set.
+  const axes = new Set((Array.isArray(d.axes_varied) ? d.axes_varied : []).map((a) => String(a).toLowerCase().trim()));
+  const hasColour = axes.has("colour") || axes.has("colourway") || axes.has("color");
+  const hasType = axes.has("type") || axes.has("faces") || axes.has("typography");
+  // distinct non-empty values of a concept axis, lower-cased.
+  const distinctOf = (key) => new Set(
+    ok.map((x) => String(x[key] || "").toLowerCase().trim()).filter((s) => s.length > 0),
+  ).size;
+
+  if (mode === "brand-provided") {
+    // colour + type are LOCKED: NOT in axes_varied, locked flags set, ~constant per concept.
+    if (hasColour || hasType) return false;
+    if (!d.locked || d.locked.colour !== true || d.locked.type !== true) return false;
+    if (distinctOf("colourway") > 1) return false;       // colourway must be constant (locked)
+    if (distinctOf("type") > 1) return false;            // type must be constant (locked)
+    // distinctness judged on the ALLOWED within-brand axes.
+    const allowed = ["layout", "composition", "section_logic", "motion", "density", "art_direction"];
+    const declaredAllowed = allowed.filter((a) => axes.has(a));
+    if (declaredAllowed.length < 2) return false;        // >= 2 distinct allowed axes declared
+    const skins = new Set(
+      ok.map((x) => allowed.map((a) => String(x[a] || "").toLowerCase().trim()).join("|"))
+        .filter((s) => s.replace(/\|/g, "").length > 0),
+    );
+    if (skins.size < MIN_DISTINCT_SIGS) return false;    // >= 6 distinct layout/motion skins
+  } else {
+    // brand-creation: the FULL identity space must vary. colour + type required + actually distinct.
+    if (!hasColour) return false;
+    if (!hasType) return false;
+    if (distinctOf("colourway") < MIN_AXIS_DISTINCT) return false; // >= 3 distinct colourways
+    if (distinctOf("type") < MIN_AXIS_DISTINCT) return false;      // >= 3 distinct type directions
+    // plus the existing lens|seed signature spread (genuine concept variety).
+    const sigs = new Set(
+      ok.map((x) =>
+        `${String(x.lens || "").toLowerCase().trim()}|${String(x.analogical_seed || "").toLowerCase().trim()}`,
+      ),
+    );
+    if (sigs.size < MIN_DISTINCT_SIGS) return false;     // distinct fingerprints
+  }
+
+  // CONVERGE must have narrowed to a chosen 1-2 (both modes).
+  if (!c || c.ran !== true || !Array.isArray(c.advanced) || c.advanced.length < 1) return false;
+  return true;
+}
+
+const p = readStdin();
+if (!p) allow();
+if (handleLiveWorkflow(p, "PreToolUse", [resolveBuildContext(p.cwd || process.cwd(), {
+  hint: p.tool_input?.file_path || p.tool_input?.filePath || p.tool_input?.path,
+}).dir])) process.exit(0);
+if (process.env.PALATE_GATE_OFF === "1") {
+  recordGatesOff(p.cwd || process.cwd(), p.tool_input && p.tool_input.file_path);
+  allow();
+}
+
+const tool = p.tool_name || "";
+
+// ---------------------------------------------------------------------------------------
+// THE ORCHESTRATION GUARD. A Palate build must be DRIVEN BY THE SKILL, and this is the
+// difference between the two real builds we can compare directly.
+//
+//   The Wildlings: 0 Workflow calls, 20 subagents (a palate-surveyor, a palate-verifier and
+//   18 research agents), variants written IN the main session. Manifest: 28 Palate calls, 12
+//   references, 8 inner pages, all five craft layers. The client was delighted.
+//
+//   Pelvy: 10 Workflow calls including one named `pelvy-explore`, ZERO variant writes in the
+//   main session, no surveyor. Manifest: 3 Palate calls. It cost its owner a day and every
+//   fault in the review traces back here.
+//
+// WHY IT FAILS, precisely. A workflow agent receives only the prompt the script hands it. It
+// does not load SKILL.md, explore-stage.md or build-commission.md, so the agents that actually
+// wrote all eight variants had never read the ambition ladder, "one distinct donor per rung",
+// "rung 1 is restrained AND excellent", or "calm is not motionless". The orchestrator
+// paraphrases the brief into each worker, and a paraphrase of a restraint clause is applied
+// uniformly, which is exactly how eight rungs came out inside one narrow band.
+//
+// THE SKILL ALREADY HAS DELEGATION that keeps the doctrine: `palate-surveyor` and
+// `palate-verifier` carry it by construction, and plain Agent spawns are fine for research and
+// harvest (Wildlings used eighteen). So nothing is lost by holding this line, and a day was
+// lost by not having it. Escape: PALATE_ALLOW_WORKFLOW=1.
+// ---------------------------------------------------------------------------------------
+if (tool === "Workflow") {
+  if (process.env.PALATE_ALLOW_WORKFLOW === "1") allow();
+  try {
+    const marker = path.join(p.cwd || process.cwd(), ".palate-skill-state.json");
+    if (!fs.existsSync(marker)) allow(); // not a Palate build: none of our business
+  } catch {
+    allow();
+  }
+
+  // A BLANKET DENY WOULD LEAVE NO WAY OUT, and that matters more than it looks. The env-var
+  // escape is set on the Claude Code process, so an agent mid-build CANNOT set it: under an
+  // orchestration-first mode the agent would be told no, be unable to comply with either
+  // instruction, and thrash. Mechanical fan-out is also genuinely fine. Pelvy's `pelvy-harvest`
+  // was harmless; `pelvy-explore` and `pelvy-ladder-judging` are what cost the day.
+  //
+  // So the split is CREATIVE vs MECHANICAL, read off the script the caller is about to run.
+  // It fails CLOSED, because a false allow costs a rebuilt site and a false deny costs one
+  // reshaped call, and the deny says exactly what would pass.
+  // READ THE PAYLOAD DIRECTLY, never the `input` const below. This guard runs above that
+  // declaration, and a `const` referenced before its line is a ReferenceError at RUNTIME that
+  // `node --check` passes cleanly: written the obvious way, this hook crashed on every workflow
+  // call and the guard was dead. Third time today that a syntax check has hidden a TDZ.
+  const wf = p.tool_input || {};
+  const blob = [
+    typeof wf.script === "string" ? wf.script : "",
+    typeof wf.scriptPath === "string" ? wf.scriptPath : "",
+    typeof wf.name === "string" ? wf.name : "",
+    (() => { try { return JSON.stringify(wf.args ?? ""); } catch { return ""; } })(),
+  ].join("\n").toLowerCase();
+
+  // Authoring the site, or deciding how it should look. None of this may leave this session.
+  const CREATIVE = [
+    ".astro", ".svelte", ".vue", ".tsx", ".jsx", "src/pages", "src/components", "src/styles",
+    "variant", "explore", "diverge", "converge", "commission", "rung", "ladder", "compose",
+    "redesign", "hero", "art direction", "design direction", "concept", "palette", "typograph",
+    "motion", "signature move", "donor", "judge", "judging", "score the", "rank the", "pick the",
+    "write the copy", "copy voice", "section", "layout",
+  ];
+  // Reading, measuring, gathering. Parallelising these is a real win and costs nothing.
+  const MECHANICAL = [
+    "crawl", "harvest", "sitemap", "scrape", "fetch", "measure", "dimension", "audit",
+    "inventory", "extract", "transcript", "research", "competitor", "summar", "classify",
+    "categor", "lighthouse", "accessib", "migrate", "dedupe", "wayback", "screenshot",
+  ];
+  const hitsCreative = CREATIVE.filter((t) => blob.includes(t));
+  const hitsMechanical = MECHANICAL.some((t) => blob.includes(t));
+
+  if (!hitsCreative.length && hitsMechanical) allow(); // gathering, in parallel: fine
+
+  const why = hitsCreative.length
+    ? `This one names ${hitsCreative.slice(0, 4).map((t) => `"${t}"`).join(", ")}, so it is design work.`
+    : "This one does not read as pure gathering, and an unlabelled workflow on a build site is treated as design work rather than guessed at.";
+
+  deny(
+    "Palate BUILD SITE gate: the creative stages of a Palate build stay in THIS session.\n" +
+      "\n" +
+      "A workflow agent gets the prompt your script hands it and nothing else. It does not load\n" +
+      "SKILL.md, explore-stage.md or build-commission.md, so it has never read the ambition ladder,\n" +
+      "the one-distinct-donor-per-rung rule, or the restraint clause. Measured on two real builds\n" +
+      "from the same prompt:\n" +
+      "\n" +
+      "  The Wildlings   0 workflows, variants written in-session, surveyor ran.\n" +
+      "                  28 Palate calls, 12 references, 8 inner pages, 5 craft layers. Delighted.\n" +
+      "  Pelvy           10 workflows including one for Explore, zero variant writes in-session,\n" +
+      "                  no surveyor. 3 Palate calls. A day lost, and every fault traced here.\n" +
+      "\n" +
+      why +
+      "\n\n" +
+      "YOU HAVE NOT LOST THE PARALLELISM, only this route to it:\n" +
+      "  - Gathering workflows still run. Crawling, harvesting, measuring, auditing, research and\n" +
+      "    screenshots all pass this gate untouched.\n" +
+      "  - Fan out with the Agent tool instead for anything else that is not a design decision.\n" +
+      "    Wildlings ran eighteen research agents alongside its build.\n" +
+      "  - palate-surveyor does the library survey and keeps the raw refs_* JSON out of your\n" +
+      "    context, which is most of why you wanted a subagent.\n" +
+      "  - palate-verifier runs the gates and the visual loop in a fresh context.\n" +
+      "  - And write the variants YOURSELF, here, where the doctrine is loaded.\n" +
+      "\n" +
+      "If you are running in an orchestration-first mode, this is the exception to it: on a Palate\n" +
+      "build the doctrine has to travel with whoever writes the page, and it only travels here.\n" +
+      "(Not a Palate build? This only fires when .palate-skill-state.json exists. Whole-build\n" +
+      "override, set before the session: PALATE_ALLOW_WORKFLOW=1. Everything off: PALATE_GATE_OFF=1.)",
+  );
+}
+
+if (tool !== "Write" && tool !== "MultiEdit") allow();
+
+const input = p.tool_input || {};
+const fp = input.file_path || input.filePath || input.path || "";
+if (!SOURCE.test(fp)) allow(); // non-source: scaffolding, config, notes, the manifest
+if (CONFIG.test(fp)) allow();
+
+const cwd = p.cwd || process.cwd();
+
+// The manifest follows the PROJECT, not the session cwd (hooks/project-dir.mjs). It has to be
+// read from the same place hooks/palate-manifest.mjs writes it, or the wall would look in the
+// cwd, find nothing once the manifest moved into the scaffolded project, and block the first
+// source write of a build that had already diverged. The hint is the file being written, which
+// is the strongest available signal for which project this write belongs to.
+//
+// The MARKER lookup below deliberately stays on the cwd. It decides WHETHER the wall applies at
+// all, and widening where it is looked for would widen the set of sessions that get walled.
+const buildCtx = resolveBuildContext(cwd, { hint: fp });
+// The Palate plugin is not a site under construction. A refusal means there is no build here to
+// gate, so allow the write rather than judge the tool's own files against a client's contract.
+if (buildCtx.how === "refused" || !buildCtx.manifest) allow();
+
+// BUILD-SITE SCOPE: the DIVERGE wall only applies inside an active build-site flow.
+// state-init.sh writes .palate-skill-state.json before scaffold and before any source
+// write, and ONLY the BUILD SITE mode writes it (BUILD BRAND writes
+// .palate-brand-state.json; an ordinary edit writes neither). No marker => not a build
+// => fall through to the unchanged depth nudge. This is the non-negotiable fail-open
+// scope wall. Wrapped in try/catch so a marker-read throw cannot wedge a write.
+try {
+  const marker = path.join(cwd, ".palate-skill-state.json");
+  if (fs.existsSync(marker)) {
+    const isPageOrSection = PAGE_OR_SECTION.test(fp);
+
+    // Write-over-existing NON page/section source (config, layout chrome, lib) is
+    // iteration on the scaffold: allow. New page/section source, OR overwriting page/
+    // section source, both wait for DIVERGE so the first authored hero/section cannot
+    // sneak in by overwriting a template stub before the build has diverged.
+    if (fs.existsSync(fp) && !isPageOrSection) allow();
+
+    // Read the BRAND MODE from the MARKER (not the manifest, so it cannot be tampered
+    // with by a manifest write). Default brand-creation (the stricter bar) when the
+    // marker has no brandMode (an older state file).
+    let mode = "brand-creation";
+    try {
+      const st = JSON.parse(fs.readFileSync(marker, "utf8"));
+      if (st.brandMode === "brand-provided" || st.brandMode === "brand-creation") mode = st.brandMode;
+    } catch { /* default brand-creation */ }
+
+    let manifest = null;
+    try {
+      manifest = JSON.parse(fs.readFileSync(buildCtx.manifest, "utf8"));
+    } catch {
+      /* absent/unreadable => diverge not yet valid */
+    }
+
+    if (!divergeValid(manifest, mode)) {
+      // A build site is active, this is a NEW (or page/section) source write, and DIVERGE
+      // has not validly run FOR THIS MODE. Block it and tell the model to diverge first.
+      deny(DIVERGE_REQUIRED_MESSAGE(mode));
+    }
+
+    // THE PLAN CHECKPOINT WALL (see checkpointValid above): a build site, new or page/section
+    // source, and nobody was shown a plan or asked. Sits after DIVERGE because the plan names
+    // the references and the Explore count, which DIVERGE produces.
+    if (process.env.PALATE_GATE_CHECKPOINT !== "0" && !checkpointValid(manifest)) {
+      deny(CHECKPOINT_REQUIRED_MESSAGE);
+    }
+
+    // ---------------------------------------------------------------------------------
+    // THE SURVEY WALL. DIVERGE is a reasoning step; the SURVEY is where the library
+    // actually enters the build, and until now nothing checked it before code was written.
+    // The depth gate existed and was strict (5 references, 2 inner pages, 3 tools, 1 deep
+    // read, 1 rich layer), but on a build site this branch called allow() the moment
+    // DIVERGE was valid and never ran it. A real client build reached eight finished
+    // variants having made THREE Palate calls: one catalogue listing and two hero
+    // screenshots. Its own commission still claimed a backbone was "the only reference in
+    // the library that is literally the same machine", a claim about 2,169 references that
+    // requires a search nobody ran. The craft in that build was the model's, not the
+    // library's, which is the one thing Palate cannot afford to ship.
+    //
+    // WHY IT CANNOT TRAP ANYONE. It only binds once the MCP has PROVEN itself reachable, by
+    // returning content at least once in this build. Zero recorded calls is exactly the
+    // signature of a user whose token is not set, and that case allows, unchanged. So the
+    // rule is: you may build without Palate, and you may not pretend to build with it.
+    // ---------------------------------------------------------------------------------
+    // SCOPED TO PAGE AND SECTION SOURCE, which is the only thing composed FROM the library.
+    //
+    // The first version held every new source file, and a live build hit it writing
+    // `src/brand/tokens.css`: brand tokens are EXTRACTED from the client's own brand, not
+    // designed from references, so demanding a library survey before them inverts the order of
+    // the work. Same for `src/brand/fonts.css`, `src/styles/globals.css` and `src/lib/content.ts`
+    // (which is content, not craft). The survey is about what you COMPOSE, and composition
+    // happens in src/pages and src/components. Nothing is lost by scoping it: a site still needs
+    // pages, and those are held.
+    if (process.env.PALATE_GATE_SURVEY !== "0" && isPageOrSection) {
+      const calls = Array.isArray(manifest?.mcp_calls) ? manifest.mcp_calls.length : 0;
+      const failures = Array.isArray(manifest?.mcp_failures) ? manifest.mcp_failures.length : 0;
+      // A degrading connection must not become a trap: if the library is refusing more often
+      // than it answers, the agent cannot satisfy a depth bar no matter how it tries.
+      const degraded = failures > calls;
+      if (calls >= 1 && !degraded) {
+        try {
+          execFileSync("bash", [GATE, buildCtx.manifest], { stdio: ["ignore", "ignore", "pipe"] });
+        } catch (e) {
+          // DENY ONLY ON THE GATE'S OWN BLOCK CODE (2). execFileSync throws on any non-zero
+          // status AND on failing to spawn at all, so a missing bash, an unreadable script or a
+          // permissions problem arrives here looking exactly like a verdict. Treating those as
+          // a block would wall every source write for a reason that has nothing to do with the
+          // build. Exit 3 is the non-blocking UNGROUNDED label and is unreachable here anyway
+          // (it requires zero calls, which this branch has already excluded).
+          if (e && e.status === 2) {
+            deny(SURVEY_REQUIRED_MESSAGE((e.stderr ? e.stderr.toString() : "").trim(), calls));
+          }
+        }
+      }
+    }
+
+    allow();
+  }
+} catch {
+  // Any unexpected fs error: do NOT wedge a write. Fall through to the depth path,
+  // which allows under non-strict.
+}
+
+// No build-site marker: not a build. Keep the EXISTING depth nudge, unchanged. NEVER
+// block a write by default; the depth gate is a nudge, not a wall (hard-blocking a
+// write would trap anyone whose Palate MCP is not connected, who is editing an existing
+// app, or who surveyed in a subagent). Opt into hard enforcement with PALATE_GATE_STRICT=1.
+if (process.env.PALATE_GATE_STRICT !== "1") allow();
+
+try {
+  execFileSync("bash", [GATE, buildCtx.manifest], {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  allow();
+} catch (e) {
+  // THE THIRD STATE: exit 3 = UNGROUNDED (the gate ran, the build recorded no Palate MCP
+  // calls). That is a LABEL, never a block, so the write is ALLOWED even under
+  // PALATE_GATE_STRICT=1. execFileSync throws on ANY non-zero status, so without this
+  // exit-code check the non-blocking signal would deny a source write to precisely the
+  // person whose MCP is not connected. Nothing is printed here on purpose: PreToolUse
+  // fires on every write, and the Stop hook states the label once per build. Degrade
+  // loudly ONCE, never nag.
+  // The explicit else is load-bearing. allow() exits the process today, but this branch is
+  // the single thing keeping the third state non-blocking on the write path, and its
+  // correctness must not depend on a helper's side effect. Written as a bare `if` it would
+  // fall through to deny() the moment allow() stopped exiting, silently denying every
+  // source write for exactly the person whose MCP is not connected. (A `return` cannot be
+  // used here: this catch sits at module top level, not inside a function.)
+  if (e && e.status === 3) {
+    allow();
+  } else {
+    const reason =
+      (e.stderr ? e.stderr.toString() : "").trim() ||
+      'MCP-depth gate failed: survey the library first: refs_search with concrete lexical terms (a font, "GSAP", "preloader", the business category), then refs_get your donors with a layer (signature_moves / do_dont / component_prompts) or format:design before writing code.';
+    deny(reason);
+  }
+}

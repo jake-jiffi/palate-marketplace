@@ -1,0 +1,116 @@
+---
+/**
+ * Compact call-to-action banner.
+ *
+ * Drop this mid-page, between two sections of argument, for the reader who is already convinced
+ * and should not have to scroll to the end to act. It is deliberately one line and one action:
+ * a banner that grows a headline, a paragraph and two buttons has become a closing section in the
+ * wrong place, and it interrupts the argument it was meant to sit quietly inside. Use CtaClosing
+ * for that job instead.
+ *
+ * The row wraps rather than switching layout at a breakpoint, so it reflows on the length of the
+ * sentence rather than on an assumption about the device.
+ */
+export interface Props {
+  /** One line. If it needs a full stop and then another sentence, it is the wrong piece. */
+  text?: string;
+  action?: { label: string; href: string };
+  /** A short reassurance beside the button: "No obligation", "Takes two minutes". */
+  note?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  text = "Need it sorted this week? We hold a few slots for urgent jobs.",
+  action = { label: "Book a callout", href: "/contact" },
+  note,
+  tone = "subtle",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const slug = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "cta";
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `cta-banner-${slug(text)}`;
+const labelId = `${uid}-heading`;
+---
+
+<section
+  id={id || undefined}
+  class:list={["kit-section", "kit-section--tight", toneClass, "kit-ctab", className]}
+  aria-labelledby={labelId}
+>
+  <div class="kit-container kit-ctab__row">
+    <p class="kit-lede kit-ctab__text" id={labelId}>{text}</p>
+    <div class="kit-ctab__act">
+      <a class="kit-btn kit-btn--primary" href={action.href}>
+        <span class="kit-btn__label">{action.label}</span>
+      </a>
+      {note && <span class="kit-ctab__note kit-muted">{note}</span>}
+    </div>
+  </div>
+</section>
+
+<style>
+  .kit-ctab__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kit-space-lg) var(--kit-space-2xl);
+  }
+
+  /* Wraps to its own line as soon as the sentence and the button stop fitting side by side,
+     which is a width decision rather than a device decision. */
+  .kit-ctab__text {
+    flex: 1 1 34ch;
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .kit-ctab__act {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kit-space-xs) var(--kit-space-md);
+    flex: 0 1 auto;
+  }
+
+  .kit-ctab__note { font-size: var(--kit-text-sm); }
+
+  .kit-ctab .kit-btn { max-width: 100%; }
+
+  .kit-ctab .kit-btn:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-section--inverse .kit-btn:focus-visible { outline-color: var(--kit-text-inverse); }
+  /* On a dark ground the primary button is drawn in the inverse text colour rather than in the
+     accent. --kit-accent-lift falls back to --kit-accent, which a brand chooses for a LIGHT
+     ground, so on the default token set an accent button is a near-invisible shape carrying
+     legible text. A brand that wants its own colour here overrides .kit-btn--primary inside
+     .kit-section--inverse in its own layer. */
+  /* .kit-lede pins its own colour to --kit-text, so on a dark ground it lands as
+     near-black on near-black. Measured at 1.06:1 before this line existed. */
+  .kit-section--inverse .kit-ctab__text { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-btn--primary {
+    background: var(--kit-text-inverse);
+    color: var(--kit-bg-inverse);
+  }
+  .kit-section--inverse .kit-btn--primary:hover {
+    background: color-mix(in srgb, var(--kit-text-inverse) 86%, var(--kit-bg-inverse));
+  }
+</style>

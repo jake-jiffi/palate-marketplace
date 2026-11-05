@@ -1,0 +1,189 @@
+---
+/**
+ * HeroCentredPreview: a centred claim above a picture of the product itself.
+ *
+ * Reach for this when the product IS the proof: software, an app, a dashboard, anything with a
+ * screen worth showing. A trade business showing a photograph of its work wants HeroServicePhoto;
+ * a claim that needs a paragraph beside an image wants HeroTextImage.
+ *
+ * NO FAKE BROWSER CHROME. The screenshot sits in a plain frame: a border, a little padding, and
+ * whatever radius the brand uses. It deliberately does not draw a window bar with three coloured
+ * dots and an invented URL, which is one of the clearest tells that a page was assembled rather
+ * than designed, and which puts a fictional address on the most looked-at element of the page.
+ * If the real product runs in a browser, screenshot the real browser.
+ *
+ * The frame is a ratio box, so the layout below the fold does not move when the screenshot loads,
+ * and a build with no screenshot yet gets a correctly sized tinted panel instead of a collapse.
+ */
+export interface HeroCta {
+  label: string;
+  href: string;
+  variant?: "primary" | "secondary";
+}
+export interface HeroPreview {
+  src: string;
+  /** Describe what the screen shows, not that it is a screenshot. */
+  alt: string;
+  width?: number;
+  height?: number;
+}
+export interface Props {
+  headline?: string;
+  /** Short. The centred measure is narrow on purpose and a long lede reads as a wall here. */
+  lede?: string;
+  ctas?: HeroCta[];
+  /** A line under the buttons: a trial length, a price floor, whatever removes the next doubt. */
+  note?: string;
+  preview?: HeroPreview | null;
+  ratio?: "wide" | "photo";
+  level?: 1 | 2;
+  /**
+   * Which ground this piece sits on. One name and one vocabulary across the whole kit, so a page
+   * can alternate grounds without having to remember which piece calls it what. Every semantic
+   * token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  headline = "See what a job earns before you quote it",
+  lede = "Ledgerline pulls your costs, hours and materials into one view, so the margin is on screen while the quote is still editable.",
+  ctas = [
+    { label: "Start free", href: "/signup" },
+    { label: "See how it works", href: "/tour" },
+  ],
+  note = "Free for one user. No card until you invite a second.",
+  preview = null,
+  ratio = "wide",
+  level = 1,
+  id,
+  tone = "default",
+} = Astro.props;
+
+const Heading = level === 2 ? "h2" : "h1";
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `hcp-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const calls = ctas.slice(0, 2);
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+---
+
+<section class:list={["kit-section", toneClass, "hero-preview"]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container hero-preview__inner">
+    <div class="hero-preview__words">
+      <Heading id={headingId} class="kit-display">{headline}</Heading>
+      {lede && <p class="kit-lede kit-muted hero-preview__lede">{lede}</p>}
+
+      {calls.length > 0 && (
+        <div class="hero-preview__ctas">
+          {calls.map((cta, index) => (
+            <a
+              class:list={[
+                "kit-btn",
+                (cta.variant ?? (index === 0 ? "primary" : "secondary")) === "primary"
+                  ? "kit-btn--primary"
+                  : "kit-btn--secondary",
+                "hero-preview__cta",
+              ]}
+              href={cta.href}
+            >
+              {cta.label}
+            </a>
+          ))}
+        </div>
+      )}
+
+      {note && <p class="kit-body kit-muted hero-preview__note">{note}</p>}
+    </div>
+
+    <figure class="hero-preview__frame">
+      <div class:list={["kit-media", `kit-media--${ratio}`, "hero-preview__shot"]}>
+        {preview && (
+          <img
+            src={preview.src}
+            alt={preview.alt}
+            width={preview.width}
+            height={preview.height}
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+          />
+        )}
+      </div>
+    </figure>
+  </div>
+</section>
+
+<style>
+  .hero-preview__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--kit-space-2xl);
+  }
+
+  .hero-preview__words {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--kit-space-lg);
+    text-align: center;
+    width: 100%;
+  }
+  /* The reading measure is set in ch against BODY type, so applying it to a display headline
+     caps a display heading at roughly the body measure, which breaks a nine-word claim over
+     three lines on a wide screen. The
+     headline gets its own wider cap; the lede and the note keep the reading measure, which is
+     what centred prose actually needs. */
+  .hero-preview__words > :global(.kit-display) {
+    max-width: min(100%, calc(var(--kit-page-max) * 0.72));
+    margin-inline: auto;
+  }
+  .hero-preview__lede { margin: 0; margin-inline: auto; }
+  .hero-preview__note {
+    margin: 0;
+    margin-inline: auto;
+    font-size: var(--kit-text-sm);
+  }
+
+  .hero-preview__ctas {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--kit-space-md);
+    width: 100%;
+  }
+  .hero-preview__cta { flex: 1 1 auto; }
+
+  .hero-preview__frame {
+    margin: 0;
+    width: 100%;
+    /* Stated rather than inherited: foundations.css carries no reset, and width plus padding
+       without it puts the frame wider than its column. */
+    box-sizing: border-box;
+    padding: var(--kit-space-sm);
+    background: var(--kit-bg-subtle);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    box-shadow: var(--kit-shadow-raised);
+  }
+  .hero-preview__shot { background: var(--kit-bg); }
+
+  .hero-preview__cta:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  @media (min-width: 40em) {
+    .hero-preview__cta { flex: 0 0 auto; }
+  }
+</style>

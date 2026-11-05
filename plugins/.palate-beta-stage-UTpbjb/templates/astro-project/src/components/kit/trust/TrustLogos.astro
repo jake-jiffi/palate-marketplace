@@ -1,0 +1,251 @@
+---
+/**
+ * TrustLogos: one band of customer logos, placed under the hero.
+ *
+ * Logos arrive in wildly different proportions and ink weights: a tall monogram beside a long
+ * wordmark beside a mark that is mostly white space. Constraining them by WIDTH is what makes a
+ * strip look broken, because the tall one then towers over the wide one. This constrains every
+ * mark by HEIGHT inside a slot with a consistent minimum width, so four logos and ten logos both
+ * read as one rhythm rather than as a row of unrelated pictures.
+ *
+ * The marks sit at a uniform resting opacity, and that is a decision rather than a default. A
+ * strip of full-strength brand colours competes with the page's own accent, and the point of this
+ * band is the names, not the palette. A logo that links lifts to full strength on hover and on
+ * keyboard focus, so the dimming never hides that something is interactive.
+ *
+ * A logo with no file falls back to its name set as text. Builds routinely have permission to
+ * name a customer weeks before anyone sends the artwork, and a missing file should cost a picture,
+ * not the whole band.
+ */
+export interface TrustLogo {
+  /** The customer's name. Always required: it is the alt text and the fallback. */
+  name: string;
+  /** Path to the logo file. Leave it out and the name renders as text instead. */
+  src?: string;
+  /** Where the logo links, if the customer is happy to be linked. */
+  href?: string;
+  /** Intrinsic size of the file, so the browser reserves the space before it loads. */
+  width?: number;
+  height?: number;
+}
+
+export interface Props {
+  /** One line of framing. It is also the section's accessible name. */
+  intro?: string;
+  logos?: TrustLogo[];
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  /**
+   * Which ground this section sits on. One name and one vocabulary across the whole kit, so a
+   * page can alternate grounds without having to remember which piece calls it what. Every
+   * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * OPT IN when every mark supplied is a single dark colour and the section sits on the inverse
+   * ground. An SVG loaded through <img> is an isolated document: it cannot read this page's tone,
+   * so a one-colour dark wordmark renders dark ink on a dark ground and simply disappears. This
+   * flips it, and it is OPT IN rather than automatic because inverting a customer's real
+   * multi-colour logo would render their brand in colours they have never approved, which is a
+   * worse fault than the one it fixes.
+   *
+   * The better answer, where the customer has one, is a light-ground version of their mark.
+   */
+  monochromeLogos?: boolean;
+  /** Shown in place of the strip when no logos have been supplied. */
+  emptyMessage?: string;
+}
+
+const {
+  intro = "Working with builders, growers and freight operators along the coast",
+  /* Empty by default. These name real people and real firms, so an omitted prop must render the empty state rather than an invented one; the demo pages pass samples from src/lib/kit-sample.ts. */
+  logos = [],
+  id,
+  tone = "default",
+  monochromeLogos = false,
+  emptyMessage = "Customer logos appear here once they have been approved for use.",
+} = Astro.props;
+
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `tl-${Math.random().toString(36).slice(2, 8)}`;
+const titleId = `${uid}-title`;
+const items = (Array.isArray(logos) ? logos : []).filter((logo) => logo && logo.name);
+/* The caller's sentence, if they wrote one. The section's NAME is fixed and hidden, so a strip
+   with no intro is named the same as one with a paragraph above it. */
+const introText = intro?.trim() || "";
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    "kit-section--tight",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+    monochromeLogos && "tl--mono",
+  ]}
+  aria-labelledby={titleId}
+>
+  <div class="kit-container">
+    {/*
+      THE INTRO IS A SENTENCE, NOT A HEADING.
+      This was an <h2> holding whatever intro the caller passed, so a full sentence at 17px body
+      size entered the document outline as a section heading. The section still needs a name, and
+      it gets one from a visually hidden heading that says what the strip IS, with the caller's
+      sentence rendered underneath as the paragraph it reads like. A strip with no intro at all
+      keeps the same name, which is why the fallback is not the caller's text.
+    */}
+    <h2 id={titleId} class="kit-visually-hidden">Customers we work with</h2>
+    {introText && <p class:list={["tl__intro", "kit-body", "kit-muted"]}>{introText}</p>}
+
+    {items.length === 0 ? (
+      <p class="kit-empty tl__empty">{emptyMessage}</p>
+    ) : (
+      <ul class="tl__list" role="list">
+        {items.map((logo) => (
+          <li class="tl__item">
+            {logo.href ? (
+              <a class="tl__link" href={logo.href} aria-label={logo.name}>
+                {logo.src ? (
+                  <img
+                    class="tl__img"
+                    src={logo.src}
+                    alt=""
+                    width={logo.width}
+                    height={logo.height}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <span class="tl__name">{logo.name}</span>
+                )}
+              </a>
+            ) : logo.src ? (
+              <img
+                class="tl__img"
+                src={logo.src}
+                alt={logo.name}
+                width={logo.width}
+                height={logo.height}
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <span class="tl__name">{logo.name}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  /* --kit-accent-lift is the variant meant for dark grounds, but its fallback chain ends at
+     --kit-accent, which is near-black by default and therefore invisible on --kit-bg-inverse.
+     That takes the accent text, the stars and every focus ring down with it. Re-resolving it
+     here reads the brand's own lifted accent when there is one and falls back to the inverse
+     text colour, which the same ground already guarantees. Delete this once foundations gives
+     the token a fallback suited to the ground it exists for. */
+  .kit-section--inverse {
+  }
+
+  .tl__intro {
+    text-align: center;
+    margin-inline: auto;
+  }
+
+  .tl__empty,
+  .tl__list {
+    margin-block-start: var(--kit-space-xl);
+  }
+
+  .tl__list {
+    /* The slot, not the file, sets the rhythm: a fixed mark height and a floor on the slot width
+       so a narrow monogram still occupies its share of the row. */
+    --tl-mark-height: calc(var(--kit-space-xl) + var(--kit-space-xs));
+    --tl-slot-min: calc(var(--kit-space-3xl) * 2);
+    --tl-rest-opacity: 0.75;
+
+    list-style: none;
+    margin-inline: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    /* The column gap tracks the page gutter rather than sitting at a fixed size, because a
+       generous wide-screen gap is what pushes a narrow screen into a ragged 2/1/2/1 wrap. */
+    gap: var(--kit-space-lg) calc(var(--kit-gutter) * 1.5);
+  }
+
+  .tl__item {
+    flex: 0 1 auto;
+    min-width: min(100%, var(--tl-slot-min));
+    min-height: var(--tl-mark-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: var(--tl-rest-opacity);
+    transition: opacity var(--kit-duration) var(--kit-ease);
+  }
+
+  .tl__item:hover,
+  .tl__item:focus-within {
+    opacity: 1;
+  }
+
+  .tl__link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--kit-target);
+    min-width: 100%;
+    color: inherit;
+    text-decoration: none;
+    border-radius: var(--kit-radius);
+  }
+
+  .tl__link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .kit-section--inverse .tl__link:focus-visible {
+    outline-color: var(--kit-accent-lift);
+  }
+
+  .tl__img {
+    display: block;
+    height: var(--tl-mark-height);
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  /* Only on the inverse ground, and only when the caller has said every mark is one dark colour.
+     See the prop's own note: an automatic invert would recolour a real customer's brand. */
+  .kit-section--inverse .tl--mono .tl__img { filter: invert(1); }
+
+  .tl__name {
+    font-family: var(--kit-font-display);
+    font-size: var(--kit-text-base);
+    font-weight: var(--kit-weight-medium);
+    line-height: var(--kit-leading-snug);
+    letter-spacing: var(--kit-tracking-tight);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tl__item {
+      transition: none;
+    }
+  }
+</style>

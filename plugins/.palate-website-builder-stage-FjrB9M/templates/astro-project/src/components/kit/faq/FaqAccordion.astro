@@ -1,0 +1,256 @@
+---
+/**
+ * FAQ, expandable.
+ *
+ * Use this once there are more than six questions, or the answers run long enough that showing
+ * them all would push the next section off the bottom of the page. Below that, FaqVisible is
+ * better: disclosure costs a click per answer and most visitors spend none.
+ *
+ * Built on native <details> and <summary> rather than a JavaScript disclosure, which is not
+ * laziness: it opens and closes with no script at all, it is keyboard operable and correctly
+ * announced for free, it survives a failed hydration, and the browser's own find-in-page opens
+ * a closed answer when the text matches. The only script here mirrors the open state onto
+ * aria-expanded, which some assistive technology still reads more reliably than the native
+ * mapping. It listens in the capture phase because `toggle` does not bubble.
+ *
+ * Like FaqVisible, it emits FAQPage structured data from the props it renders, and only when
+ * there are questions. If both variations appear on one page, set `jsonLd={false}` on one.
+ */
+export interface FaqItem {
+  question: string;
+  /** Plain text. Length is the reason to choose this variation, so long is expected. */
+  answer: string;
+  /** Open on load. Use for at most one, usually the question everybody asks. */
+  open?: boolean;
+}
+
+export interface Props {
+  title?: string;
+  intro?: string;
+  items?: FaqItem[];
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Allow only one answer open at a time. Off by default: closing an answer someone is reading
+   * because they opened another is a surprise, and comparing two answers is a real thing people do.
+   */
+  single?: boolean;
+  emptyMessage?: string;
+  jsonLd?: boolean;
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  title = "Frequently asked questions",
+  intro,
+  items = [
+    { question: "How does the first visit work?", open: true,
+      answer: "We look at the job, measure what needs measuring and talk through the options in front of you. It takes about half an hour and there is no charge, whether or not you go ahead. You get the written quote by email the same day." },
+    { question: "What does the price include?",
+      answer: "Labour, materials, the tip fees and the certificate of compliance where one is required. The only things quoted separately are repairs we could not see until the job was open, and we ring you before starting any of those." },
+    { question: "Do I need to be home?",
+      answer: "For the quote, yes, so we can agree the detail with you. For the work itself, no. Plenty of customers leave a key and a note about the dog." },
+    { question: "How do I pay?",
+      answer: "Bank transfer or card, invoiced when the job is signed off. Jobs over $2,000 are split into a deposit and a balance, both on the quote before you accept it." },
+    { question: "What if something goes wrong afterwards?",
+      answer: "Ring us and we come back. Workmanship is covered for six years, parts carry whatever the manufacturer offers, and we make those claims for you rather than sending you to a call centre." },
+  ],
+  tone = "default",
+  single = false,
+  emptyMessage = "We are still collecting the questions people ask most. Send yours through and we will answer it here.",
+  jsonLd = true,
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const slug = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "faq";
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `faq-${slug(title)}`;
+const headingId = `${uid}-heading`;
+/** Shared by every <details> in this block when `single` is set; that is what makes them exclusive. */
+const groupName = `${headingId}-group`;
+
+const structuredData = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: items.map((item) => ({
+    "@type": "Question",
+    name: item.question,
+    acceptedAnswer: { "@type": "Answer", text: item.answer },
+  })),
+}).replace(/</g, "\\u003c");
+---
+
+<section class:list={["kit-section", toneClass, "kit-faq-a", className]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container">
+    <div class="kit-faq-a__head kit-stack">
+      <h2 class="kit-h2" id={headingId}>{title}</h2>
+      {intro && <p class="kit-lede kit-muted">{intro}</p>}
+    </div>
+
+    {items.length === 0 ? (
+      <p class="kit-empty kit-faq-a__empty">{emptyMessage}</p>
+    ) : (
+      <div class="kit-faq-a__list">
+        {items.map((item) => (
+          <details
+            class="kit-faq-a__item"
+            open={item.open}
+            name={single ? groupName : undefined}
+            data-kit-disclosure
+          >
+            <summary class="kit-faq-a__q">
+              <span class="kit-h3 kit-faq-a__q-text">{item.question}</span>
+              <svg class="kit-faq-a__chev" viewBox="0 0 12 8" aria-hidden="true" focusable="false">
+                <path
+                  d="M1 1.75 6 6.25 11 1.75"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </summary>
+            <div class="kit-faq-a__a">
+              <p class="kit-body">{item.answer}</p>
+            </div>
+          </details>
+        ))}
+      </div>
+    )}
+  </div>
+</section>
+
+{jsonLd && items.length > 0 && (
+  <script type="application/ld+json" set:html={structuredData} is:inline />
+)}
+
+<style>
+  .kit-faq-a__head { margin-bottom: var(--kit-space-2xl); }
+
+  .kit-faq-a__list {
+    max-width: var(--kit-page-max);
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+
+  .kit-faq-a__item { border-bottom: var(--kit-border-width) solid var(--kit-border); }
+
+  .kit-section--inverse .kit-faq-a__list,
+  .kit-section--inverse .kit-faq-a__item {
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent);
+  }
+
+  /* The default triangle is replaced deliberately, in both engines. */
+  .kit-faq-a__q { list-style: none; }
+  .kit-faq-a__q::-webkit-details-marker { display: none; }
+  .kit-faq-a__q::marker { content: ""; }
+
+  .kit-faq-a__q {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kit-space-lg);
+    min-height: var(--kit-target);
+    padding-block: var(--kit-space-lg);
+    cursor: pointer;
+    /* The whole row is the target, not just the words. */
+    transition: background-color var(--kit-duration-fast) var(--kit-ease);
+  }
+
+  /* Ground-independent, so the hover reads on a light, subtle or inverse section alike. */
+  .kit-faq-a__q:hover { background: color-mix(in srgb, currentColor 6%, transparent); }
+
+  .kit-faq-a__q:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: calc(var(--kit-space-2xs) * -1);
+  }
+  .kit-section--inverse .kit-faq-a__q:focus-visible { outline-color: var(--kit-text-inverse); }
+
+  .kit-faq-a__q-text {
+    /* Questions are long by nature here; they wrap and stay inside the measure. */
+    max-width: var(--kit-measure);
+  }
+
+  .kit-faq-a__chev {
+    flex: none;
+    width: 1em;
+    height: auto;
+    color: var(--kit-text-muted);
+    transition: transform var(--kit-duration) var(--kit-ease);
+  }
+  .kit-section--inverse .kit-faq-a__chev { color: var(--kit-text-inverse); }
+  .kit-faq-a__item[open] .kit-faq-a__chev { transform: rotate(180deg); }
+
+  .kit-faq-a__a {
+    padding-bottom: var(--kit-space-xl);
+    padding-right: var(--kit-space-2xl);
+    color: var(--kit-text-muted);
+  }
+  .kit-faq-a__a p { max-width: var(--kit-measure); text-wrap: pretty; }
+  .kit-section--inverse .kit-faq-a__a {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+
+  .kit-faq-a__empty { margin: 0; }
+  /* .kit-empty is muted text in a dashed --kit-border, both chosen for a light page. */
+  .kit-section--inverse .kit-faq-a__empty {
+    color: color-mix(in srgb, var(--kit-text-inverse) 82%, transparent);
+    border-color: color-mix(in srgb, var(--kit-text-inverse) 34%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-faq-a__chev { transition: none; }
+  }
+</style>
+
+<script>
+  /**
+   * Mirrors the native open state onto aria-expanded.
+   *
+   * IT IS SET FROM HERE AND NEVER IN THE MARKUP, which is the whole reason this script exists.
+   * A hardcoded aria-expanded OVERRIDES the state the browser works out for itself, so with
+   * JavaScript off it would be frozen at whatever the build stamped and a screen reader would
+   * announce an open answer as collapsed. Absent, the native mapping is correct on its own.
+   *
+   * Delegated and bound once, because Astro's ClientRouter swaps the document body while
+   * `document` itself persists, and in the CAPTURE phase, because `toggle` does not bubble.
+   */
+  (() => {
+    const w = window as unknown as { __kitDisclosureBound?: boolean };
+    if (w.__kitDisclosureBound) return;
+    w.__kitDisclosureBound = true;
+
+    const sync = (details: HTMLDetailsElement) => {
+      const summary = details.querySelector("summary");
+      if (summary) summary.setAttribute("aria-expanded", details.open ? "true" : "false");
+    };
+
+    document.addEventListener(
+      "toggle",
+      (event) => {
+        const details = event.target;
+        if (!(details instanceof HTMLDetailsElement)) return;
+        if (!details.hasAttribute("data-kit-disclosure")) return;
+        sync(details);
+      },
+      true,
+    );
+
+    const syncAll = () =>
+      document.querySelectorAll<HTMLDetailsElement>("details[data-kit-disclosure]").forEach(sync);
+    document.addEventListener("astro:page-load", syncAll);
+    syncAll();
+  })();
+</script>

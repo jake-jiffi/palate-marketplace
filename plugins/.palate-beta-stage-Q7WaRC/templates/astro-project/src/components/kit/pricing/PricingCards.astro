@@ -1,0 +1,335 @@
+---
+/**
+ * PricingCards: two to four packages, side by side, where they differ by what is included.
+ *
+ * Use this when the price is genuinely public and the plans are distinguishable by inclusion. If
+ * the plans differ across a dozen attributes and the visitor is comparing carefully, PricingTable
+ * is the honest shape. If every job is priced individually, PricingQuote is, and inventing a
+ * "from" price to fill this section is the thing that gets a trade a reputation for bait pricing.
+ *
+ * ONE PLAN MAY BE MARKED RECOMMENDED, AND IT IS MARKED WITH STRUCTURE, NOT WITH COLOUR.
+ * The recommendation is a phrase inside the plan's own heading ("Standard, most chosen"), so a
+ * screen reader hears it as part of the plan name and somebody who cannot distinguish the accent
+ * still gets the information. The card also takes a heavier border and the tokens' raised shadow.
+ * A coloured card with no text saying why it is coloured tells half the audience nothing.
+ *
+ * The recommendation phrase sits INSIDE the heading rather than as a badge above it, because a
+ * small label directly above a heading is the eyebrow pattern this kit refuses.
+ *
+ * Inclusion lists are the part that breaks: three plans with three, six and eleven inclusions look
+ * broken when the cards stretch to match. The call to action is pinned to the bottom of each card
+ * so the buttons line up across the row whatever the lists do above them.
+ *
+ * The lists carry an explicit `role="list"` beside `list-style: none`. A strict validator calls
+ * that redundant, and it is not: Safari with VoiceOver drops list semantics from a list whose
+ * markers have been removed, so without it the items stop being announced as a list at all. Do
+ * not strip it to quieten a linter.
+ */
+interface Plan {
+  name: string;
+  /** The price as it should read, including the currency. */
+  price: string;
+  /** "per month", "per site, per year", "one off". */
+  cadence?: string;
+  /** One line on who the plan is for. */
+  description?: string;
+  features: string[];
+  ctaLabel: string;
+  ctaHref: string;
+  /** At most one plan. More than one recommendation is no recommendation. */
+  recommended?: boolean;
+  /** The phrase used to mark it. Say why, not just that. */
+  recommendedLabel?: string;
+  /** Anything the price depends on: minimum term, excluded costs, call-out fees. */
+  note?: string;
+}
+
+interface Props {
+  heading?: string;
+  lede?: string;
+  plans?: Plan[];
+  /** Tax treatment, term, or anything true of every plan. */
+  footnote?: string;
+  emptyMessage?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+}
+
+const {
+  heading = "What it costs",
+  lede,
+  plans = [
+    {
+      name: "Callout",
+      price: "$180",
+      cadence: "per visit",
+      description: "One job, one visit, no ongoing arrangement.",
+      features: [
+        "Two hours on site",
+        "Written report the same day",
+        "Parts charged at cost, itemised",
+        "Follow-up call within a fortnight",
+      ],
+      ctaLabel: "Book a callout",
+      ctaHref: "/contact?service=callout",
+      note: "Outside 30 km of the depot a travel charge applies and is quoted before we book.",
+    },
+    {
+      name: "Maintenance",
+      price: "$140",
+      cadence: "per month",
+      description: "Scheduled work for a site that cannot afford surprises.",
+      features: [
+        "Quarterly inspection with photographs",
+        "Priority booking within two working days",
+        "Two hours of remedial work each quarter, carried over once",
+        "Parts at cost, no markup",
+        "Annual condition report for your insurer",
+      ],
+      ctaLabel: "Start maintenance",
+      ctaHref: "/contact?service=maintenance",
+      recommended: true,
+      recommendedLabel: "most sites choose this",
+      note: "Twelve month term, then monthly. Cancel with a month's notice.",
+    },
+    {
+      name: "Managed",
+      price: "$420",
+      cadence: "per month",
+      description: "For multiple sites, or one site that has to keep running.",
+      features: [
+        "Monthly inspection across every site",
+        "Same-day response, seven days",
+        "Eight hours of remedial work each month",
+        "Named engineer who knows your building",
+        "Parts at cost, held in stock for your equipment",
+        "Quarterly review with your facilities lead",
+      ],
+      ctaLabel: "Talk to us about managed",
+      ctaHref: "/contact?service=managed",
+      note: "Priced per site above three sites. We will quote before you commit.",
+    },
+  ],
+  footnote = "Prices exclude GST. Nothing here is charged until the work is agreed in writing.",
+  emptyMessage = "Pricing will be published here once the packages are confirmed.",
+  tone = "default",
+  id,
+} = Astro.props;
+
+/* The caller's id anchors the section. Internal aria wiring falls back to a
+   per-render value, so two copies of a piece on one page cannot collide. */
+const uid = id || `pc-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+
+const cards = (plans ?? []).filter((p) => p?.name && p?.price && p?.ctaLabel && p?.ctaHref);
+/* Only the first plan flagged as recommended is honoured, so a content mistake cannot produce a
+   row in which every card claims to be the pick. */
+const recommendedIndex = cards.findIndex((p) => p.recommended);
+const columns = Math.min(Math.max(cards.length, 1), 4);
+---
+
+<section class:list={["kit-section", toneClass]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container pc" data-columns={columns}>
+    <div class="pc__head">
+      <h2 id={headingId} class="kit-h2">{heading}</h2>
+      {lede && <p class="kit-lede kit-muted">{lede}</p>}
+    </div>
+
+    {cards.length === 0 ? (
+      <p class="kit-empty">{emptyMessage}</p>
+    ) : (
+      <ul class="pc__grid" role="list">
+        {cards.map((plan, index) => {
+          const isPick = index === recommendedIndex;
+          const planId = `${uid}-plan-${index}`;
+          return (
+            <li class="pc__item">
+              <article class:list={["pc__card", isPick && "pc__card--pick"]} aria-labelledby={planId}>
+                <h3 class="pc__name" id={planId}>
+                  {plan.name}
+                  {/* The pick label is a badge, not part of the plan's name: a screen reader read
+                      "Whole operationmost farms land here" as one heading. It is hidden from the
+                      heading and announced through the card's description instead. */}
+                  {isPick && (
+                    <span class="pc__pick" aria-hidden="true">{plan.recommendedLabel ?? "most chosen"}</span>
+                  )}
+                </h3>
+                {isPick && <p class="kit-visually-hidden pc__pick-sr">Recommended: {plan.recommendedLabel ?? "most chosen"}</p>}
+
+                <p class="pc__price">
+                  <span class="pc__amount">{plan.price}</span>
+                  {plan.cadence && <span class="pc__cadence kit-muted">{plan.cadence}</span>}
+                </p>
+
+                {plan.description && <p class="pc__desc kit-muted">{plan.description}</p>}
+
+                {plan.features?.length ? (
+                  <ul class="pc__features" role="list">
+                    {plan.features.map((feature) => (
+                      <li class="pc__feature">
+                        <span class="pc__mark" aria-hidden="true"></span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p class="kit-empty pc__features-empty">Inclusions for this plan are still being confirmed.</p>
+                )}
+
+                <div class="pc__foot">
+                  <a
+                    class:list={["kit-btn", isPick ? "kit-btn--primary" : "kit-btn--secondary", "pc__cta"]}
+                    href={plan.ctaHref}
+                  >
+                    {plan.ctaLabel}
+                    <span class="kit-visually-hidden"> on the {plan.name} plan</span>
+                  </a>
+                  {plan.note && <p class="pc__note kit-muted">{plan.note}</p>}
+                </div>
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+
+    {footnote && <p class="pc__footnote kit-muted">{footnote}</p>}
+  </div>
+</section>
+
+<style>
+  .pc__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
+
+  .pc__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-gutter);
+    align-items: stretch;
+  }
+
+  .pc__item { display: flex; min-width: 0; }
+
+  /* Flex column with the foot pushed down, so the call to action lands on the bottom edge of
+     every card in the row whatever the inclusion list does above it. */
+  .pc__card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-space-md);
+    width: 100%;
+    min-width: 0;
+    padding: var(--kit-space-lg);
+    border: var(--kit-border-width) solid var(--kit-border);
+    border-radius: var(--kit-radius);
+    background: var(--kit-bg);
+    transition: border-color var(--kit-duration) var(--kit-ease);
+  }
+  .pc__card:hover { border-color: var(--kit-border-strong); }
+
+  /* Structure, not colour: a heavier border and the raised shadow, plus the phrase in the name. */
+  .pc__card--pick {
+    border-width: calc(var(--kit-border-width) * 2);
+    border-color: var(--kit-border-strong);
+    box-shadow: var(--kit-shadow-raised);
+  }
+
+  .pc__name {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--kit-space-xs);
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-strong);
+    font-size: var(--kit-text-xl);
+    line-height: var(--kit-leading-snug);
+  }
+
+  .pc__pick {
+    font-family: var(--kit-font-body);
+    font-size: var(--kit-text-xs);
+    font-weight: var(--kit-weight-medium);
+    line-height: var(--kit-leading-snug);
+    padding: var(--kit-space-2xs) var(--kit-space-xs);
+    border: var(--kit-border-width) solid var(--kit-border-strong);
+    border-radius: var(--kit-radius-pill);
+  }
+
+  .pc__price {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--kit-space-xs);
+  }
+  .pc__amount {
+    font-family: var(--kit-font-display);
+    font-weight: var(--kit-weight-display);
+    font-size: var(--kit-text-3xl);
+    line-height: var(--kit-leading-tight);
+    letter-spacing: var(--kit-tracking-tight);
+    font-variant-numeric: tabular-nums;
+  }
+  .pc__cadence { font-size: var(--kit-text-sm); }
+
+  .pc__desc { margin: 0; font-size: var(--kit-text-sm); line-height: var(--kit-leading-body); max-width: none; }
+
+  .pc__features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    padding-block-start: var(--kit-space-md);
+    border-block-start: var(--kit-border-width) solid var(--kit-border);
+    display: grid;
+    gap: var(--kit-space-sm);
+    align-content: start;
+    /* Takes the slack, so the foot below it sits on the bottom edge of every card in the row. */
+    flex: 1 1 auto;
+    font-size: var(--kit-text-sm);
+    line-height: var(--kit-leading-snug);
+  }
+  .pc__features-empty { flex: 1 1 auto; align-self: start; }
+
+  .pc__feature { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--kit-space-sm); }
+  /* A neutral mark, drawn from the border token. It says "listed", not "good": the inclusion is
+     the content, and a tick in the accent colour turns a list into a sales graphic. */
+  .pc__mark {
+    width: var(--kit-space-xs);
+    height: var(--kit-space-xs);
+    margin-block-start: var(--kit-space-2xs);
+    border-radius: var(--kit-radius-pill);
+    background: var(--kit-border-strong);
+  }
+
+  .pc__foot { display: grid; gap: var(--kit-space-sm); margin-block-start: auto; }
+  .pc__cta { width: 100%; }
+  .pc__note { margin: 0; font-size: var(--kit-text-xs); line-height: var(--kit-leading-snug); }
+
+  .pc__footnote {
+    margin: 0;
+    margin-block-start: var(--kit-space-xl);
+    font-size: var(--kit-text-xs);
+    max-width: var(--kit-measure);
+  }
+
+  /* Each plan count gets the width it actually needs, on the kit's two shared steps. Three plans
+     stay stacked until 64rem rather than being squeezed into the two-column rule, which would
+     strand the third card on a row of its own. */
+  @media (min-width: 48rem) {
+    .pc[data-columns="2"] .pc__grid,
+    .pc[data-columns="4"] .pc__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 64rem) {
+    .pc[data-columns="3"] .pc__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pc[data-columns="4"] .pc__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+</style>

@@ -1,0 +1,368 @@
+---
+/**
+ * Contact form.
+ *
+ * The general enquiry, for when there is no structure worth imposing: a name, a way to reply and
+ * whatever they want to tell you. Reach for FormEnquiry instead when three structured answers
+ * would save a phone call, and for FormBooking when a time is actually being reserved.
+ *
+ * WHAT MAKES THIS THE FORM AND NOT A FORM. Every field has a visible label above it, the right
+ * type, inputmode and autocomplete so a phone fills it in with one tap, validation on blur but
+ * never on an empty field the visitor has not reached the end of, the error cleared the moment
+ * the field becomes valid, and every asynchronous state announced rather than merely coloured.
+ * On success the form is REPLACED by a confirmation that says what happens next and by when. On
+ * failure it says what went wrong and what to do, and keeps every word they typed.
+ *
+ * The behaviour lives in ./form-runtime.ts, shared with the other three forms, and the markup
+ * below is its whole configuration: `data-kit-validate` says what a field must be,
+ * `data-kit-required-message` says what to tell someone who leaves it blank, `data-kit-key` sends
+ * it to the endpoint as itself and `data-kit-summary` folds it into the message instead.
+ *
+ * Turnstile appears only when PUBLIC_TURNSTILE_SITE_KEY is set, which is what
+ * scripts/optional-services.sh provisions. Without it the widget is absent and the token blank,
+ * and /api/contact treats an unverified submission accordingly.
+ */
+export interface Props {
+  title?: string;
+  intro?: string;
+  /** Shown beside the form: a phone number, an address, hours. Optional but usually worth it. */
+  aside?: { heading: string; lines: string[] };
+  submitLabel?: string;
+  /** Where the JSON goes. Anything answering `{ ok: true }` will do. */
+  endpoint?: string;
+  /** Ask for a phone number as well. Off by default: every extra field costs completions. */
+  phone?: boolean;
+  successTitle?: string;
+  /** What happens next AND by when. "We will be in touch" is not an answer to either. */
+  successBody?: string;
+  /** The second line of an error: how to reach you when the form itself will not work. */
+  errorHelp?: string;
+  /** Said where the form would be, for the small number of people who have no JavaScript. */
+  noScriptNote?: string;
+  /** What you do with their details. One sentence, under the button, where it is read. */
+  privacyNote?: string;
+  tone?: "default" | "subtle" | "inverse";
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  class?: string;
+}
+
+const {
+  title = "Send us a message",
+  intro = "Tell us what you need and we will come back to you. If it is urgent, ring instead: it is faster.",
+  aside,
+  submitLabel = "Send message",
+  endpoint = "/api/contact",
+  phone = false,
+  successTitle = "Thanks, we have got that",
+  successBody = "Your message is with us and we reply to everything within one business day. Check your junk folder if you have not heard from us by then, because that is where our reply usually is.",
+  errorHelp = "If it will not send, email us directly and we will pick it up from there.",
+  noScriptNote = "This form needs JavaScript to send. If yours is turned off, email us or ring instead and we will take the details that way.",
+  privacyNote = "We use your details to answer your message and nothing else. We do not pass them on.",
+  tone = "default",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `fc-${Math.random().toString(36).slice(2, 8)}`;
+const headingId = `${uid}-heading`;
+const asideId = `${uid}-aside`;
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+---
+
+<section class:list={["kit-section", toneClass, "kit-formsec", className]} aria-labelledby={headingId} id={id || undefined}>
+  <div class="kit-container kit-formsec__inner">
+    <div class="kit-formsec__intro">
+      <h2 class="kit-h2 kit-formsec__title" id={headingId}>{title}</h2>
+      {intro && <p class="kit-lede kit-muted kit-formsec__intro-text">{intro}</p>}
+      {aside && (
+        <div class="kit-formsec__aside">
+          {/*
+            NOT A HEADING, AND IT NEVER LOOKED LIKE ONE.
+            This was an <h3> carrying .kit-label, so it rendered at 13px uppercase and still
+            sat in the document outline one level under the form's own title: a screen-reader
+            user listing the headings on a contact page heard "If you would rather just ring"
+            ranked as a subsection of the page. It is a label over a list, which is the use
+            .kit-label is for, so the tag follows the treatment rather than fighting it.
+            The list keeps the name through aria-labelledby, the same wiring the mobile sheet
+            uses for its groups, so nothing is lost from the accessible tree.
+          */}
+          <p class="kit-label kit-formsec__aside-head" id={asideId}>{aside.heading}</p>
+          <ul class="kit-formsec__aside-list" role="list" aria-labelledby={asideId}>
+            {aside.lines.map((line) => <li>{line}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+
+    <div class="kit-formsec__panel">
+      <form
+        class="kit-form"
+        method="post"
+        action={endpoint}
+        data-kit-form
+        data-kit-endpoint={endpoint}
+        data-kit-sending="Sending your message."
+      >
+        <div class="kit-form__alert" data-kit-alert role="alert" tabindex="-1" hidden>
+          <p class="kit-form__alert-text" data-kit-alert-text></p>
+          <p class="kit-form__alert-help kit-muted">{errorHelp}</p>
+        </div>
+
+        <div class="kit-field">
+          <label class="kit-field__label" for={`${uid}-name`}>Your name</label>
+          <input
+            class="kit-input"
+            id={`${uid}-name`}
+            name="name"
+            type="text"
+            autocomplete="name"
+            required
+            aria-describedby={`${uid}-name-error`}
+            data-kit-key="name"
+            data-kit-validate="required"
+            data-kit-required-message="Please tell us your name, so we know who we are replying to."
+            data-kit-error={`${uid}-name-error`}
+          />
+          <p class="kit-field__error" id={`${uid}-name-error`} role="alert" hidden></p>
+        </div>
+
+        <div class="kit-field">
+          <label class="kit-field__label" for={`${uid}-email`}>Email address</label>
+          <input
+            class="kit-input"
+            id={`${uid}-email`}
+            name="email"
+            type="email"
+            inputmode="email"
+            autocomplete="email"
+            required
+            aria-describedby={`${uid}-email-hint ${uid}-email-error`}
+            data-kit-key="email"
+            data-kit-validate="required email"
+            data-kit-required-message="Please give us an email address so we can reply."
+            data-kit-error={`${uid}-email-error`}
+          />
+          <p class="kit-field__hint" id={`${uid}-email-hint`}>This is where our reply goes.</p>
+          <p class="kit-field__error" id={`${uid}-email-error`} role="alert" hidden></p>
+        </div>
+
+        {phone && (
+          <div class="kit-field">
+            <label class="kit-field__label" for={`${uid}-phone`}>
+              Phone<span class="kit-field__optional kit-muted">&#32;(optional)</span>
+            </label>
+            <input
+              class="kit-input"
+              id={`${uid}-phone`}
+              name="phone"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+              aria-describedby={`${uid}-phone-error`}
+              data-kit-summary="Phone"
+              data-kit-validate="tel"
+              data-kit-error={`${uid}-phone-error`}
+            />
+            <p class="kit-field__error" id={`${uid}-phone-error`} role="alert" hidden></p>
+          </div>
+        )}
+
+        <div class="kit-field">
+          <label class="kit-field__label" for={`${uid}-message`}>Your message</label>
+          <textarea
+            class="kit-textarea"
+            id={`${uid}-message`}
+            name="message"
+            rows="6"
+            required
+            aria-describedby={`${uid}-message-error`}
+            data-kit-key="message"
+            data-kit-validate="required"
+            data-kit-required-message="Please tell us what you need, even roughly. A line is plenty."
+            data-kit-error={`${uid}-message-error`}
+          ></textarea>
+          <p class="kit-field__error" id={`${uid}-message-error`} role="alert" hidden></p>
+        </div>
+
+        {siteKey && <div class="cf-turnstile" data-sitekey={siteKey}></div>}
+
+        <noscript>
+          <p class="kit-form__fine">{noScriptNote}</p>
+        </noscript>
+
+        <button type="submit" class="kit-btn kit-btn--primary kit-form__submit" data-kit-submit>
+          <span class="kit-spinner" data-kit-spinner aria-hidden="true" hidden></span>
+          <span class="kit-btn__label">{submitLabel}</span>
+        </button>
+
+        {privacyNote && <p class="kit-form__fine kit-muted">{privacyNote}</p>}
+        <p class="kit-visually-hidden" data-kit-status role="status" aria-live="polite"></p>
+      </form>
+
+      <div class="kit-form__done" data-kit-success hidden>
+        <svg class="kit-form__tick" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M4 10.5 8 14.5 16 5.5" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <h3 class="kit-h3" data-kit-success-heading tabindex="-1">{successTitle}</h3>
+        <p class="kit-body">{successBody}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{siteKey && (
+  <script is:inline>
+    // Loaded once however many kit forms a page carries, and once however many times the
+    // ClientRouter re-runs this block.
+    (function () {
+      if (document.querySelector("script[data-kit-turnstile]")) return;
+      var s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      s.async = true;
+      s.defer = true;
+      s.setAttribute("data-kit-turnstile", "");
+      document.head.appendChild(s);
+    })();
+  </script>
+)}
+
+<style>
+  /* An author rule setting `display` out-ranks the browser's own [hidden], and every state in
+     this piece is switched with `hidden`. Restated here so success, error and loading actually
+     hide rather than merely claim to. */
+  [hidden] { display: none !important; }
+
+  /* foundations.css does not set box-sizing, and what normally does is Tailwind's preflight. A
+     build that vendors its own preset instead, which is a failure this repo has already paid for
+     once, would push every full-width control past the right edge of a phone. One rule, stated
+     where it binds, so the form does not depend on a reset arriving from somewhere else. */
+  .kit-input, .kit-select, .kit-textarea { box-sizing: border-box; }
+
+  .kit-formsec__inner {
+    display: grid;
+    align-items: start;
+    gap: var(--kit-space-2xl) var(--kit-space-3xl);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 30ch), 1fr));
+  }
+
+  .kit-formsec__intro { display: grid; gap: var(--kit-space-lg); align-content: start; }
+  .kit-formsec__title { max-width: 18ch; }
+  .kit-formsec__intro-text { text-wrap: pretty; }
+  .kit-formsec__aside {
+    display: grid;
+    gap: var(--kit-space-xs);
+    padding-top: var(--kit-space-lg);
+    border-top: var(--kit-border-width) solid var(--kit-border);
+  }
+  .kit-formsec__aside-head { color: var(--kit-text); }
+  .kit-formsec__aside-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-space-2xs);
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+  }
+
+  .kit-form { display: grid; gap: var(--kit-space-lg); max-width: var(--kit-measure); }
+
+  .kit-form__alert {
+    display: grid;
+    gap: var(--kit-space-2xs);
+    padding: var(--kit-space-md);
+    border: var(--kit-border-width) solid var(--kit-error);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-form__alert p { margin: 0; }
+  .kit-form__alert-text { font-weight: var(--kit-weight-strong); color: var(--kit-error); }
+
+  /* The space before "(optional)" is written as &#32; inside the span, not as a space in the
+     markup. A plain space is swallowed when Astro trims the newline before an expression, which is
+     how one label read "Anything else we should know(optional)" while its neighbour read
+     "Photos (optional)". An entity is a character rather than whitespace, so it survives either
+     layout, and unlike a CSS margin it also puts a space in the accessible name. */
+  .kit-field__optional { font-weight: var(--kit-weight-body); }
+
+  .kit-form__submit { justify-self: start; }
+  .kit-form__fine { font-size: var(--kit-text-sm); margin: 0; max-width: var(--kit-measure); }
+
+  .kit-form__done {
+    display: grid;
+    gap: var(--kit-space-md);
+    justify-items: start;
+    padding: var(--kit-space-xl);
+    border: var(--kit-border-width) solid var(--kit-success);
+    border-inline-start-width: calc(var(--kit-border-width) * 4);
+    border-radius: var(--kit-radius);
+    max-width: var(--kit-measure);
+  }
+  .kit-form__tick { width: 1.5em; height: auto; color: var(--kit-success); }
+  .kit-form__done p { text-wrap: pretty; }
+
+  .kit-formsec :focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+  .kit-section--inverse :focus-visible { outline-color: var(--kit-text-inverse); }
+
+  /* THE INVERSE GROUND, AND WHY EVERY ONE OF THESE NEEDS SAYING.
+     foundations pins .kit-field__label to --kit-text and .kit-field__hint to --kit-text-muted,
+     both chosen for a light page. On a dark section that measures 1.06:1 for every label and
+     3.34:1 for every hint, so a form set to tone="inverse" ships with unreadable labels and
+     nothing reports it. The feedback colours have the same shape of problem: --kit-error is a
+     dark red picked to sit on white, and on this ground its border reads 1.8:1. Each is mixed
+     toward the inverse text colour rather than replaced, so an error still looks like an error. */
+  .kit-section--inverse .kit-field__label { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-field__hint {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+  .kit-section--inverse .kit-field__error,
+  .kit-section--inverse .kit-form__alert-text {
+    color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__alert {
+    border-color: color-mix(in srgb, var(--kit-error) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__done {
+    border-color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-form__tick {
+    color: color-mix(in srgb, var(--kit-success) 45%, var(--kit-text-inverse));
+  }
+  .kit-section--inverse .kit-check input { accent-color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-formsec__aside-list {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+  .kit-section--inverse .kit-formsec__aside { border-top-color: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent); }
+  .kit-section--inverse .kit-formsec__aside-head { color: var(--kit-text-inverse); }
+  .kit-section--inverse .kit-form__alert-help { color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent); }
+</style>
+
+<script>
+  /**
+   * NOVALIDATE ONLY ONCE THIS SCRIPT IS RUNNING. The form carries a real `action` and `method`,
+   * so with scripts off or before they bind it still posts to the endpoint as form data, and the
+   * browser's own validation stands in for the piece's. The first version wrote `novalidate` into
+   * the markup, which switched native validation off on exactly the path that had nothing else.
+   */
+  const armNovalidate = () => document.querySelectorAll<HTMLFormElement>("form[data-kit-form]").forEach((f) => f.setAttribute("novalidate", ""));
+  armNovalidate();
+  document.addEventListener("astro:page-load", armNovalidate);
+
+  import { initKitForms } from "./form-runtime";
+  initKitForms();
+</script>

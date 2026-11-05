@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="A treatment being recorded on a phone in the yards, with no network connection">
+  <title>A treatment being recorded on a phone in the yards, with no network connection</title>
+  <style>
+    svg{--ink:var(--kit-text,#1b1d21);--muted:var(--kit-text-muted,#6e737b);--paper:var(--kit-bg,#ffffff);--panel:var(--kit-bg-subtle,#f3f4f6);--line:var(--kit-border,#dfe2e6);--steel:#46525d;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    text{fill:var(--ink)}
+    .m{fill:var(--muted)}
+    .w{fill:#fff}
+    .lbl{font-size:19px;letter-spacing:.06em;text-transform:uppercase}
+    .sm{font-size:20px}
+    .md{font-size:24px}
+    .lg{font-size:30px;font-weight:600}
+    .xl{font-size:40px;font-weight:600;letter-spacing:-.01em}
+    .num{font-variant-numeric:tabular-nums}
+    .ln{stroke:var(--line);stroke-width:2}
+  </style>
+  <rect x="0" y="0" width="1600" height="1000" fill="var(--panel)"/>
+  <text x="120" y="150" class="xl">Recording in the yards</text>
+  <text x="120" y="238" class="md m">The yards have no signal and never will.</text>
+  <text x="120" y="276" class="md m">Entries queue on the phone and go up</text>
+  <text x="120" y="314" class="md m">when it next sees the house.</text>
+  <text x="120" y="410" class="lbl m">Queued</text>
+  <text x="120" y="450" class="lg num">6 entries</text>
+  <text x="120" y="518" class="lbl m">Last sync</text>
+  <text x="120" y="558" class="lg num">7:04am</text>
+  <rect x="560" y="60" width="480" height="880" fill="var(--ink)" rx="44"/>
+  <rect x="576" y="76" width="448" height="848" fill="var(--paper)" rx="34"/>
+  <rect x="736" y="96" width="128" height="10" fill="var(--line)" rx="5"/>
+  <text x="628" y="176" class="sm num" font-size="18">11:42</text>
+  <text x="972" y="176" class="sm m" text-anchor="end" font-size="18">No signal</text>
+  <rect x="576" y="196" width="448" height="52" fill="#e6dccc"/>
+  <rect x="604" y="214" width="16" height="16" fill="#a8703a" rx="8"/>
+  <text x="632" y="228" class="sm" font-size="18">Offline. 6 entries waiting.</text>
+  <text x="628" y="306" class="lg">Record a treatment</text>
+  <text x="628" y="344" class="sm m">Weaners, 218 head</text>
+  <text x="628" y="416" class="lbl m">Product</text>
+  <rect x="628" y="432" width="344" height="62" fill="var(--paper)" rx="8" stroke="var(--line)" stroke-width="2"/>
+  <text x="652" y="472" class="sm">Abamectin drench</text>
+  <text x="628" y="552" class="lbl m">Dose</text>
+  <rect x="628" y="568" width="164" height="62" fill="var(--paper)" rx="8" stroke="var(--line)" stroke-width="2"/>
+  <text x="652" y="608" class="sm num">4.5 mL</text>
+  <text x="808" y="552" class="lbl m">Withholding</text>
+  <rect x="808" y="568" width="164" height="62" fill="var(--panel)" rx="8"/>
+  <text x="832" y="608" class="sm m num">28 days</text>
+  <text x="628" y="688" class="sm m" font-size="18">Applies to the whole mob unless</text>
+  <text x="628" y="714" class="sm m" font-size="18">you tag individual head.</text>
+  <rect x="628" y="764" width="344" height="62" fill="var(--steel)" rx="10"/>
+  <text x="800" y="804" class="sm w" text-anchor="middle" font-weight="600">Save to the queue</text>
+  <text x="800" y="866" class="sm m" text-anchor="middle" font-size="18">Nothing is lost if you close it</text>
+</svg>

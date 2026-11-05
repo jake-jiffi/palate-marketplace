@@ -1,0 +1,216 @@
+---
+/**
+ * ANNOUNCEMENT BAR. One line above the navigation, for a live notice, an offer, or the one
+ * service action that has to be reachable on every page.
+ *
+ * The library's surveyed flagships put a strip above the bar far more often than not: a price
+ * hook and a persistent "Book an exam" (warby-parker), an insurance notice (parsley-health), a
+ * shipping threshold (gymshark, glossier), an event with tickets (swillhouse), a product launch
+ * (attentive, crisp, webflow), a campus notice (vivvi), and a marquee (1rebel). The kit had no
+ * piece for it, so a composed page could not carry the one thing those pages carry first.
+ *
+ * ONE LINE, ONE LINK. The moment it grows a second sentence or a second action it has become a
+ * hero in the wrong place, so the text is clamped to two lines with an ellipsis rather than
+ * allowed to become one. Dismissal is remembered for the session only, so a notice that matters
+ * comes back tomorrow; a permanent hide is a decision for the page, not the visitor.
+ *
+ * It renders NOTHING when there is no text. A bar with nothing to say is chrome, and the survey's
+ * caution is explicit: one piece of first-view chrome, not three (vivvi).
+ */
+export interface Props {
+  /** The notice itself. One line. If it needs a full stop and then another sentence, cut it. */
+  text?: string;
+  /** Optional one link. Where the persistent service action lives when a page has one. */
+  link?: { label: string; href: string };
+  /** Whether the visitor may close it for this session. Off for a legal or safety notice. */
+  dismissible?: boolean;
+  /** Accessible label for the dismiss control. */
+  dismissLabel?: string;
+  tone?: "default" | "subtle" | "inverse";
+  id?: string;
+  class?: string;
+}
+
+const {
+  text = "",
+  link,
+  dismissible = true,
+  dismissLabel = "Hide this notice",
+  tone = "inverse",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const notice = text.trim();
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+const uid = id || `ann-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+{notice && (
+  <div
+    id={id || undefined}
+    class:list={["kit-ann", toneClass, className]}
+    data-kit-announcement={uid}
+    role="region"
+    aria-label="Notice"
+  >
+    <div class="kit-container kit-ann__row">
+      {/* The text clamps; the link is its own flex item beside it, never inside the clamp, so a
+          long notice on a phone truncates its words and keeps its action visible and pressable. */}
+      <p class="kit-ann__text">
+        <span class="kit-ann__notice">{notice}</span>
+        {link && link.href && link.label && (
+          <a class="kit-ann__link" href={link.href}>{link.label}</a>
+        )}
+      </p>
+      {dismissible && (
+        <button type="button" class="kit-ann__close" data-kit-announcement-close aria-label={dismissLabel}>
+          <span aria-hidden="true">&times;</span>
+        </button>
+      )}
+    </div>
+  </div>
+)}
+{notice && (
+  <script is:inline data-kit-announcement-restore>
+    /* BEFORE FIRST PAINT. The module below runs after the document has parsed, so a bar the
+       visitor closed painted for a frame on every page and pushed the content down 53px before
+       hiding. This runs the moment the bar is in the tree, on a hard load and on every swap. */
+    (function () {
+      try {
+        var el = document.currentScript && document.currentScript.previousElementSibling;
+        if (el && el.hasAttribute("data-kit-announcement")) {
+          el.hidden = sessionStorage.getItem("kit-ann:" + el.getAttribute("data-kit-announcement")) === "1";
+        }
+      } catch (e) {}
+    })();
+  </script>
+)}
+
+<script>
+  /**
+   * Bound once on document, delegated, so it survives Astro's ClientRouter swapping the body and
+   * a page that carries two notices needs no extra wiring. Dismissal lives in sessionStorage,
+   * keyed by the bar's id, so a closed notice stays closed for the visit and returns next time.
+   */
+  type AnnWindow = Window & { __kitAnnouncementBound?: boolean };
+  const scope = window as AnnWindow;
+  if (!scope.__kitAnnouncementBound) {
+    scope.__kitAnnouncementBound = true;
+
+    const key = (bar: HTMLElement) => `kit-ann:${bar.dataset.kitAnnouncement || "notice"}`;
+
+    const restore = () => {
+      document.querySelectorAll<HTMLElement>("[data-kit-announcement]").forEach((bar) => {
+        let hidden = false;
+        try {
+          hidden = sessionStorage.getItem(key(bar)) === "1";
+        } catch {
+          hidden = false;
+        }
+        bar.hidden = hidden;
+      });
+    };
+
+    document.addEventListener("click", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      const close = origin ? origin.closest("[data-kit-announcement-close]") : null;
+      if (!close) return;
+      const bar = close.closest<HTMLElement>("[data-kit-announcement]");
+      if (!bar) return;
+      bar.hidden = true;
+      // The dismissed button is gone, so focus would fall to <body>; move it to the next thing
+      // in the page that takes it, which on every kit page is the site name in the bar below.
+      const after = Array.from(
+        document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+      ).find((el) => !bar.contains(el) && bar.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && el.getBoundingClientRect().height > 0);
+      if (after) after.focus();
+      else {
+        // A bare frame has nothing focusable after the bar; park focus on main rather than body.
+        const main = document.querySelector<HTMLElement>("main");
+        if (main) { main.setAttribute("tabindex", "-1"); main.focus(); }
+      }
+      try {
+        sessionStorage.setItem(key(bar), "1");
+      } catch {
+        /* Storage refused: the notice simply returns on the next page, which is the safe way round. */
+      }
+    });
+
+    // after-swap runs before the new body paints; page-load is the belt to that brace.
+    document.addEventListener("astro:after-swap", restore);
+    document.addEventListener("astro:page-load", restore);
+    restore();
+  }
+</script>
+
+<style>
+  .kit-ann {
+    background: var(--kit-bg);
+    color: var(--kit-text);
+    border-bottom: var(--kit-border-width) solid var(--kit-border);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-ann__row {
+    display: flex;
+    align-items: center;
+    gap: var(--kit-space-md);
+    min-height: var(--kit-target);
+    padding-block: var(--kit-space-2xs);
+  }
+  .kit-ann__text {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--kit-space-2xs) var(--kit-space-sm);
+    line-height: var(--kit-leading-snug);
+  }
+  .kit-ann__notice {
+    flex: 1 1 14rem;
+    min-width: 0;
+    /* A notice is one line; a client who writes eight gets two and an ellipsis, not a hero. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .kit-ann__link {
+    /* The link may wrap and never overflows: `flex: none` made a long label the row's overflow at
+       320 and ran it under the close button. The box is at least 24px tall, a real target. */
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
+    color: inherit;
+    font-weight: var(--kit-weight-medium);
+    text-decoration: underline;
+    text-underline-offset: var(--kit-underline-offset);
+  }
+  .kit-ann__link:hover { text-decoration-thickness: var(--kit-underline-hover); }
+  .kit-ann__close {
+    flex: none;
+    inline-size: var(--kit-target);
+    block-size: var(--kit-target);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--kit-radius-pill);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--kit-text-lg);
+    cursor: pointer;
+  }
+  .kit-ann__close:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+  .kit-ann__close:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+</style>

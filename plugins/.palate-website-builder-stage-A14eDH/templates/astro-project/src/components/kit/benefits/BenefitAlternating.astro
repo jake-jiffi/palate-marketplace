@@ -1,0 +1,256 @@
+---
+/**
+ * BenefitAlternating: two to four features, each with a paragraph and a picture, sides alternating.
+ *
+ * The alternation is a desktop-only effect and that is deliberate. In one column there is no
+ * "side" to alternate, so swapping the order per item would just mean the reader meets a heading
+ * first for one feature and a picture first for the next, which reads as a bug. Here the source
+ * order is always words then picture, mobile shows exactly that, and only the two-column layout
+ * moves the picture across for every second item.
+ *
+ * Words before picture in the source order is also the right order for a screen reader: the
+ * heading arrives first and the image is corroboration, rather than the reader having to listen
+ * to an image description to find out which feature they are on.
+ *
+ * The list is unordered on purpose. These are peers presented in a chosen sequence, not ranked
+ * steps, and `<ol>` would tell a screen reader they are numbered when nothing on screen numbers
+ * them. ProcessSteps is the piece for work that genuinely happens in order.
+ */
+export interface AlternatingItem {
+  title: string;
+  /** A paragraph. One or two sentences is usually right, three is the ceiling. */
+  body: string;
+  image?: {
+    src?: string;
+    alt?: string;
+    ratio?: "wide" | "photo" | "portrait";
+  };
+  /** Optional link out to the page that covers this properly. */
+  href?: string;
+  linkLabel?: string;
+}
+
+export interface Props {
+  /** Section heading. Pass an empty string to keep it for assistive technology only. */
+  heading?: string;
+  lede?: string;
+  items?: AlternatingItem[];
+  /**
+   * Anchor for this section, so a page can offer "jump to how it works" and a call to action can
+   * point at it. Never defaulted: a defaulted anchor collides the moment a page carries two of a
+   * piece. Internal aria wiring falls back to a per-render value, so the piece is correct with no
+   * id at all.
+   */
+  id?: string;
+  /**
+   * Which ground this section sits on. One name and one vocabulary across the whole kit, so a
+   * page can alternate grounds without having to remember which piece calls it what. Every
+   * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
+   */
+  tone?: "default" | "subtle" | "inverse";
+  emptyMessage?: string;
+}
+
+const {
+  heading = "Three things that decide whether a job runs on time",
+  lede = "None of them are the tools. They are all about what happens before anyone turns up.",
+  items = [
+    {
+      title: "The site is measured before it is quoted",
+      body: "A quote written off a photograph is a guess, and a guess becomes a variation later. Every job gets a measured visit first, which is why the figure you are given is the figure you pay.",
+      image: { ratio: "photo", alt: "" },
+      href: "#",
+      linkLabel: "How a quote is put together",
+    },
+    {
+      title: "Materials are ordered before the start date, not after",
+      body: "Most delays are a supplier, not a tradesperson. Long-lead items are ordered and confirmed in writing before the date is offered, so a start date is a date rather than an intention.",
+      image: { ratio: "photo", alt: "" },
+    },
+    {
+      title: "One person owns the job from start to finish",
+      body: "You get a name and a number on day one and keep them until the final invoice. Nothing has to be explained twice, and nobody has to be chased for an answer they already have.",
+      image: { ratio: "photo", alt: "" },
+      href: "#",
+      linkLabel: "Meet the team",
+    },
+  ],
+  id,
+  tone = "default",
+  emptyMessage = "These features are being written up and photographed.",
+} = Astro.props;
+
+/* The caller's id anchors the section. Every id inside this instance is prefixed from
+   it, falling back to a per-render value so two copies on one page cannot collide. */
+const uid = id || `ba-${Math.random().toString(36).slice(2, 8)}`;
+const titleId = `${uid}-title`;
+const headingText = heading?.trim() || "What you get";
+const headingHidden = !heading?.trim();
+const features = (Array.isArray(items) ? items : []).filter((item) => item && item.title);
+---
+
+<section
+  id={id || undefined}
+  class:list={[
+    "kit-section",
+    tone === "subtle" && "kit-section--subtle",
+    tone === "inverse" && "kit-section--inverse",
+  ]}
+  aria-labelledby={titleId}
+>
+  <div class="kit-container">
+    <div class="ba__head">
+      <h2 id={titleId} class:list={["kit-h2", headingHidden && "kit-visually-hidden"]}>{headingText}</h2>
+      {lede && <p class="kit-lede ba__lede">{lede}</p>}
+    </div>
+
+    {features.length === 0 ? (
+      <p class="kit-empty ba__empty">{emptyMessage}</p>
+    ) : (
+      <ul class="ba__list" role="list">
+        {features.map((item) => (
+          <li class="ba__item">
+            <div class="ba__text">
+              <h3 class="kit-h3 ba__title">{item.title}</h3>
+              <p class="ba__body">{item.body}</p>
+              {item.href && (
+                <p class="ba__action">
+                  <a class="kit-btn kit-btn--quiet ba__link" href={item.href}>
+                    {item.linkLabel ?? "Read more"}
+                    <span class="kit-visually-hidden"> about {item.title}</span>
+                  </a>
+                </p>
+              )}
+            </div>
+
+            <div class="ba__media">
+              <span class:list={["kit-media", `kit-media--${item.image?.ratio ?? "photo"}`]}>
+                {item.image?.src && (
+                  <img src={item.image.src} alt={item.image.alt ?? ""} loading="lazy" decoding="async" />
+                )}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  /* --kit-accent-lift is the variant meant for dark grounds, but its fallback chain ends at
+     --kit-accent, which is near-black by default and therefore invisible on --kit-bg-inverse.
+     That takes the accent text, the stars and every focus ring down with it. Re-resolving it
+     here reads the brand's own lifted accent when there is one and falls back to the inverse
+     text colour, which the same ground already guarantees. Delete this once foundations gives
+     the token a fallback suited to the ground it exists for. */
+  .kit-section--inverse {
+  }
+
+  /* Same token, opposite failure: --kit-media-placeholder is --kit-bg-subtle, so a media box
+     waiting for its image disappears completely on a subtle section and glares on an inverse one.
+     The reserved space has to stay visible on whichever ground the piece is standing on. */
+  .kit-section--subtle {
+  }
+
+  .ba__head {
+    display: grid;
+    gap: var(--kit-space-md);
+    max-width: var(--kit-measure);
+  }
+
+  .ba__lede {
+    color: var(--kit-text-muted);
+  }
+
+  .kit-section--inverse .ba__lede {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+
+  .ba__empty,
+  .ba__list {
+    margin-block-start: var(--kit-space-2xl);
+  }
+
+  .ba__list {
+    list-style: none;
+    margin-inline: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--kit-space-3xl);
+  }
+
+  .ba__item {
+    display: grid;
+    gap: var(--kit-gutter);
+    align-items: center;
+    min-width: 0;
+  }
+
+  .ba__text {
+    min-width: 0;
+    display: grid;
+    gap: var(--kit-space-md);
+    align-content: center;
+  }
+
+  .ba__title {
+    text-wrap: balance;
+  }
+
+  .ba__body {
+    font-size: var(--kit-text-base);
+    line-height: var(--kit-leading-body);
+    color: var(--kit-text-muted);
+    max-width: var(--kit-measure);
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .kit-section--inverse .ba__body {
+    color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
+  }
+
+  .ba__action {
+    margin: 0;
+  }
+
+  .ba__link {
+    text-decoration: underline;
+  }
+
+  .ba__link:hover {
+    text-decoration: none;
+  }
+
+  .ba__link:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+
+  .kit-section--inverse .ba__link:focus-visible {
+    outline-color: var(--kit-accent-lift);
+  }
+
+  .ba__media {
+    min-width: 0;
+  }
+
+  @media (min-width: 48rem) {
+    .ba__item {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--kit-space-2xl);
+    }
+
+    /* The swap lives here and nowhere else, so the single-column order can never alternate. */
+    .ba__item:nth-child(even) .ba__media {
+      order: -1;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .ba__list {
+      gap: calc(var(--kit-space-3xl) * 1.5);
+    }
+  }
+</style>
